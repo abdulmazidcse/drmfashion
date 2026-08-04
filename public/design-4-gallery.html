@@ -1,0 +1,335 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>drm Fashion — Direction 4 · Gallery</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --copper-100:#f6e7d7; --copper-300:#deaf81; --copper-400:#ce9159;
+  --copper-500:#bc7a3f; --copper-600:#a0632f; --copper-700:#814e26;
+  --aqua-400:#35c7d2; --aqua-600:#148794; --aqua-700:#146b76;
+  --paper:#fff; --ink:#111110; --grey:#77746e; --rule:#e4e1db; --wash:#faf8f5;
+  --side:250px;
+  --mono:'IBM Plex Mono',ui-monospace,monospace;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Inter','Segoe UI',system-ui,sans-serif;background:var(--paper);color:var(--ink);
+  -webkit-font-smoothing:antialiased;font-size:15px}
+img{display:block;width:100%;height:100%;object-fit:cover}
+a{color:inherit;text-decoration:none}
+.mono{font-family:var(--mono);font-size:11px;letter-spacing:.06em;text-transform:uppercase}
+
+/* ── fixed sidebar ── */
+aside{position:fixed;inset:0 auto 0 0;width:var(--side);border-right:1px solid var(--rule);
+  padding:30px 26px;display:flex;flex-direction:column;justify-content:space-between;background:var(--paper);z-index:50}
+.logo{display:flex;flex-direction:column;line-height:1}
+.logo-mark{font-size:32px;font-weight:700;letter-spacing:-.05em;
+  background:linear-gradient(100deg,var(--copper-300),var(--copper-500) 52%,var(--copper-700));
+  -webkit-background-clip:text;background-clip:text;color:transparent}
+.logo-sub{font-family:var(--mono);font-size:8px;letter-spacing:.44em;text-transform:uppercase;
+  color:var(--aqua-600);margin-top:5px}
+.snav{margin-top:52px;display:flex;flex-direction:column}
+.snav a{display:flex;justify-content:space-between;align-items:baseline;padding:11px 0;
+  border-top:1px solid var(--rule);font-size:14px;font-weight:500}
+.snav a:last-child{border-bottom:1px solid var(--rule)}
+.snav a span{font-family:var(--mono);font-size:10px;color:#b7b3ac}
+.snav a:hover{color:var(--copper-600)}
+.snav a:hover span{color:var(--copper-400)}
+.sfoot{display:flex;flex-direction:column;gap:9px}
+.sfoot a{font-family:var(--mono);font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--grey)}
+.sfoot a:hover{color:var(--ink)}
+.bag{display:flex;justify-content:space-between;align-items:center;border-top:1px solid var(--rule);
+  margin-top:14px;padding-top:14px;font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase}
+.bag b{background:var(--copper-600);color:#fff;border-radius:2px;padding:2px 7px;font-weight:500}
+
+/* ── main ── */
+main{margin-left:var(--side)}
+.rowline{border-bottom:1px solid var(--rule)}
+.pad{padding:0 44px}
+.strip{display:flex;justify-content:space-between;align-items:center;padding:13px 44px;
+  border-bottom:1px solid var(--rule);color:var(--grey)}
+.strip b{color:var(--copper-600);font-weight:500}
+
+/* ── hero ── */
+.hero{display:grid;grid-template-columns:1fr 1.15fr;border-bottom:1px solid var(--rule)}
+.hero-l{padding:60px 44px 44px;display:flex;flex-direction:column;justify-content:space-between;
+  border-right:1px solid var(--rule)}
+.hero-l h1{font-size:clamp(38px,4.1vw,64px);font-weight:300;letter-spacing:-.035em;line-height:1.02}
+.hero-l h1 b{font-weight:600}
+.hero-l h1 i{font-style:normal;color:var(--copper-600)}
+.hero-l p{color:var(--grey);line-height:1.75;max-width:36ch;margin-top:24px;font-size:14.5px}
+.hero-facts{display:grid;grid-template-columns:1fr 1fr;gap:0;margin-top:46px;border-top:1px solid var(--rule)}
+.hero-facts div{padding:16px 0;border-bottom:1px solid var(--rule)}
+.hero-facts div:nth-child(odd){border-right:1px solid var(--rule);padding-right:16px}
+.hero-facts div:nth-child(even){padding-left:16px}
+.hero-facts b{display:block;font-size:22px;font-weight:600;letter-spacing:-.02em}
+.hero-facts span{font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--grey)}
+.hero-r{position:relative;min-height:600px;overflow:hidden}
+.hero-r img{transition:transform 1.2s cubic-bezier(.16,1,.3,1)}
+.hero-r:hover img{transform:scale(1.03)}
+.hero-tag{position:absolute;left:0;bottom:0;background:var(--paper);padding:14px 20px;
+  border-top:1px solid var(--rule);border-right:1px solid var(--rule);display:flex;gap:16px;align-items:center}
+.hero-tag em{font-style:normal;font-weight:600;font-size:14px}
+.btn{display:inline-flex;align-items:center;gap:10px;font-family:var(--mono);font-size:11px;
+  letter-spacing:.14em;text-transform:uppercase;padding:15px 26px;transition:.22s}
+.btn-fill{background:var(--copper-600);color:#fff}
+.btn-fill:hover{background:var(--copper-500)}
+.btn-out{border:1px solid var(--ink)}
+.btn-out:hover{background:var(--ink);color:#fff}
+.hero-cta{display:flex;gap:10px;margin-top:34px}
+
+/* ── section head ── */
+.sh{display:flex;justify-content:space-between;align-items:baseline;padding:44px 44px 24px;gap:30px}
+.sh h2{font-size:26px;font-weight:600;letter-spacing:-.025em}
+.sh .mono{color:var(--copper-600)}
+.sh a{font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;
+  border-bottom:1px solid var(--copper-400);padding-bottom:3px}
+
+/* ── index list (categories) ── */
+.idx{border-top:1px solid var(--rule)}
+.idx a{display:grid;grid-template-columns:60px 1fr 200px 120px;align-items:center;gap:20px;
+  padding:20px 44px;border-bottom:1px solid var(--rule);transition:background .2s}
+.idx a:hover{background:var(--wash)}
+.idx .n{font-family:var(--mono);font-size:11px;color:#b7b3ac}
+.idx .t{font-size:24px;font-weight:400;letter-spacing:-.02em}
+.idx a:hover .t{color:var(--copper-700)}
+.idx .d{color:var(--grey);font-size:13.5px}
+.idx .thumb{width:100px;height:64px;overflow:hidden;justify-self:end;opacity:0;transition:opacity .25s;background:var(--wash)}
+.idx a:hover .thumb{opacity:1}
+
+/* ── product grid ── */
+.pgrid{display:grid;grid-template-columns:repeat(3,1fr);border-top:1px solid var(--rule)}
+.pit{padding:26px 26px 30px;border-right:1px solid var(--rule);border-bottom:1px solid var(--rule)}
+.pit:nth-child(3n){border-right:0}
+.pit .im{position:relative;aspect-ratio:4/5;overflow:hidden;background:var(--wash)}
+.pit .im img{transition:transform .9s cubic-bezier(.16,1,.3,1)}
+.pit:hover .im img{transform:scale(1.04)}
+.flag{position:absolute;top:0;left:0;background:var(--copper-600);color:#fff;font-family:var(--mono);
+  font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;padding:6px 10px}
+.flag.aq{background:var(--aqua-700)}
+.pit .cap{display:flex;justify-content:space-between;gap:18px;margin-top:18px;
+  padding-top:14px;border-top:1px solid var(--rule)}
+.pit h4{font-size:16px;font-weight:500;letter-spacing:-.015em}
+.pit .sub{font-family:var(--mono);font-size:10px;color:var(--grey);margin-top:5px}
+.pit .pr{text-align:right;white-space:nowrap}
+.pit .pr b{font-size:16px;font-weight:600;color:var(--copper-700)}
+.pit .pr s{display:block;font-size:12px;color:#b7b3ac;margin-top:3px;font-weight:400}
+.pit .cart{margin-top:16px;font-family:var(--mono);font-size:10.5px;letter-spacing:.14em;
+  text-transform:uppercase;border:1px solid var(--rule);text-align:center;padding:11px;transition:.2s}
+.pit:hover .cart{border-color:var(--ink);background:var(--ink);color:#fff}
+
+/* ── editorial spread ── */
+.spread{display:grid;grid-template-columns:1.6fr 1fr;border-bottom:1px solid var(--rule)}
+.spread .im{aspect-ratio:16/10;overflow:hidden;border-right:1px solid var(--rule)}
+.spread .tx{padding:48px 40px;display:flex;flex-direction:column;justify-content:center}
+.spread h3{font-size:30px;font-weight:300;letter-spacing:-.03em;line-height:1.15;margin:14px 0 18px}
+.spread h3 b{font-weight:600}
+.spread p{color:var(--grey);line-height:1.8;font-size:14.5px}
+.spread .lst{margin-top:26px;border-top:1px solid var(--rule)}
+.spread .lst div{display:flex;gap:16px;padding:14px 0;border-bottom:1px solid var(--rule);font-size:14px}
+.spread .lst span{font-family:var(--mono);font-size:10px;color:var(--copper-500);padding-top:3px}
+
+/* ── manifesto table ── */
+.tbl{display:grid;grid-template-columns:repeat(4,1fr);border-bottom:1px solid var(--rule)}
+.tbl div{padding:34px 26px;border-right:1px solid var(--rule)}
+.tbl div:last-child{border-right:0}
+.tbl b{display:block;font-size:34px;font-weight:300;letter-spacing:-.04em;color:var(--copper-700)}
+.tbl span{font-family:var(--mono);font-size:10px;letter-spacing:.13em;text-transform:uppercase;
+  color:var(--grey);display:block;margin-top:10px}
+.tbl p{color:var(--grey);font-size:13px;line-height:1.65;margin-top:12px}
+
+/* ── newsletter row ── */
+.nl{display:grid;grid-template-columns:1fr 1fr;border-bottom:1px solid var(--rule)}
+.nl .l{padding:48px 44px;border-right:1px solid var(--rule)}
+.nl h3{font-size:26px;font-weight:300;letter-spacing:-.025em;line-height:1.25;margin-top:12px}
+.nl h3 b{font-weight:600;color:var(--copper-700)}
+.nl .r{padding:48px 44px;display:flex;flex-direction:column;justify-content:center}
+.nlf{display:flex;border-bottom:1px solid var(--ink);padding-bottom:12px;gap:14px}
+.nlf input{flex:1;border:0;outline:none;font-family:inherit;font-size:16px;background:none}
+.nlf input::placeholder{color:#b7b3ac}
+.nlf button{border:0;background:none;cursor:pointer;font-family:var(--mono);font-size:11px;
+  letter-spacing:.14em;text-transform:uppercase;color:var(--copper-600)}
+.nlf button:hover{color:var(--aqua-700)}
+.nl small{color:#a9a49c;font-size:12px;margin-top:14px;display:block}
+
+/* ── footer ── */
+footer{display:grid;grid-template-columns:repeat(4,1fr);border-bottom:1px solid var(--rule)}
+footer > div{padding:36px 26px;border-right:1px solid var(--rule)}
+footer > div:last-child{border-right:0}
+footer h6{font-family:var(--mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase;
+  color:var(--copper-600);margin-bottom:16px}
+footer ul{list-style:none;display:flex;flex-direction:column;gap:9px}
+footer li a{font-size:14px;color:var(--grey)}
+footer li a:hover{color:var(--ink)}
+.fbot{display:flex;justify-content:space-between;gap:20px;padding:18px 44px;
+  font-family:var(--mono);font-size:10px;letter-spacing:.11em;text-transform:uppercase;color:#a9a49c;flex-wrap:wrap}
+
+.badge{position:fixed;right:22px;bottom:22px;z-index:99;background:var(--ink);color:#fff;
+  font-family:var(--mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase;padding:12px 16px}
+.badge span{color:var(--copper-300)}
+
+@media(max-width:1100px){
+  aside{position:static;width:auto;border-right:0;border-bottom:1px solid var(--rule);
+    flex-direction:row;align-items:center;justify-content:space-between;padding:18px 22px;flex-wrap:wrap;gap:16px}
+  .snav{flex-direction:row;margin-top:0;gap:18px;flex-wrap:wrap}
+  .snav a{border:0!important;padding:0;font-size:13px}
+  .snav a span{display:none}
+  .sfoot{flex-direction:row;align-items:center;gap:14px}
+  .bag{border:0;margin:0;padding:0}
+  main{margin-left:0}
+  .hero,.spread,.nl{grid-template-columns:1fr}
+  .hero-l{border-right:0;border-bottom:1px solid var(--rule);padding:36px 22px}
+  .hero-r{min-height:380px}
+  .pgrid,.tbl,footer{grid-template-columns:1fr 1fr}
+  .pit:nth-child(3n){border-right:1px solid var(--rule)}
+  .pit:nth-child(2n){border-right:0}
+  .idx a{grid-template-columns:40px 1fr;padding:16px 22px}
+  .idx .d,.idx .thumb{display:none}
+  .pad,.sh,.fbot,.strip,.nl .l,.nl .r{padding-left:22px;padding-right:22px}
+}
+</style>
+</head>
+<body>
+
+<div class="badge">Direction 4 — <span>Gallery</span></div>
+
+<aside>
+  <div>
+    <a href="#" class="logo"><span class="logo-mark">drm</span><span class="logo-sub">Fashion</span></a>
+    <nav class="snav">
+      <a href="#">New Arrivals <span>24</span></a>
+      <a href="#">Women <span>84</span></a>
+      <a href="#">Men <span>62</span></a>
+      <a href="#">Footwear <span>29</span></a>
+      <a href="#">Tailoring <span>48</span></a>
+      <a href="#">Sale <span>36</span></a>
+      <a href="#">Journal <span>—</span></a>
+    </nav>
+  </div>
+  <div class="sfoot">
+    <a href="#">Search</a>
+    <a href="#">Account</a>
+    <a href="#">Wishlist</a>
+    <a href="#">BDT ৳ · Bangladesh</a>
+    <div class="bag"><span>Bag</span><b>2</b></div>
+  </div>
+</aside>
+
+<main>
+  <div class="strip mono"><span>Autumn / Winter 2026 — Drop 04 now live</span><span><b>Free shipping</b> over ৳5,000</span></div>
+
+  <section class="hero">
+    <div class="hero-l">
+      <div>
+        <div class="mono" style="color:var(--copper-600)">Vol. 04 — The Long Form</div>
+        <h1 style="margin-top:22px">Clothes drafted for<br><b>height</b>, not <i>scaled</i> for it.</h1>
+        <p>Every pattern in the house starts from a tall block. Longer sleeves, deeper rises, hems that land where they were drawn to land.</p>
+        <div class="hero-cta">
+          <a href="#" class="btn btn-fill">Shop the drop</a>
+          <a href="#" class="btn btn-out">Size guide</a>
+        </div>
+      </div>
+      <div class="hero-facts">
+        <div><b>148</b><span>Styles this season</span></div>
+        <div><b>5'9"–7'1"</b><span>Fit range</span></div>
+        <div><b>2,140</b><span>Reviews</span></div>
+        <div><b>48h</b><span>Delivery</span></div>
+      </div>
+    </div>
+    <div class="hero-r">
+      <img src="images/fashion-show-1746622_1280.jpg" alt="">
+      <div class="hero-tag"><span class="mono" style="color:var(--grey)">Fig. 01</span><em>The Long Coat — ৳12,900</em></div>
+    </div>
+  </section>
+
+  <div class="sh"><div><div class="mono">Index</div><h2 style="margin-top:8px">Departments</h2></div><a href="#">All categories</a></div>
+  <div class="idx">
+    <a href="#"><span class="n">01</span><span class="t">Womenswear</span><span class="d">Dresses, shirts, tailoring, knitwear</span><span class="thumb"><img src="images/women_shirt.png" alt=""></span></a>
+    <a href="#"><span class="n">02</span><span class="t">Menswear</span><span class="d">Shirting, trousers, outerwear</span><span class="thumb"><img src="images/tees.png" alt=""></span></a>
+    <a href="#"><span class="n">03</span><span class="t">Denim</span><span class="d">36" and 38" inseams as standard</span><span class="thumb"><img src="images/women_jeans.png" alt=""></span></a>
+    <a href="#"><span class="n">04</span><span class="t">Footwear</span><span class="d">European sizes 39 through 47</span><span class="thumb"><img src="uploads/fashion-shoes-sneakers-1779862183289-105055970.jpg" alt=""></span></a>
+    <a href="#"><span class="n">05</span><span class="t">Warm Weather</span><span class="d">Linen, swim and shorts</span><span class="thumb"><img src="images/swim.png" alt=""></span></a>
+  </div>
+
+  <div class="sh"><div><div class="mono">Selection</div><h2 style="margin-top:8px">This week's edit</h2></div><a href="#">View all 148</a></div>
+  <div class="pgrid">
+    <article class="pit">
+      <div class="im"><img src="uploads/2723-reese-silk-long-dress-gallery-1-1781447883037-171149920.jpg" alt=""><span class="flag">Sale −25%</span></div>
+      <div class="cap"><div><h4>Reese Silk Long Dress</h4><div class="sub">Womenswear / 3 colours</div></div><div class="pr"><b>৳8,400</b><s>৳11,200</s></div></div>
+      <div class="cart">Add to bag</div>
+    </article>
+    <article class="pit">
+      <div class="im"><img src="uploads/Vintage-90s-Women-Linen-Shirt-Beige-White-0-1781447417362-626010972.jpg" alt=""><span class="flag aq">New in</span></div>
+      <div class="cap"><div><h4>Vintage 90s Linen Shirt</h4><div class="sub">Womenswear / Beige</div></div><div class="pr"><b>৳4,950</b></div></div>
+      <div class="cart">Add to bag</div>
+    </article>
+    <article class="pit">
+      <div class="im"><img src="uploads/Elegant_Loafers-1782800725438-929355837.avif" alt=""></div>
+      <div class="cap"><div><h4>Elegant Leather Loafer</h4><div class="sub">Footwear / 39–47</div></div><div class="pr"><b>৳7,200</b></div></div>
+      <div class="cart">Add to bag</div>
+    </article>
+    <article class="pit">
+      <div class="im"><img src="uploads/Skirts-for-woman-1782801201159-505903499.jpg" alt=""></div>
+      <div class="cap"><div><h4>Tailored Midi Skirt</h4><div class="sub">Womenswear / 2 colours</div></div><div class="pr"><b>৳5,100</b></div></div>
+      <div class="cart">Add to bag</div>
+    </article>
+    <article class="pit">
+      <div class="im"><img src="uploads/colorful-sport-shoes-mustard-color-wall_151013-4913-1779862161795-119883341.jpg" alt=""><span class="flag">Sale −30%</span></div>
+      <div class="cap"><div><h4>Court Sneaker Mustard</h4><div class="sub">Footwear / 40–47</div></div><div class="pr"><b>৳5,600</b><s>৳8,000</s></div></div>
+      <div class="cart">Add to bag</div>
+    </article>
+    <article class="pit">
+      <div class="im"><img src="images/women_pants.png" alt=""><span class="flag aq">New in</span></div>
+      <div class="cap"><div><h4>Wide Leg Trouser</h4><div class="sub">Womenswear / 4 colours</div></div><div class="pr"><b>৳6,300</b></div></div>
+      <div class="cart">Add to bag</div>
+    </article>
+  </div>
+
+  <section class="spread">
+    <div class="im"><img src="images/olaszkolda-fashion-10318918.jpg" alt=""></div>
+    <div class="tx">
+      <div class="mono" style="color:var(--copper-600)">Fig. 02 — The House Standard</div>
+      <h3>Four things we <b>refuse</b> to compromise.</h3>
+      <p>A tall block costs more to develop and returns fewer sizes per run. We do it anyway, because a folded hem is not a fit.</p>
+      <div class="lst">
+        <div><span>01</span>Drafted from a tall block, never scaled upward</div>
+        <div><span>02</span>Long-staple cotton, wet-spun linen, mulberry silk</div>
+        <div><span>03</span>Runs of 80–300 pieces, then the pattern retires</div>
+        <div><span>04</span>Complimentary alterations for the life of the garment</div>
+      </div>
+    </div>
+  </section>
+
+  <div class="tbl">
+    <div><b>Free</b><span>Shipping</span><p>Nationwide on every order above ৳5,000, dispatched same day.</p></div>
+    <div><b>30d</b><span>Returns</span><p>Live in it a while. Wrong fit goes back free, no restocking fee.</p></div>
+    <div><b>∞</b><span>Alterations</span><p>Hemming and taper included for life on full-price pieces.</p></div>
+    <div><b>7d</b><span>Support</span><p>A fit specialist on the line every day, 10am to 8pm.</p></div>
+  </div>
+
+  <section class="nl">
+    <div class="l">
+      <div class="mono" style="color:var(--copper-600)">Correspondence</div>
+      <h3>Fifteen percent off your first order, and <b>first look</b> at every drop.</h3>
+    </div>
+    <div class="r">
+      <div class="nlf"><input type="email" placeholder="your@email.com" /><button>Subscribe →</button></div>
+      <small>One letter a month. Unsubscribe in a click.</small>
+    </div>
+  </section>
+
+  <footer>
+    <div><h6>Shop</h6><ul><li><a href="#">New arrivals</a></li><li><a href="#">Women</a></li><li><a href="#">Men</a></li><li><a href="#">Sale</a></li></ul></div>
+    <div><h6>Support</h6><ul><li><a href="#">Help centre</a></li><li><a href="#">Track order</a></li><li><a href="#">Returns</a></li><li><a href="#">Size charts</a></li></ul></div>
+    <div><h6>House</h6><ul><li><a href="#">Our story</a></li><li><a href="#">Journal</a></li><li><a href="#">Fittings</a></li><li><a href="#">Careers</a></li></ul></div>
+    <div><h6>Follow</h6><ul><li><a href="#">Instagram</a></li><li><a href="#">Facebook</a></li><li><a href="#">Pinterest</a></li><li><a href="#">YouTube</a></li></ul></div>
+  </footer>
+  <div class="fbot"><span>© 2026 drm Fashion — Dhaka</span><span>Privacy · Terms · Accessibility</span></div>
+</main>
+
+</body>
+</html>

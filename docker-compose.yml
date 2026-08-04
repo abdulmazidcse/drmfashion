@@ -1,0 +1,52 @@
+version: '3.8'
+
+services:
+  # Redis Cache for API and Page caching
+  redis:
+    image: redis:7-alpine
+    container_name: fashion_store_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    restart: unless-stopped
+
+  # PgBouncer for Database Connection Pooling (1M Users)
+  pgbouncer:
+    image: edoburu/pgbouncer:latest
+    container_name: fashion_store_pgbouncer
+    environment:
+      # These credentials should match your actual PostgreSQL database
+      - DB_USER=postgres
+      - DB_PASSWORD=915515
+      - DB_HOST=host.docker.internal # Points to your local host machine's PostgreSQL
+      - DB_PORT=5432
+      - POOL_MODE=transaction
+      - AUTH_TYPE=scram-sha-256
+      - MAX_CLIENT_CONN=10000 # Allows 10k connections from Next.js instances
+      - DEFAULT_POOL_SIZE=50  # Multiplexes them into 50 actual DB connections
+    ports:
+      - "6432:5432" # PgBouncer listens on 6432
+    restart: unless-stopped
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  # MinIO Object Storage
+  minio:
+    image: minio/minio
+    container_name: fashion_store_minio
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      - MINIO_ROOT_USER=admin
+      - MINIO_ROOT_PASSWORD=password123
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio_data:/data
+    restart: unless-stopped
+
+volumes:
+  redis_data:
+  minio_data:

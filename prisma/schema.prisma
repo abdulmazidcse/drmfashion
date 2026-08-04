@@ -1,0 +1,714 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_DATABASE_URL")
+}
+enum Role {
+  USER
+  ADMIN
+}
+
+enum OrderStatus {
+  PENDING
+  PROCESSING
+  SHIPPED
+  DELIVERED
+  CANCELLED
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
+}
+
+enum PurchaseOrderStatus {
+  DRAFT
+  ORDERED
+  SHIPPED
+  RECEIVED
+  CANCELLED
+}
+
+enum ReturnStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  REFUNDED
+}
+
+enum MeasurementSurchargeType {
+  FLAT
+  PERCENT
+}
+
+enum CouponType {
+  PERCENTAGE
+  FIXED
+}
+
+model User {
+  id          String      @id @default(cuid())
+  name        String
+  email       String      @unique
+  password    String
+  phone       String?
+  role        Role        @default(USER)
+  rewardPoints Int        @default(0)
+
+  addresses   Address[]
+  cart        Cart?
+  wishlist    Wishlist?
+  reviews     Review[]
+  questions   ProductQuestion[]
+  orders      Order[]
+  returnRequests ReturnRequest[]
+
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+}
+
+model Address {
+  id          String    @id @default(cuid())
+
+  userId      String
+  user        User      @relation(fields: [userId], references: [id])
+
+  fullName    String
+  phone       String
+
+  country     String
+  city        String
+  area        String
+  address     String
+  postalCode  String?
+
+  isDefault   Boolean   @default(false)
+
+  createdAt   DateTime  @default(now())
+}
+
+model Category {
+  id          String      @id @default(cuid())
+  name        String
+  slug        String      @unique
+  image       String?
+  description String?     @db.Text
+  isTrending  Boolean     @default(false)
+
+  parentId    String?
+  parent      Category?   @relation("CategoryChildren", fields: [parentId], references: [id])
+  children    Category[]  @relation("CategoryChildren")
+
+  products    Product[]
+
+  createdAt   DateTime    @default(now())
+  deletedAt   DateTime?
+}
+
+model Brand {
+  id          String      @id @default(cuid())
+  name        String
+  slug        String      @unique
+  image       String?
+  description String?     @db.Text
+
+  products    Product[]
+
+  createdAt   DateTime    @default(now())
+}
+
+model Color {
+  id          String      @id @default(cuid())
+  name        String
+  // SOLID | GRADIENT | CHECK | IMAGE — see lib/colorStyle.ts for how each renders
+  type        String      @default("SOLID")
+  // always set: the flat colour, and the fallback behind an IMAGE swatch
+  value       String
+  // gradient: second stop. check: line colour over `value`
+  value2      String?
+  // gradient direction in degrees
+  angle       Int?
+  // IMAGE: fabric / print photo cropped into the swatch
+  image       String?
+
+  createdAt   DateTime    @default(now())
+}
+
+model Size {
+  id          String      @id @default(cuid())
+  name        String
+  value       String      @unique
+
+  createdAt   DateTime    @default(now())
+}
+
+model Length {
+  id          String      @id @default(cuid())
+  name        String
+  value       String      @unique
+
+  createdAt   DateTime    @default(now())
+}
+
+model Product {
+  id              String            @id @default(cuid())
+
+  title           String
+  slug            String            @unique
+  description     String            @db.Text
+  sizeAndFit      String?           @db.Text
+  fabricAndCare   String?           @db.Text
+
+  metaTitle       String?
+  metaDescription String?           @db.Text
+  metaKeywords    String?           @db.Text
+  tags            String?           @db.Text
+
+  brandId         String?
+  brand           Brand?            @relation(fields: [brandId], references: [id])
+  thumbnail       String
+  sizeChart       String?
+
+  basePrice       Float
+  costPrice       Float?
+  discountPrice   Float?
+  flashSaleEndDate DateTime?
+
+  featured        Boolean           @default(false)
+  published       Boolean           @default(true)
+
+  // ─── Made-to-measure ───────────────────────────────────────────────────────
+  // When enabled the customer can order this product to their own measurements.
+  // The surcharge falls back to the template's unless overridden here.
+  customMeasurementEnabled Boolean                   @default(false)
+  measurementTemplateId    String?
+  measurementTemplate      MeasurementTemplate?      @relation(fields: [measurementTemplateId], references: [id], onDelete: SetNull)
+  customSurchargeType      MeasurementSurchargeType?
+  customSurchargeValue     Float?
+
+  categoryId      String
+  category        Category          @relation(fields: [categoryId], references: [id])
+
+  images          ProductImage[]
+  variants        ProductVariant[]
+  reviews         Review[]
+  questions       ProductQuestion[]
+
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  deletedAt       DateTime?
+
+  // Every admin and storefront listing filters on `deletedAt IS NULL` and sorts
+  // by `createdAt DESC`; the category filter drives the shop and the admin
+  // category picker. Postgres does not index foreign keys automatically.
+  @@index([deletedAt, createdAt])
+  @@index([categoryId])
+  @@index([brandId])
+}
+
+model ProductImage {
+  id          String    @id @default(cuid())
+
+  productId   String
+  product     Product   @relation(fields: [productId], references: [id])
+
+  url         String
+  color       String?
+}
+
+model ProductVariant {
+  id              String          @id @default(cuid())
+
+  productId       String
+  product         Product         @relation(fields: [productId], references: [id])
+
+  size            String
+  color           String
+  length          String?
+  sku             String          @unique
+
+  stock           Int
+  price           Float?
+
+  image           String?
+  images          Json
+
+  orderItems      OrderItem[]
+  cartItems       CartItem[]
+  wishlistItems   WishlistItem[]
+
+  inventoryLogs   InventoryLog[]
+  purchaseItems   PurchaseOrderItem[]
+  stockAlerts     StockAlert[]
+
+  createdAt       DateTime        @default(now())
+  deletedAt       DateTime?
+
+  @@index([productId])
+  @@index([sku])
+
+  // The inventory screen pages through variants ordered by stock and filters on
+  // low/out-of-stock bands, so the sort key needs an index of its own.
+  @@index([deletedAt, stock])
+}
+
+model Cart {
+  id          String      @id @default(cuid())
+
+  userId      String      @unique
+  user        User        @relation(fields: [userId], references: [id])
+
+  items       CartItem[]
+
+  createdAt   DateTime    @default(now())
+}
+
+model CartItem {
+  id              String            @id @default(cuid())
+
+  cartId          String
+  cart            Cart              @relation(fields: [cartId], references: [id])
+
+  variantId       String
+  variant         ProductVariant    @relation(fields: [variantId], references: [id])
+
+  quantity        Int
+
+  createdAt       DateTime          @default(now())
+}
+
+model Wishlist {
+  id          String          @id @default(cuid())
+
+  userId      String          @unique
+  user        User            @relation(fields: [userId], references: [id])
+
+  items       WishlistItem[]
+}
+
+model WishlistItem {
+  id              String            @id @default(cuid())
+
+  wishlistId      String
+  wishlist        Wishlist          @relation(fields: [wishlistId], references: [id])
+
+  variantId       String
+  variant         ProductVariant    @relation(fields: [variantId], references: [id])
+
+  createdAt       DateTime          @default(now())
+}
+
+model Order {
+  id                  String            @id @default(cuid())
+
+  userId              String
+  user                User              @relation(fields: [userId], references: [id])
+
+  totalAmount         Float
+
+  status              OrderStatus       @default(PENDING)
+
+  paymentStatus       PaymentStatus     @default(PENDING)
+
+  shippingAddress     String
+  shippingPhone       String
+  shippingCarrier     String?
+  shippingMethod      String?
+  shippingFee         Float             @default(0)
+
+  items               OrderItem[]
+
+  payment             Payment?
+  returnRequests      ReturnRequest[]
+  
+  pointsRedeemed      Int               @default(0)
+  pointsEarned        Int               @default(0)
+
+  currencyCode        String            @default("USD")
+  currencySymbol      String            @default("$")
+  exchangeRate        Float             @default(1.0)
+
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+
+  @@index([userId])
+  @@index([status])
+  @@index([paymentStatus])
+  @@index([createdAt])
+}
+
+model OrderItem {
+  id                  String            @id @default(cuid())
+
+  orderId             String
+  order               Order             @relation(fields: [orderId], references: [id])
+
+  variantId           String
+  variant             ProductVariant    @relation(fields: [variantId], references: [id])
+
+  quantity            Int
+  price               Float
+
+  // ─── Made-to-measure snapshot ──────────────────────────────────────────────
+  // Values and fee are frozen at order time so later admin edits to a template
+  // never rewrite the price or measurements of an existing order.
+  isCustom            Boolean           @default(false)
+  customFee           Float             @default(0)
+  customMeasurements  Json?             // { templateName, unit, values: [{ key, label, value, unit }] }
+
+  @@index([orderId])
+  @@index([variantId])
+}
+
+model Payment {
+  id                  String            @id @default(cuid())
+
+  orderId             String            @unique
+  order               Order             @relation(fields: [orderId], references: [id])
+
+  transactionId       String?
+
+  provider            String
+
+  amount              Float
+
+  status              PaymentStatus     @default(PENDING)
+
+  createdAt           DateTime          @default(now())
+}
+
+model Review {
+  id              String      @id @default(cuid())
+
+  userId          String
+  user            User        @relation(fields: [userId], references: [id])
+
+  productId       String
+  product         Product     @relation(fields: [productId], references: [id])
+
+  rating          Int
+  comment         String?
+
+  createdAt       DateTime    @default(now())
+
+  @@index([userId])
+  @@index([productId])
+  @@index([createdAt])
+}
+
+model Coupon {
+  id              String      @id @default(cuid())
+
+  code            String      @unique
+
+  type            CouponType  @default(PERCENTAGE)
+  discount        Float
+
+  minOrderAmount  Float?      // Minimum order value to apply coupon
+  maxUses         Int?        // Max number of times coupon can be used (null = unlimited)
+  usedCount       Int         @default(0)
+
+  active          Boolean     @default(true)
+
+  expiresAt       DateTime?
+}
+
+model Banner {
+  id              String      @id @default(cuid())
+
+  title           String
+
+  image           String
+
+  link            String?
+
+  active          Boolean     @default(true)
+
+  createdAt       DateTime    @default(now())
+}
+
+model ReturnRequest {
+  id              String        @id @default(cuid())
+
+  orderId         String
+  order           Order         @relation(fields: [orderId], references: [id])
+
+  userId          String
+  user            User          @relation(fields: [userId], references: [id])
+
+  reason          String
+  status          ReturnStatus  @default(PENDING)
+  adminNote       String?
+
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@index([orderId])
+  @@index([userId])
+  @@index([status])
+}
+
+model Subscriber {
+  id              String      @id @default(cuid())
+
+  email           String      @unique
+  firstName       String?
+  shopFor         String?
+
+  subscribedAt    DateTime    @default(now())
+}
+
+// Messages submitted through the storefront "Contact Us" form.
+model ContactMessage {
+  id          String      @id @default(cuid())
+  name        String
+  email       String
+  subject     String?
+  message     String
+  handled     Boolean     @default(false)
+  createdAt   DateTime    @default(now())
+
+  @@index([createdAt])
+}
+
+// One-time password codes for customer "forgot password" reset flow.
+// OTP is stored hashed; rows are short-lived and cleaned up on use/expiry.
+model PasswordResetOtp {
+  id          String      @id @default(cuid())
+  email       String
+  otpHash     String
+  expiresAt   DateTime
+  attempts    Int         @default(0)
+  createdAt   DateTime    @default(now())
+
+  @@index([email])
+}
+
+model InventoryLog {
+  id              String            @id @default(cuid())
+
+  variantId       String
+  variant         ProductVariant    @relation(fields: [variantId], references: [id])
+
+  previousStock   Int
+  newStock        Int
+
+  note            String?
+
+  createdAt       DateTime          @default(now())
+
+  @@index([variantId])
+  @@index([createdAt])
+}
+
+model Supplier {
+  id              String            @id @default(cuid())
+  
+  name            String
+  email           String?
+  phone           String?
+  address         String?
+  
+  purchaseOrders  PurchaseOrder[]
+  
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+}
+
+model PurchaseOrder {
+  id              String            @id @default(cuid())
+  
+  supplierId      String
+  supplier        Supplier          @relation(fields: [supplierId], references: [id])
+  
+  status          PurchaseOrderStatus @default(DRAFT)
+  
+  totalCost       Float
+  
+  items           PurchaseOrderItem[]
+  
+  notes           String?
+  
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+}
+
+model PurchaseOrderItem {
+  id              String            @id @default(cuid())
+  
+  purchaseOrderId String
+  purchaseOrder   PurchaseOrder     @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+  
+  variantId       String
+  variant         ProductVariant    @relation(fields: [variantId], references: [id])
+  
+  quantity        Int
+  unitCost        Float
+  
+  createdAt       DateTime          @default(now())
+}
+
+model Setting {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     String   @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Page {
+  id        String   @id @default(cuid())
+  title     String
+  slug      String   @unique
+  content   String   // Stores HTML content
+  published Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model ProductQuestion {
+  id          String   @id @default(cuid())
+
+  productId   String
+  product     Product  @relation(fields: [productId], references: [id])
+
+  userId      String?
+  user        User?    @relation(fields: [userId], references: [id])
+
+  userName    String?  // For guest questions
+
+  question    String
+  answer      String?
+
+  status      String   @default("PENDING") // PENDING, ANSWERED, REJECTED
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([productId])
+  @@index([userId])
+}
+
+model StockAlert {
+  id        String   @id @default(cuid())
+  email     String
+  variantId String
+  variant   ProductVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  status    String   @default("PENDING") // PENDING, NOTIFIED
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([email, variantId])
+}
+
+model MenuItem {
+  id         String     @id @default(cuid())
+  title      String
+  url        String
+  position   Int        @default(0)
+  imageUrl   String?
+  parentId   String?
+  parent     MenuItem?  @relation("MenuHierarchy", fields: [parentId], references: [id], onDelete: Cascade)
+  children   MenuItem[] @relation("MenuHierarchy")
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+}
+
+/// A made-to-measure garment type (Shirt, Pant, Blazer …) plus the tailoring
+/// surcharge charged when a customer orders it to their own measurements.
+model MeasurementTemplate {
+  id             String                   @id @default(cuid())
+  name           String
+  slug           String                   @unique
+  description    String?                  @db.Text
+  instructions   String?                  @db.Text // "How to measure" copy shown to the customer
+
+  surchargeType  MeasurementSurchargeType @default(FLAT)
+  surchargeValue Float                    @default(0)
+
+  active         Boolean                  @default(true)
+  position       Int                      @default(0)
+
+  fields         MeasurementField[]
+  products       Product[]
+
+  createdAt      DateTime                 @default(now())
+  updatedAt      DateTime                 @updatedAt
+}
+
+/// One measurement the customer fills in (Shoulder, Chest …).
+model MeasurementField {
+  id         String              @id @default(cuid())
+
+  templateId String
+  template   MeasurementTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  label      String // "Shoulder"
+  key        String // "shoulder" — stable key stored on the order
+  unit       String              @default("in")
+  helpText   String?
+  placeholder String?
+
+  minValue   Float?
+  maxValue   Float?
+  step       Float               @default(0.5)
+  required   Boolean             @default(true)
+  position   Int                 @default(0)
+
+  createdAt  DateTime            @default(now())
+  updatedAt  DateTime            @updatedAt
+
+  @@unique([templateId, key])
+  @@index([templateId])
+}
+
+model JournalCategory {
+  id          String        @id @default(cuid())
+  name        String
+  slug        String        @unique
+  description String?       @db.Text
+  position    Int           @default(0)
+
+  posts       JournalPost[]
+
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+}
+
+model JournalPost {
+  id              String           @id @default(cuid())
+  title           String
+  slug            String           @unique
+  excerpt         String?          @db.Text
+  content         String           @db.Text // Stores HTML content
+  coverImage      String?
+
+  authorName      String?
+  readTime        Int              @default(1) // minutes, auto-estimated from content
+  tags            String[]         @default([])
+
+  featured        Boolean          @default(false)
+  published       Boolean          @default(false)
+  publishedAt     DateTime?
+  views           Int              @default(0)
+
+  metaTitle       String?
+  metaDescription String?          @db.Text
+  metaKeywords    String?
+
+  categoryId      String?
+  category        JournalCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  @@index([published, publishedAt])
+  @@index([categoryId])
+  @@index([featured])
+}

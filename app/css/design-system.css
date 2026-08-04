@@ -1,0 +1,47 @@
+/* design-system.css */
+:root {
+  /* Cool blue palette */
+  --color-primary: hsl(210, 60%, 55%); /* base blue */
+  --color-primary-light: hsl(210, 60%, 65%);
+  --color-primary-dark: hsl(210, 60%, 45%);
+  --color-accent: hsl(340, 70%, 55%); /* accent pink */
+  --color-bg: #f8fafc; /* light background */
+  --color-bg-dark: #0a0a0a; /* dark background */
+  --color-text: #1f2937; /* dark gray */
+  --color-text-light: #f1f5f9; /* light text */
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-bg: var(--color-bg-dark);
+    --color-text: var(--color-text-light);
+  }
+}
+
+/* Typography */
+html {
+  font-family: "Inter", system-ui, sans-serif;
+  color: var(--color-text);
+  background: var(--color-bg);
+}
+
+/* NOTE: the .bg-primary / .text-primary / .text-accent utility classes were
+   removed here — they had zero usages and their names collided with the
+   shadcn/ui token utilities generated for the admin panel. */
+
+/* Glassmorphism navbar */
+.nav-glass {
+  backdrop-filter: blur(12px);
+  background: rgba(255, 255, 255, 0.15);
+  border-bottom: 1px solid rgba(255,255,255,0.2);
+}
+
+/* Hero animation */
+@keyframes heroFadeIn {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.hero-section { animation: heroFadeIn 1.2s ease-out; }
+
+/* Product card lift */
+.card:hover { transform: translateY(-4px); box-shadow: 0 8px 20px rgba(0,0,0,0.12); }

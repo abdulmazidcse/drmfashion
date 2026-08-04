@@ -1,0 +1,943 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+/* Class-based dark variant (admin never sets .dark, so shadcn dark: utilities stay
+   inert; the public site never used dark: utilities, so this changes nothing there). */
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  /* Signature: the storefront sits on warm cream, not white. Cards, header and
+     footer supply the white. `.admin` re-declares both below, so the dashboard
+     is unaffected. */
+  --background: #faf6f1;
+  --foreground: #1c1a17;
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+   BRAND PALETTE — sampled from the drm Fashion logo.
+
+   The wordmark is a copper/bronze gradient, the "Fashion" outline is cyan, and
+   the mark sits on white. So: copper carries every action and brand state,
+   cyan is a sparing secondary (focus rings, small accents, gradient rules), and
+   the editorial black-on-white typography of the storefront is left alone —
+   that contrast is what keeps the pages reading as premium rather than themed.
+
+   `brand-600` is the button colour (4.8:1 on white, so white label text passes
+   AA); `brand-700` is the smallest safe copper for text on white (6.9:1).
+   `brand-ink` replaces flat zinc-950 on the big dark bands — same weight, but
+   warmed toward the logo instead of a neutral grey.
+   ────────────────────────────────────────────────────────────────────────── */
+@theme {
+  --color-brand-50: #fbf5ef;
+  --color-brand-100: #f6e7d7;
+  --color-brand-200: #ebcdae;
+  --color-brand-300: #deaf81;
+  --color-brand-400: #ce9159;
+  --color-brand-500: #bc7a3f;
+  --color-brand-600: #a0632f;
+  --color-brand-700: #814e26;
+  --color-brand-800: #653d20;
+  --color-brand-900: #4c2e19;
+  --color-brand-950: #2a190d;
+
+  --color-aqua-50: #ecfdfd;
+  --color-aqua-100: #cff7f9;
+  --color-aqua-200: #a0edf1;
+  --color-aqua-300: #63dde5;
+  --color-aqua-400: #35c7d2;
+  --color-aqua-500: #1ba9b6;
+  --color-aqua-600: #148794;
+  --color-aqua-700: #146b76;
+  --color-aqua-800: #165660;
+  --color-aqua-900: #164851;
+  --color-aqua-950: #082f36;
+
+  /* Dark bands (hero backdrop, flash sale, brand showcase, value props) */
+  --color-brand-ink: #101617;
+  --color-brand-ink-soft: #1a2325;
+  --color-brand-ink-line: #2a3538;
+
+  /* ── Signature surface scale ──────────────────────────────────────────────
+     The storefront is three surfaces and nothing else: cream page, white card,
+     hairline between them. Everything rounded to one radius so the page reads
+     as a set of soft panels rather than a stack of boxes. */
+  --color-cream: #faf6f1;
+  --color-surface: #ffffff;
+  --color-line: #eae2d8;
+  --color-soft: #6f6a63;
+  --color-faint: #a49d94;
+
+  --radius-sg: 22px;
+  --radius-sg-lg: 34px;
+  --shadow-sg: 0 1px 2px rgba(28, 26, 23, 0.04), 0 18px 44px -28px rgba(28, 26, 23, 0.35);
+  --shadow-sg-copper: 0 10px 24px -12px rgba(160, 99, 47, 0.85);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  /* Signature's typeface. Plus Jakarta Sans was already in the bundle for the
+     admin, so making it the storefront face costs nothing extra and retires the
+     second family. */
+  --font-sans: var(--font-plus-jakarta-sans);
+
+  /* shadcn/ui token → utility mappings (inline, so nothing is emitted to :root and
+     the public site's own variables are never touched). Values live in `.admin`. */
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+}
+
+/* No prefers-color-scheme flip here any more. The storefront now takes its page
+   colour from --background rather than a per-page `bg-white`, so honouring the
+   OS dark preference would hand a dark-mode visitor a cream design with no dark
+   counterpart — every card, rule and shadow below is authored for light. */
+
+/* ──────────────────────────────────────────────────────────────────────────
+   Admin dashboard design system (shadcn/ui).
+   Token VALUES live on :root so Radix PORTALS (dropdown / select / popover /
+   tooltip / dialog) — which render on <body>, OUTSIDE the .admin wrapper — are
+   themed too. The storefront uses none of these utilities (bg-primary/bg-card/
+   border-border/…), so exposing the vars here is inert for the public site; the
+   only vars it actually reads (--background/--foreground) are NOT redefined here.
+
+   ►► BRAND ACCENT: edit --primary / --ring below to re-skin every admin button,
+      badge, active state and focus ring in ONE place. ◄◄
+   ────────────────────────────────────────────────────────────────────────── */
+:root {
+  --radius: 0.625rem;
+
+  /* Primary accent — blue-indigo (#4A5FE8), from the user's Dashboard color redesign. Change these to rebrand the admin. */
+  --primary: #4A5FE8;
+  --primary-foreground: oklch(0.985 0 0);
+  --ring: #4A5FE8;
+
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.141 0.005 285.823);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.141 0.005 285.823);
+  --secondary: oklch(0.967 0.001 286.375);
+  --secondary-foreground: oklch(0.21 0.006 285.885);
+  --muted: oklch(0.967 0.001 286.375);
+  --muted-foreground: oklch(0.552 0.016 285.938);
+  --accent: oklch(0.967 0.001 286.375);
+  --accent-foreground: oklch(0.21 0.006 285.885);
+  --destructive: oklch(0.577 0.245 27.325);
+  --destructive-foreground: oklch(0.985 0 0);
+  --border: oklch(0.92 0.004 286.32);
+  --input: oklch(0.92 0.004 286.32);
+  --chart-1: oklch(0.646 0.222 41.116);
+  --chart-2: oklch(0.6 0.118 184.704);
+  --chart-3: oklch(0.398 0.07 227.392);
+  --chart-4: oklch(0.828 0.189 84.429);
+  --chart-5: oklch(0.769 0.188 70.08);
+}
+
+/* Give the admin subtree AND all portalled content a light, OS-independent
+   --background/--foreground (immune to the storefront's prefers-color-scheme
+   flip on :root). Portal roots live on <body>, so they must be listed here.
+   Includes SweetAlert2 (.swal2-popup) and CKEditor 5's balloon/toolbar UI
+   (.ck-body-wrapper), both of which also render into document.body outside
+   .admin. */
+.admin,
+[data-radix-popper-content-wrapper],
+[data-slot="dialog-content"],
+[data-slot="dialog-overlay"],
+[data-slot="alert-dialog-content"],
+[data-slot="alert-dialog-overlay"],
+.swal2-popup,
+.ck-body-wrapper {
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.141 0.005 285.823);
+  /* ►► ADMIN FONT: edit --font-admin below to change the dashboard typeface
+     without touching the storefront's body font-family. ◄◄ */
+  --font-admin: var(--font-plus-jakarta-sans);
+  font-family: var(--font-admin), sans-serif;
+}
+.admin {
+  color: var(--foreground);
+}
+
+/* SweetAlert2 premium reskin — matches the admin's rounded-xl/border/button
+   conventions. Only shape/spacing/typography is touched here; confirmButtonColor
+   / cancelButtonColor stay as inline styles set per Swal.fire() call and are
+   deliberately left alone (see CLAUDE.md-adjacent notes on that convention). */
+.swal2-popup {
+  width: 22rem !important;
+  border-radius: 1rem !important;
+  border: 1px solid var(--border) !important;
+  padding: 2rem 1.75rem 1.75rem !important;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25) !important;
+}
+.swal2-title {
+  font-size: 1.125rem !important;
+  font-weight: 600 !important;
+  letter-spacing: -0.01em !important;
+  padding: 0 !important;
+  margin: 0 0 0.5rem !important;
+}
+.swal2-html-container {
+  font-size: 0.875rem !important;
+  margin: 0 0 1.5rem !important;
+}
+.swal2-icon {
+  width: 4rem !important;
+  height: 4rem !important;
+  margin: 0.5rem auto 1.25rem !important;
+}
+.swal2-actions {
+  gap: 0.625rem !important;
+  width: 100% !important;
+  margin: 0 !important;
+}
+.swal2-styled {
+  border-radius: 0.5rem !important;
+  min-height: 2.25rem !important;
+  padding: 0.5rem 1.125rem !important;
+  font-size: 0.8125rem !important;
+  font-weight: 600 !important;
+  flex: 1 !important;
+  box-shadow: none !important;
+}
+
+/* Delete-confirmation dialog (lib/confirmDelete.ts) — rose/red destructive-confirm
+   design matching a reference mock. A deliberate, scoped exception to the admin's
+   monochrome accent rule: applies only to this specific confirm dialog, not the
+   generic .swal2-popup reskin above used for every other Swal.fire() alert. */
+.swal2-popup.confirm-delete-popup {
+  width: 22rem !important;
+  background: #fff !important;
+  border: none !important;
+  border-radius: 1.5rem !important;
+  padding: 1.25rem !important;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25) !important;
+}
+.confirm-delete-card {
+  background: transparent;
+  padding: 0.5rem 0.25rem 0;
+  text-align: center;
+}
+.confirm-delete-icon-wrap {
+  position: relative;
+  width: 5rem;
+  height: 5rem;
+  margin: 0 auto 0.75rem;
+}
+.confirm-delete-shadow {
+  position: absolute;
+  left: 50%;
+  bottom: 0.35rem;
+  transform: translateX(-50%);
+  width: 3.5rem;
+  height: 0.7rem;
+  border-radius: 999px;
+  background: #fde3e5;
+}
+.confirm-delete-trash {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+.confirm-delete-mark {
+  position: absolute;
+  color: #f43f5e;
+  font-weight: 800;
+  line-height: 1;
+  pointer-events: none;
+}
+.confirm-delete-plus {
+  font-size: 1.1rem;
+}
+.confirm-delete-dot {
+  width: 0.3rem;
+  height: 0.3rem;
+  border-radius: 50%;
+  background: #f43f5e;
+}
+.confirm-delete-dot-sm {
+  width: 0.2rem;
+  height: 0.2rem;
+}
+.confirm-delete-title {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #18181b;
+  margin: 0 0 0.375rem;
+  letter-spacing: -0.01em;
+}
+.confirm-delete-text {
+  font-size: 0.875rem;
+  color: #71717a;
+  line-height: 1.4;
+  margin: 0;
+}
+.confirm-delete-actions {
+  width: 100% !important;
+  gap: 0.625rem !important;
+  margin: 1rem 0 0 !important;
+}
+.confirm-delete-confirm,
+.confirm-delete-cancel {
+  flex: 1;
+  border-radius: 999px;
+  padding: 0.7rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: opacity 0.15s ease;
+}
+.confirm-delete-confirm {
+  background: #f43f5e;
+  color: #fff;
+  border: none;
+}
+.confirm-delete-confirm:hover {
+  opacity: 0.9;
+}
+.confirm-delete-cancel {
+  background: #fff;
+  color: #f43f5e;
+  border: 1.5px solid #f43f5e;
+}
+.confirm-delete-cancel:hover {
+  background: #fff1f2;
+}
+
+/* shadcn components use bare `border`/`outline` expecting the token colour.
+   Apply it to the admin subtree AND to portalled content. Explicit border-*
+   utilities still win (utilities layer overrides this base layer). */
+@layer base {
+  .admin *, .admin ::after, .admin ::before,
+  [data-radix-popper-content-wrapper] *,
+  [data-radix-popper-content-wrapper] ::after,
+  [data-radix-popper-content-wrapper] ::before,
+  [data-slot="dialog-content"], [data-slot="dialog-content"] *,
+  [data-slot="alert-dialog-content"], [data-slot="alert-dialog-content"] * {
+    border-color: var(--border);
+  }
+  .admin *:focus-visible,
+  [data-radix-popper-content-wrapper] *:focus-visible {
+    outline-color: var(--ring);
+  }
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-plus-jakarta-sans), sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Signature sets headings tight and heavy; the default tracking looks loose at
+   the display sizes the design uses. */
+h1, h2, h3 {
+  letter-spacing: -0.03em;
+}
+
+/* Custom HTML styling for dynamic pages */
+.custom-html h1, .custom-html h2, .custom-html h3 { font-weight: 850; text-transform: uppercase; margin-bottom: 1rem; margin-top: 2rem; color: #09090b; letter-spacing: -0.02em; }
+.custom-html h1 { font-size: 2.25rem; line-height: 2.5rem; }
+.custom-html h2 { font-size: 1.75rem; line-height: 2.25rem; }
+.custom-html h3 { font-size: 1.35rem; line-height: 2rem; }
+.custom-html p { margin-bottom: 1.25rem; line-height: 1.8; color: #52525b; font-size: 14px; }
+.custom-html p strong { color: #09090b; }
+.custom-html ul, .custom-html ol { margin-bottom: 1.25rem; padding-left: 0rem; color: #52525b; }
+.custom-html li { 
+  position: relative; 
+  padding-left: 1.75rem; 
+  margin-bottom: 1.25rem; 
+  font-size: 14px; 
+  line-height: 1.8; 
+  list-style: none;
+}
+.custom-html li::before { 
+  content: "→"; 
+  position: absolute; 
+  left: 0; 
+  top: 0; 
+  color: #09090b; 
+  font-weight: bold; 
+}
+.custom-html li strong { 
+  display: block; 
+  font-size: 11px; 
+  text-transform: uppercase; 
+  letter-spacing: 0.2em; 
+  color: #71717a; 
+  margin-bottom: 0.25rem; 
+  font-weight: 800;
+}
+.custom-html a { color: #09090b; text-decoration: underline; text-underline-offset: 4px; font-weight: bold; }
+.custom-html a:hover { color: #71717a; }
+.custom-html blockquote { border-left: 4px solid #09090b; padding-left: 1.25rem; color: #27272a; font-style: italic; margin-bottom: 1.25rem; font-size: 1.125rem; }
+.custom-html strong { font-weight: 700; color: #09090b; }
+
+/* ─── Journal article body ──────────────────────────────────────────────────
+   Long-form editorial typography. Unlike .custom-html this keeps headings in
+   sentence case and uses real bullets, matching the journal design. */
+.journal-content { color: #3f3f46; font-size: 16px; line-height: 1.85; }
+.journal-content > *:first-child { margin-top: 0; }
+.journal-content h2,
+.journal-content h3,
+.journal-content h4 {
+  color: #09090b;
+  font-weight: 800;
+  letter-spacing: -0.015em;
+  scroll-margin-top: 6rem;
+}
+.journal-content h2 { font-size: 1.65rem; line-height: 1.3; margin-top: 3rem; margin-bottom: 1rem; }
+.journal-content h3 { font-size: 1.25rem; line-height: 1.4; margin-top: 2.25rem; margin-bottom: 0.75rem; }
+.journal-content h4 { font-size: 1.05rem; line-height: 1.5; margin-top: 1.75rem; margin-bottom: 0.5rem; }
+.journal-content p { margin-bottom: 1.4rem; }
+.journal-content strong { color: #09090b; font-weight: 700; }
+.journal-content a { color: #09090b; text-decoration: underline; text-underline-offset: 3px; font-weight: 600; }
+.journal-content a:hover { color: #71717a; }
+.journal-content ul,
+.journal-content ol { margin: 0 0 1.5rem; padding-left: 1.35rem; }
+.journal-content ul { list-style: disc; }
+.journal-content ol { list-style: decimal; }
+.journal-content li { margin-bottom: 0.6rem; padding-left: 0.35rem; }
+.journal-content li::marker { color: #a1a1aa; }
+.journal-content blockquote {
+  border-left: 3px solid #09090b;
+  margin: 2rem 0;
+  padding: 0.25rem 0 0.25rem 1.5rem;
+  color: #18181b;
+  font-size: 1.15rem;
+  line-height: 1.6;
+  font-style: italic;
+}
+.journal-content img { width: 100%; height: auto; display: block; }
+.journal-content figure { margin: 2.5rem 0; }
+.journal-content figure.image { margin: 2.5rem 0; }
+.journal-content figcaption {
+  margin-top: 0.75rem;
+  font-size: 12px;
+  line-height: 1.6;
+  color: #71717a;
+  text-align: center;
+}
+.journal-content hr { border: 0; border-top: 1px solid #e4e4e7; margin: 3rem 0; }
+.journal-content table { width: 100%; border-collapse: collapse; margin: 2rem 0; font-size: 14px; }
+.journal-content th,
+.journal-content td { border: 1px solid #e4e4e7; padding: 0.75rem 1rem; text-align: left; }
+.journal-content th { background: #fafafa; font-weight: 700; color: #09090b; }
+
+/* ─── Page Builder text blocks ───────────────────────────────────────────────
+   Applied by BlockRenderer to text / two-column / html blocks. Inline styles
+   authored in the builder always win, so this only styles plain semantic HTML
+   (help pages, policies, size charts) that would otherwise render unstyled. */
+.page-content { color: #52525b; font-size: 15px; line-height: 1.8; }
+.page-content > *:first-child { margin-top: 0; }
+.page-content h2,
+.page-content h3,
+.page-content h4 { color: #09090b; font-weight: 800; letter-spacing: -0.015em; }
+.page-content h2 { font-size: 1.6rem; line-height: 1.3; margin-top: 2.5rem; margin-bottom: 1rem; }
+.page-content h3 { font-size: 1.15rem; line-height: 1.4; margin-top: 1.75rem; margin-bottom: 0.5rem; }
+.page-content h4 { font-size: 1rem; line-height: 1.5; margin-top: 1.5rem; margin-bottom: 0.5rem; }
+.page-content p { margin-bottom: 1.25rem; }
+.page-content strong { color: #09090b; font-weight: 700; }
+.page-content a { color: #09090b; text-decoration: underline; text-underline-offset: 3px; font-weight: 600; }
+.page-content a:hover { color: #71717a; }
+.page-content ul,
+.page-content ol { margin: 0 0 1.5rem; padding-left: 1.35rem; }
+.page-content ul { list-style: disc; }
+.page-content ol { list-style: decimal; }
+.page-content li { margin-bottom: 0.5rem; padding-left: 0.35rem; }
+.page-content li::marker { color: #a1a1aa; }
+.page-content hr { border: 0; border-top: 1px solid #e4e4e7; margin: 2.5rem 0; }
+.page-content table { width: 100%; border-collapse: collapse; margin: 1.75rem 0; font-size: 14px; }
+.page-content th,
+.page-content td { border: 1px solid #e4e4e7; padding: 0.65rem 0.9rem; text-align: left; }
+.page-content th { background: #fafafa; font-weight: 700; color: #09090b; }
+@media (max-width: 640px) {
+  .page-content table { display: block; overflow-x: auto; white-space: nowrap; }
+}
+
+/* Custom Styling for React Quill Editor */
+.ql-container { min-height: 24rem; font-family: var(--font-plus-jakarta-sans), sans-serif !important; font-size: 0.875rem !important; border-bottom-left-radius: 0.5rem; border-bottom-right-radius: 0.5rem; }
+.ql-toolbar { font-family: var(--font-plus-jakarta-sans), sans-serif !important; border-top-left-radius: 0.5rem; border-top-right-radius: 0.5rem; background-color: #fcfcfc; }
+.ql-editor { min-height: 24rem; }
+
+/* Custom Scrollbar Utilities */
+.scrollbar-thin {
+  scrollbar-width: thin;
+  scrollbar-color: #e4e4e7 transparent;
+}
+.scrollbar-thin::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+.scrollbar-thin::-webkit-scrollbar-button {
+  display: none;
+  width: 0;
+  height: 0;
+}
+.scrollbar-thin::-webkit-scrollbar-track {
+  background: transparent;
+}
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background: #e4e4e7;
+  border-radius: 10px;
+}
+.scrollbar-thin::-webkit-scrollbar-thumb:hover {
+  background: #d4d4d8;
+}
+
+/* Menu Builder tree (react-nestable). The library indents 40px per level, which
+   costs 120px by depth 3 — enough to squeeze the item label out of the row in
+   the two-thirds-width column it renders in. A guide line replaces the width. */
+.admin .nestable .nestable-list {
+  padding-left: 20px;
+  border-left: 1px solid var(--border);
+  margin-left: 6px;
+}
+.admin .nestable > .nestable-list {
+  padding-left: 0;
+  border-left: 0;
+  margin-left: 0;
+}
+
+/* Admin dashboard sidebar */
+.admin-sidebar {
+  box-shadow: 0 3px 16px rgba(142, 134, 171, .05);
+}
+
+/* Sidebar nav scrollbar — subtle, only visible on hover, tuned for the dark sidebar bg */
+.sidebar-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+.sidebar-scroll:hover {
+  scrollbar-color: rgba(255, 255, 255, 0.16) transparent;
+}
+.sidebar-scroll::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+.sidebar-scroll::-webkit-scrollbar-button {
+  display: none;
+  width: 0;
+  height: 0;
+}
+.sidebar-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.sidebar-scroll::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 10px;
+}
+.sidebar-scroll:hover::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.16);
+}
+.sidebar-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.28);
+}
+
+/* Print rules for administrative layouts (POS receipt printing) */
+@media print {
+  /* 1. Reset Next.js/Tailwind layout containers to standard vertical blocks first */
+  .min-h-screen, .flex, .flex-1, .flex-col {
+    min-height: 0 !important;
+    height: auto !important;
+    display: block !important;
+    background: transparent !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  /* 2. Hide administrative layout components and modal overlays completely.
+     Using highly specific selector pairs to ensure display:none overrides any .flex / .flex-col resets above! */
+  aside, 
+  header, 
+  #pos-main-layout, 
+  .no-print,
+  [class*="no-print"],
+  .print\:hidden,
+  aside.flex,
+  header.flex,
+  aside.flex-col,
+  header.flex-col,
+  .no-print.flex,
+  .no-print.flex-col,
+  .print\:hidden.flex,
+  .print\:hidden.flex-col,
+  #pos-main-layout.flex,
+  #pos-main-layout.flex-col {
+    display: none !important;
+  }
+
+  /* 3. Force the receipt print area to display beautifully */
+  #pos-thermal-print-area {
+    display: block !important;
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 80mm !important;
+    z-index: 9999999 !important;
+    background: white !important;
+    margin: 0 !important;
+    padding: 10px !important;
+    box-shadow: none !important;
+  }
+
+  /* 4. Clean up root page elements */
+  body, html, main, #__next {
+    background: white !important;
+    color: black !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    width: 100% !important;
+    height: auto !important;
+  }
+
+  /* 5. Full-page documents (invoices) opt out of the POS receipt reset above.
+     The two-class selectors outrank the single-class `.flex` reset, so their
+     real flex layout (justify-between totals, header) survives printing. */
+  .invoice-print-root .flex { display: flex !important; }
+  .invoice-print-root .justify-between { justify-content: space-between !important; }
+  /* Don't indent the printed sheet by the admin sidebar's content margin. */
+  .admin > div { margin-left: 0 !important; }
+}
+
+/* ── American Tall home design tokens (at- namespaced, home page only) ── */
+@theme {
+  --color-at-ink: #101010;
+  --color-at-muted: #717171;
+  /* Was a peach marker; now the lightest copper from the brand ramp so the
+     highlighted heading words read as the logo rather than a stray pastel. */
+  --color-at-peach: #f4e0c8;
+  /* Roboto Flex was retired with the old home design; keep the token pointed at
+     the one family so any stale  usage does not fall to a system face. */
+  --font-home: var(--font-plus-jakarta-sans), sans-serif;
+  --text-at-subheading: 35px;
+  --text-at-subheading--line-height: 1.15;
+  --text-at-hero: 44px;
+  --text-at-hero--line-height: 1.1;
+  --radius-at-btn: 2px;
+  --animate-at-zoom-out: at-zoom-out 1.4s cubic-bezier(0.22, 1, 0.36, 1) both;
+
+  @keyframes at-zoom-out {
+    from { transform: scale(1.08); }
+    to { transform: scale(1); }
+  }
+  @keyframes at-underline {
+    from { background-size: 0% 45%; }
+    to { background-size: 100% 45%; }
+  }
+}
+
+/* Headings use Roboto Flex width axis 105 (slightly extended) */
+.at-heading {
+  font-variation-settings: "wdth" 105;
+  font-weight: 600;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   SIGNATURE — storefront component layer.
+
+   These are the handful of shapes the design repeats everywhere: the white
+   panel, the pill button, the round icon button, the kicker. They live here
+   rather than as 12-class strings in JSX because every one of them is used in
+   a dozen files, and a radius or shadow tweak has to land in one place.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* The white panel the whole design is built from. */
+.sg-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-sg);
+}
+.sg-card-lg {
+  border-radius: var(--radius-sg-lg);
+}
+.sg-raise {
+  box-shadow: var(--shadow-sg);
+}
+
+/* Pill buttons. `primary` is the copper CTA, `ghost` is the white outline pair
+   it always appears next to, `dark` is the rare ink one (active tab states). */
+.sg-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.55rem;
+  border-radius: 999px;
+  font-weight: 700;
+  font-size: 14px;
+  line-height: 1;
+  padding: 15px 30px;
+  border: 1.5px solid transparent;
+  transition: background-color 0.22s, color 0.22s, border-color 0.22s, transform 0.22s;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.sg-btn-sm {
+  font-size: 12.5px;
+  padding: 11px 20px;
+}
+.sg-btn-primary {
+  background: var(--color-brand-600);
+  color: #fff;
+  box-shadow: var(--shadow-sg-copper);
+}
+.sg-btn-primary:hover {
+  background: var(--color-brand-500);
+  transform: translateY(-1px);
+}
+.sg-btn-primary:disabled {
+  background: var(--color-faint);
+  box-shadow: none;
+  transform: none;
+  cursor: not-allowed;
+}
+.sg-btn-ghost {
+  background: var(--color-surface);
+  border-color: var(--color-line);
+  color: var(--foreground);
+}
+.sg-btn-ghost:hover {
+  border-color: var(--color-brand-400);
+  color: var(--color-brand-700);
+}
+.sg-btn-dark {
+  background: var(--foreground);
+  color: #fff;
+}
+.sg-btn-dark:hover {
+  background: #33302c;
+}
+/* On a photo or the copper band, where white is the only readable outline. */
+.sg-btn-glass {
+  border-color: rgba(255, 255, 255, 0.4);
+  color: #fff;
+}
+.sg-btn-glass:hover {
+  border-color: #fff;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+/* 42px round icon button — search, wishlist, account, cart. */
+.sg-icon {
+  position: relative;
+  width: 42px;
+  height: 42px;
+  border-radius: 999px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-line);
+  display: grid;
+  place-items: center;
+  transition: border-color 0.2s, color 0.2s;
+}
+.sg-icon:hover {
+  border-color: var(--color-brand-400);
+  color: var(--color-brand-700);
+}
+
+/* Copper label that opens every section. */
+.sg-kicker {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--color-brand-600);
+}
+
+/* Rounded field. Focus is cyan so it never reads as a copper CTA. */
+.sg-input {
+  width: 100%;
+  background: var(--color-cream);
+  border: 1.5px solid var(--color-line);
+  border-radius: 999px;
+  padding: 14px 22px;
+  font-size: 15px;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.2s, background-color 0.2s;
+}
+.sg-input:focus {
+  border-color: var(--color-aqua-400);
+  background: var(--color-surface);
+}
+.sg-input-box {
+  border-radius: 14px;
+}
+
+/* Small status pill used for badges, counts and category chips. */
+.sg-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  padding: 6px 12px;
+}
+
+/* ─── Brand accents ─────────────────────────────────────────────────────────
+   Three small pieces that carry the logo's two colours into the layout without
+   repainting the storefront's black-on-white typography. */
+
+/* Hairline fading copper → cyan, in the order the logo reads. Closes the
+   announcement bar and opens the dark bands. */
+.brand-rule {
+  background-image: linear-gradient(
+    90deg,
+    var(--color-brand-500),
+    var(--color-aqua-400) 62%,
+    transparent
+  );
+}
+
+/* The wordmark's metallic sweep, for display numerals and short eyebrows only —
+   gradient text has no reliable contrast floor, so never body copy. */
+.brand-text-gradient {
+  background-image: linear-gradient(95deg, var(--color-brand-300), var(--color-brand-500) 55%, var(--color-brand-700));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* Cyan focus ring: distinct from every copper CTA, so keyboard focus is never
+   mistaken for a hover or a selected state. */
+.at-focus:focus-visible {
+  outline: 2px solid var(--color-aqua-500);
+  outline-offset: 2px;
+}
+
+/* Animated copper marker behind emphasized heading words */
+.at-highlight {
+  background-image: linear-gradient(var(--color-at-peach), var(--color-at-peach));
+  background-repeat: no-repeat;
+  background-position: 0 62%;
+  background-size: 100% 45%;
+  animation: at-underline 0.9s ease 0.35s both;
+}
+
+/* Pillars tab progress bar — duration set inline per slide */
+@keyframes at-pillar-bar {
+  from { width: 0; }
+  to { width: 100%; }
+}
+
+/* Category tile staggered reveal (reference motion-list: translateY 50px -> 0);
+   per-card animationDelay + `both` fill so cards hold hidden until their turn */
+@keyframes at-card-up {
+  from { opacity: 0; transform: translateY(50px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.at-card-up {
+  animation: at-card-up 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* Pillars media zoom-out entrance (reference: scale 1.3 -> 1); replays when the
+   class is (re)applied on slide activation or the element remounts on gender switch */
+@keyframes at-media-zoom {
+  from { transform: scale(1.3); }
+  to { transform: scale(1); }
+}
+.at-media-zoom {
+  animation: at-media-zoom 1.2s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Card-title underline that draws in on hover */
+.at-link-underline {
+  background-image: linear-gradient(currentColor, currentColor);
+  background-repeat: no-repeat;
+  background-position: 0 100%;
+  background-size: 0% 1px;
+  transition: background-size 0.35s ease;
+}
+.group:hover .at-link-underline,
+.at-link-underline:hover {
+  background-size: 100% 1px;
+}
+
+/* Custom Animations for UI Components */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-fade-up {
+  animation: fadeUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* ─── Scroll reveal (components/ScrollReveal.tsx) ────────────────────────────
+   Scroll-driven, so it runs on the compositor with no JavaScript. Content is
+   visible by default and the animation only *starts* hidden inside the
+   @supports block — a browser without scroll-timelines, or a visitor who asked
+   for reduced motion, simply sees the section. That is deliberate: this wraps
+   most of the homepage, and decoration must never gate content on script.     */
+.at-reveal {
+  /* No `will-change` here on purpose: nine of these on the homepage meant nine
+     permanent compositor layers. `animation-timeline` promotes as needed. */
+  animation-duration: var(--at-reveal-duration, 800ms);
+  animation-delay: var(--at-reveal-delay, 0ms);
+  animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+  animation-fill-mode: both;
+}
+
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    .at-reveal {
+      animation-timeline: view();
+      /* Fully revealed by the time the block is 40% up the viewport. */
+      animation-range: entry 0% cover 40%;
+    }
+
+    .at-reveal-fade-up { animation-name: at-reveal-fade-up; }
+    .at-reveal-fade-in { animation-name: at-reveal-fade-in; }
+    .at-reveal-slide-left { animation-name: at-reveal-slide-left; }
+    .at-reveal-slide-right { animation-name: at-reveal-slide-right; }
+  }
+}
+
+@keyframes at-reveal-fade-up {
+  from { opacity: 0; transform: translateY(4rem); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes at-reveal-fade-in {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes at-reveal-slide-left {
+  from { opacity: 0; transform: translateX(4rem); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes at-reveal-slide-right {
+  from { opacity: 0; transform: translateX(-4rem); }
+  to { opacity: 1; transform: translateX(0); }
+}
