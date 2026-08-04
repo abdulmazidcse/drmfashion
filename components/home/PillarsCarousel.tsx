@@ -57,9 +57,12 @@ const COMPARE: Record<Gender, { before: string; after: string }> = {
   women: { before: "/images/women_hero.png", after: "/images/fashion-show-1746622_1280.jpg" },
 };
 
-// Fallbacks when the `home_community_tabs` Setting is missing or partial
+// Fallbacks when the `home_community_tabs` Setting is missing or partial.
+// `id` is the React key — `label` is not unique (two "Our Fit" tabs) and is
+// admin-editable on top of that, so it can never be used as one.
 const DEFAULT_SLIDES = [
   {
+    id: "heights",
     label: "Our Fit",
     duration: 4000,
     heading: "Three lengths, one standard.",
@@ -69,6 +72,7 @@ const DEFAULT_SLIDES = [
     type: "sizes" as const,
   },
   {
+    id: "fit",
     label: "Our Fit",
     duration: 10000,
     heading: "The drm Fit, Perfected.",
@@ -78,6 +82,7 @@ const DEFAULT_SLIDES = [
     type: "compare" as const,
   },
   {
+    id: "purpose",
     label: "Our Purpose",
     duration: 10000,
     heading: "We're All About Community.",
@@ -88,6 +93,7 @@ const DEFAULT_SLIDES = [
     image: "/images/community.png",
   },
   {
+    id: "product",
     label: "Our Product",
     duration: 10000,
     heading: "Intentional Design.",
@@ -196,7 +202,7 @@ export default function PillarsCarousel({ initialTabs }: PillarsCarouselProps) {
         <div className="order-1 flex gap-[5px] px-2.5 py-[5px] md:col-start-1 md:row-start-1">
           {slides.map((slide, i) => (
             <button
-              key={slide.label}
+              key={slide.id}
               onClick={() => setActiveSlide(i)}
               className="flex-1 cursor-pointer pb-2.5 text-left"
             >
@@ -229,7 +235,7 @@ export default function PillarsCarousel({ initialTabs }: PillarsCarouselProps) {
           <div className="relative aspect-square overflow-hidden rounded-sg bg-brand-50 md:aspect-5/4">
             {slides.map((slide, i) => (
               <div
-                key={slide.label}
+                key={slide.id}
                 className={`absolute inset-0 transition-opacity duration-500 ease-[cubic-bezier(0.3,1,0.3,1)] ${
                   i === activeSlide ? "z-10 opacity-100" : "pointer-events-none opacity-0"
                 }`}
@@ -343,7 +349,7 @@ export default function PillarsCarousel({ initialTabs }: PillarsCarouselProps) {
           <div className="grid w-full max-w-[400px] 2xl:max-w-[600px]">
             {slides.map((slide, i) => (
               <div
-                key={slide.label}
+                key={slide.id}
                 className={`col-start-1 row-start-1 flex flex-col items-start justify-center transition-opacity duration-500 ease-[cubic-bezier(0.3,1,0.3,1)] ${
                   i === activeSlide ? "opacity-100" : "pointer-events-none opacity-0"
                 }`}
