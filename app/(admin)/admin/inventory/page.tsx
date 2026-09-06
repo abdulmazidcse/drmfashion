@@ -61,7 +61,7 @@ export default function InventoryPage() {
   const [variants, setVariants] = useState<VariantItem[]>([])
   const [totalVariants, setTotalVariants] = useState(0)
   const [totalPages, setTotalPages] = useState(1)
-  const [stats, setStats] = useState({ totalUnits: 0, lowStockCount: 0, totalValue: 0 })
+  const [stats, setStats] = useState({ totalUnits: 0, lowStockCount: 0, threshold: 5, totalValue: 0 })
   const [saving, setSaving] = useState(false)
 
   // Typing shouldn't fire a request per keystroke.
@@ -134,10 +134,11 @@ export default function InventoryPage() {
       if (edited) {
         const delta = tempStock - edited.stock
         setStats((prev) => ({
+          ...prev,
           totalUnits: prev.totalUnits + delta,
           totalValue: prev.totalValue + delta * edited.price,
           lowStockCount:
-            prev.lowStockCount + (tempStock <= 5 ? 1 : 0) - (edited.stock <= 5 ? 1 : 0),
+            prev.lowStockCount + (tempStock <= prev.threshold ? 1 : 0) - (edited.stock <= prev.threshold ? 1 : 0),
         }))
       }
 
@@ -152,7 +153,7 @@ export default function InventoryPage() {
 
   // Statistics — aggregated server-side over the whole inventory, so they stay
   // correct regardless of which page or filter is on screen.
-  const { totalUnits: totalItems, lowStockCount, totalValue } = stats
+  const { totalUnits: totalItems, lowStockCount, threshold, totalValue } = stats
 
   return (
     <div className="space-y-8 max-w-[1600px] mx-auto pb-10">
@@ -210,7 +211,7 @@ export default function InventoryPage() {
               <div className="w-10 h-10 rounded-lg bg-rose-100 text-rose-600 flex items-center justify-center">
                 <AlertTriangle size={18} />
               </div>
-              <h3 className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Critical Low Stock (≤ 5)</h3>
+              <h3 className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Critical Low Stock (≤ {threshold} units)</h3>
             </div>
             <p className="text-3xl font-semibold text-rose-600 relative z-10">
               {loading ? <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /> : lowStockCount}
@@ -280,8 +281,8 @@ export default function InventoryPage() {
             className="h-9 w-full sm:w-auto rounded-md border border-input bg-transparent px-3 text-sm shadow-xs focus-visible:ring-2 focus-visible:ring-ring/50 outline-none text-muted-foreground cursor-pointer"
           >
             <option value="all">All Stock Levels</option>
-            <option value="in">In Stock (&gt;5)</option>
-            <option value="low">Low Stock (1-5)</option>
+            <option value="in">In Stock (&gt;{threshold})</option>
+            <option value="low">Low Stock (1-{threshold})</option>
             <option value="out">Out of Stock (0)</option>
           </select>
         </div>
@@ -318,7 +319,7 @@ export default function InventoryPage() {
                   </TableRow>
                 ) : (
                   paginatedInventory.map((item) => {
-                    const isLow = item.stock <= 5
+                    const isLow = item.stock <= threshold
                     const isEditing = editingId === item.id
 
                     return (

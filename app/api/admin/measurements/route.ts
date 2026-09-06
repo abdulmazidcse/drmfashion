@@ -24,7 +24,10 @@ export async function GET(req: NextRequest) {
     const templates = await prisma.measurementTemplate.findMany({
       orderBy: [{ position: "asc" }, { name: "asc" }],
       include: {
-        fields: { orderBy: [{ position: "asc" }, { createdAt: "asc" }] },
+        fields: {
+          orderBy: [{ position: "asc" }, { createdAt: "asc" }],
+          include: { tiers: { orderBy: [{ position: "asc" }, { minValue: "asc" }] } },
+        },
         _count: { select: { products: true } },
       },
     })

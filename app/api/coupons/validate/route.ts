@@ -27,6 +27,47 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ message: "This coupon has reached its usage limit." }, { status: 400 })
     }
 
+    // Subscriber-only codes. The cart applies a code before it knows who the
+    // buyer is, so an email can only be checked when one is supplied (a signed-in
+    // customer, say). Without it the code still previews and checkout does the
+    // real enforcement — but the response says so, rather than letting the
+    // shopper reach the payment step expecting a discount that will be refused.
+    if (coupon.subscribersOnly) {
+      const email = typeof body.email === "string" ? body.email.trim() : ""
+
+      if (email) {
+        const subscriber = await prisma.subscriber.findFirst({
+          where: { email: { equals: email, mode: "insensitive" } },
+          select: { id: true },
+        })
+        if (!subscriber) {
+          return NextResponse.json(
+            { message: "This code is for email subscribers. Sign up with this email address first." },
+            { status: 400 }
+          )
+        }
+      }
+    }
+
+    // Same story as subscribersOnly: previewable only once an email is known,
+    // and enforced for real at checkout.
+    if (coupon.firstOrderOnly) {
+      const email = typeof body.email === "string" ? body.email.trim() : ""
+
+      if (email) {
+        const previousOrder = await prisma.order.findFirst({
+          where: {
+            user: { email: { equals: email, mode: "insensitive" } },
+            status: { not: "CANCELLED" },
+          },
+          select: { id: true },
+        })
+        if (previousOrder) {
+          return NextResponse.json({ message: "This code is for first orders only." }, { status: 400 })
+        }
+      }
+    }
+
     // Check minimum order amount
     if (coupon.minOrderAmount && orderTotal < coupon.minOrderAmount) {
       return NextResponse.json({
@@ -49,6 +90,9 @@ export async function POST(req: NextRequest) {
       type: coupon.type,
       discount: coupon.discount,
       discountAmount: parseFloat(discountAmount.toFixed(2)),
+      // Lets the cart warn that checkout will need a subscribed email, instead
+      // of the shopper finding out when the order is refused.
+      subscribersOnly: coupon.subscribersOnly,
     })
   } catch (error) {
     console.error("[COUPON_VALIDATE_ERROR]", error)

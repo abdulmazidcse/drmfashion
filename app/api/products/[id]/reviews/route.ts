@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { invalidateCache } from "@/lib/redis";
 import { rateLimit } from "@/lib/rateLimit";
 import { reviewSchema } from "@/lib/validations";
 
@@ -72,6 +73,11 @@ export async function POST(
         user: { select: { name: true } }
       }
     });
+
+    // Both homepage blocks are built from reviews; leaving their keys in place
+    // means a fresh review is invisible there for up to a day.
+    await invalidateCache("home:reviews:v1");
+    await invalidateCache("home:socialProof:v1");
 
     return NextResponse.json({ success: true, review }, { status: 201 });
   } catch (error) {

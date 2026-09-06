@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server"
+import type { PaymentStatus, Prisma } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
-import { sendShippingUpdateEmail } from "@/lib/email"
+import { getAdminPayload } from "@/lib/auth"
+import { isOrderStatus, type OrderStatusValue } from "@/lib/delivery"
+import { deliveryStatusData, notifyOrderStatus, resolveTrackingUrl } from "@/lib/deliveryUpdate"
+import { postOrderPaymentEntry } from "@/lib/accounting"
 
 type Params = {
   params: Promise<{
@@ -12,6 +16,12 @@ export async function GET(
   req: NextRequest,
   { params }: Params
 ) {
+  try {
+    await getAdminPayload(req)
+  } catch {
+    return NextResponse.json({ message: "Unauthorized" }, { status: 401 })
+  }
+
   try {
     const { id } = await params
     const order = await prisma.order.findUnique({
@@ -44,18 +54,51 @@ export async function GET(
   }
 }
 
+/** Trimmed string from a body value; empty for anything that isn't one. */
+function text(value: unknown): string {
+  return typeof value === "string" ? value.trim() : ""
+}
+
 export async function PATCH(
   req: NextRequest,
   { params }: Params
 ) {
   try {
+    await getAdminPayload(req)
+  } catch {
+    return NextResponse.json({ message: "Unauthorized" }, { status: 401 })
+  }
+
+  try {
     const { id } = await params
     const body = await req.json()
-    const { status, paymentStatus } = body
+    const { paymentStatus } = body
 
-    const updateData: any = {}
-    if (status) updateData.status = status
-    if (paymentStatus) updateData.paymentStatus = paymentStatus
+    if (body.status && !isOrderStatus(body.status)) {
+      return NextResponse.json({ message: "Invalid order status." }, { status: 400 })
+    }
+    const status = body.status as OrderStatusValue | undefined
+
+    const updateData: Prisma.OrderUncheckedUpdateInput = {}
+    if (paymentStatus) updateData.paymentStatus = paymentStatus as PaymentStatus
+
+    // Delivery fields are only touched when the key is present, so the
+    // status-only callers (the orders table dropdown) leave them alone.
+    if ("shippingCarrier" in body) updateData.shippingCarrier = text(body.shippingCarrier) || null
+    if ("trackingNumber" in body) updateData.trackingNumber = text(body.trackingNumber) || null
+    if ("trackingUrl" in body) updateData.trackingUrl = text(body.trackingUrl) || null
+    if ("deliveryNote" in body) updateData.deliveryNote = text(body.deliveryNote) || null
+    if ("estimatedDeliveryAt" in body) {
+      if (body.estimatedDeliveryAt === null || body.estimatedDeliveryAt === "") {
+        updateData.estimatedDeliveryAt = null
+      } else {
+        const parsed = new Date(body.estimatedDeliveryAt)
+        if (Number.isNaN(parsed.getTime())) {
+          return NextResponse.json({ message: "Invalid estimated delivery date." }, { status: 400 })
+        }
+        updateData.estimatedDeliveryAt = parsed
+      }
+    }
 
     const existingOrder = await prisma.order.findUnique({
       where: { id },
@@ -66,6 +109,21 @@ export async function PATCH(
       return NextResponse.json({ message: "Order not found" }, { status: 404 })
     }
 
+    // Tracking link: when a number is supplied without an explicit URL, build
+    // one from the carrier's template in settings.
+    const trackingTouched = "trackingNumber" in body || "shippingCarrier" in body
+    if (trackingTouched && !updateData.trackingUrl) {
+      const carrierName = "shippingCarrier" in body ? text(body.shippingCarrier) : existingOrder.shippingCarrier
+      const trackingNumber = "trackingNumber" in body ? text(body.trackingNumber) : existingOrder.trackingNumber
+      if (trackingNumber) {
+        const resolved = await resolveTrackingUrl(carrierName, trackingNumber)
+        if (resolved) updateData.trackingUrl = resolved
+      }
+    }
+
+    // Stamp shippedAt / deliveredAt on the matching transitions.
+    if (status) Object.assign(updateData, deliveryStatusData(status, existingOrder))
+
     const order = await prisma.$transaction(async (tx) => {
       // Restore stock if transitioning to CANCELLED from a non-cancelled state
       if (status === "CANCELLED" && existingOrder.status !== "CANCELLED") {
@@ -74,12 +132,12 @@ export async function PATCH(
             where: { id: item.variantId },
             data: { stock: { increment: item.quantity } },
           })
-          
+
           await tx.inventoryLog.create({
              data: {
                 variantId: item.variantId,
                 previousStock: 0, // Not keeping strict track of before in this quick log, just tracking the action
-                newStock: item.quantity, 
+                newStock: item.quantity,
                 note: `Restocked ${item.quantity} units from cancelled Order ${id}`
              }
           })
@@ -93,7 +151,7 @@ export async function PATCH(
           payment: true,
         },
       })
-      
+
       return updated
     })
 
@@ -105,24 +163,17 @@ export async function PATCH(
       })
     }
 
-    // Send shipping/status update email (non-blocking)
-    if (status && ["PROCESSING", "SHIPPED", "DELIVERED", "CANCELLED"].includes(status)) {
+    // Settle the receivable in the ledger when the order becomes paid (non-blocking)
+    if (paymentStatus === "PAID" && existingOrder.paymentStatus !== "PAID") {
       try {
-        const fullOrder = await prisma.order.findUnique({
-          where: { id },
-          include: { user: { select: { name: true, email: true } } },
-        })
-        if (fullOrder?.user?.email) {
-          await sendShippingUpdateEmail(fullOrder.user.email, {
-            customerName: fullOrder.user.name,
-            orderId: fullOrder.id,
-            status,
-          })
-        }
-      } catch (emailErr) {
-        console.error("[ORDER_STATUS_EMAIL_ERROR]", emailErr)
+        await postOrderPaymentEntry(id)
+      } catch (e) {
+        console.error("[ACCOUNTING_POST_ERROR]", e)
       }
     }
+
+    // Send shipping/status update email (non-blocking; never throws)
+    if (status) await notifyOrderStatus(id, status)
 
     return NextResponse.json(order)
   } catch (error) {
@@ -138,6 +189,12 @@ export async function DELETE(
   req: NextRequest,
   { params }: Params
 ) {
+  try {
+    await getAdminPayload(req)
+  } catch {
+    return NextResponse.json({ message: "Unauthorized" }, { status: 401 })
+  }
+
   try {
     const { id } = await params
 

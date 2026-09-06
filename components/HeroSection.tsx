@@ -88,7 +88,7 @@ export default function HeroSection({ initialSlides }: HeroSectionProps) {
   }, []);
 
   return (
-    <section className="relative h-[85vh] w-full grid grid-cols-1 md:grid-cols-2 bg-brand-ink overflow-hidden">
+    <section className="relative h-[85vh] w-full grid grid-cols-1 md:grid-cols-2 bg-zinc-950 overflow-hidden">
       {/* Left Side: Background Video + Content */}
       <div className="relative h-full flex items-center justify-center overflow-hidden p-6 sm:p-12">
         {/* Men Video */}
@@ -127,20 +127,20 @@ export default function HeroSection({ initialSlides }: HeroSectionProps) {
 
         {/* Text Content */}
         <div className="relative z-10 text-center text-white max-w-lg">
-          <p className="uppercase tracking-[0.3em] text-[12px] font-bold mb-4 text-aqua-400">
+          <p className="uppercase tracking-[0.3em] text-[12px] font-bold mb-4 text-indigo-400">
             {activeTab === "men" ? slides.men.topBarTag : slides.women.topBarTag}
           </p>
           <h1 className="text-4xl md:text-5xl lg:text-6xl font-extrabold mb-6 leading-[1.0] tracking-tighter uppercase whitespace-pre-line">
             {activeTab === "men" ? slides.men.title : slides.women.title}
           </h1>
-          <p className="mb-8 text-sm md:text-base font-medium opacity-90 leading-relaxed text-faint min-h-[48px]">
+          <p className="mb-8 text-sm md:text-base font-medium opacity-90 leading-relaxed text-zinc-300 min-h-[48px]">
             {activeTab === "men" ? slides.men.subtitle : slides.women.subtitle}
           </p>
           <div ref={buttonRef} className="flex flex-col sm:flex-row justify-center gap-4">
-            <Link href={slides.men.shopLink} className={`px-8 py-3.5 font-bold uppercase tracking-[0.14em] text-[11px] transition-all duration-300 ${activeTab === "men" ? "bg-white text-black hover:bg-brand-700 hover:text-white" : "border border-white text-white hover:bg-white hover:text-black"}`}>
+            <Link href={slides.men.shopLink} className={`px-8 py-3.5 font-bold uppercase tracking-widest text-[11px] transition-all duration-300 ${activeTab === "men" ? "bg-white text-black hover:bg-black hover:text-white" : "border border-white text-white hover:bg-white hover:text-black"}`}>
               {slides.men.buttonText}
             </Link>
-            <Link href={slides.women.shopLink} className={`px-8 py-3.5 font-bold uppercase tracking-[0.14em] text-[11px] transition-all duration-300 ${activeTab === "women" ? "bg-white text-black hover:bg-brand-700 hover:text-white" : "border border-white text-white hover:bg-white hover:text-black"}`}>
+            <Link href={slides.women.shopLink} className={`px-8 py-3.5 font-bold uppercase tracking-widest text-[11px] transition-all duration-300 ${activeTab === "women" ? "bg-white text-black hover:bg-black hover:text-white" : "border border-white text-white hover:bg-white hover:text-black"}`}>
               {slides.women.buttonText}
             </Link>
           </div>
@@ -173,7 +173,7 @@ export default function HeroSection({ initialSlides }: HeroSectionProps) {
           <button 
             type="button"
             onClick={() => setActiveTab("men")}
-            className={`px-8 py-3.5 font-bold uppercase tracking-[0.14em] text-[11px] transition-all duration-300 cursor-pointer ${
+            className={`px-8 py-3.5 font-bold uppercase tracking-widest text-[11px] transition-all duration-300 cursor-pointer ${
               activeTab === "men" 
                 ? "bg-white text-black shadow-md" 
                 : "border border-white text-white hover:bg-white hover:text-black"
@@ -184,7 +184,7 @@ export default function HeroSection({ initialSlides }: HeroSectionProps) {
           <button 
             type="button"
             onClick={() => setActiveTab("women")}
-            className={`px-8 py-3.5 font-bold uppercase tracking-[0.14em] text-[11px] transition-all duration-300 cursor-pointer ${
+            className={`px-8 py-3.5 font-bold uppercase tracking-widest text-[11px] transition-all duration-300 cursor-pointer ${
               activeTab === "women" 
                 ? "bg-white text-black shadow-md" 
                 : "border border-white text-white hover:bg-white hover:text-black"

@@ -3,6 +3,8 @@ import { revalidatePath } from "next/cache"
 import { prisma } from "@/lib/prisma"
 import { getAdminPayload } from "@/lib/auth"
 import { parseCustomMeasurementInput } from "@/lib/measurement"
+import { normalizeProductCode } from "@/lib/productCode"
+import { invalidateProductCaches } from "@/lib/productCache"
 
 export async function POST(
   req: NextRequest
@@ -20,17 +22,20 @@ export async function POST(
 
     const {
       title,
+      productCode,
       slug,
       description,
       sizeAndFit,
       fabricAndCare,
       thumbnail,
-      sizeChart,
+      sizeChartId,
       basePrice,
       costPrice,
+      discountPrice,
       categoryId,
       brandId,
       featured,
+      published,
       flashSaleEndDate,
       images,
       variants,
@@ -38,12 +43,35 @@ export async function POST(
       metaDescription,
       metaKeywords,
       tags,
+      modelWearsProductId,
     } = body
+
+    // Deleting a product only sets deletedAt — the row, and its code, stay. The
+    // unique index covers those rows too, so they are checked here as well;
+    // otherwise the clash surfaces as an unexplained 500 from Postgres.
+    const code = normalizeProductCode(productCode)
+    if (code) {
+      const clash = await prisma.product.findFirst({
+        where: { productCode: { equals: code, mode: "insensitive" } },
+        select: { title: true, deletedAt: true },
+      })
+      if (clash) {
+        return NextResponse.json(
+          {
+            message: clash.deletedAt
+              ? `Product code "${code}" still belongs to the deleted product "${clash.title}". Give this one a different code.`
+              : `Product code "${code}" is already used by "${clash.title}".`,
+          },
+          { status: 400 }
+        )
+      }
+    }
 
     const product =
       await prisma.product.create({
         data: {
           title,
+          productCode: code,
           slug,
           description,
           sizeAndFit: sizeAndFit || null,
@@ -53,13 +81,21 @@ export async function POST(
           metaKeywords: metaKeywords || null,
           tags: tags || null,
           thumbnail,
-          sizeChart: sizeChart || null,
+          sizeChartId: sizeChartId || null,
           basePrice,
           costPrice: costPrice || null,
+          // Blank means "not on sale" — stored as null rather than 0, which the
+          // storefront would render as a £0.00 sale price.
+          discountPrice:
+            discountPrice === "" || discountPrice === undefined || discountPrice === null
+              ? null
+              : parseFloat(discountPrice.toString()),
           categoryId,
           brandId: brandId || null,
           featured,
+          published: published ?? true,
           flashSaleEndDate: flashSaleEndDate ? new Date(flashSaleEndDate) : null,
+          modelWearsProductId: modelWearsProductId || null,
           ...parseCustomMeasurementInput(body),
 
           images: {
@@ -75,6 +111,10 @@ export async function POST(
                 return {
                   url: img.url,
                   color: img.color || null,
+                  // Blank stays null rather than "": the storefront treats an
+                  // empty alt as "generate one" — see lib/imageMeta.ts.
+                  alt: String(img.alt || "").trim() || null,
+                  caption: String(img.caption || "").trim() || null,
                 }
               }),
           },
@@ -89,9 +129,13 @@ export async function POST(
           variants: true,
           brand: true,
           category: true,
+          sizeChart: true,
         },
       })
 
+    // revalidatePath only clears Next's render cache; the home page's product
+    // lists live in Redis for an hour and need their own purge.
+    await invalidateProductCaches()
     revalidatePath("/")
     revalidatePath("/product/[slug]", "page")
 
@@ -165,6 +209,8 @@ export async function GET(req: NextRequest) {
     if (search) {
       whereClause.OR = [
         { title: { contains: search, mode: "insensitive" } },
+        // The code exists to look a product up, so admin search has to cover it.
+        { productCode: { contains: search, mode: "insensitive" } },
         { variants: { some: { sku: { contains: search, mode: "insensitive" } } } }
       ]
     }
@@ -228,6 +274,7 @@ export async function GET(req: NextRequest) {
                 variants: true,
                 brand: true,
                 category: true,
+                sizeChart: true,
               },
             })
 

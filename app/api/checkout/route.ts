@@ -4,11 +4,16 @@ import Stripe from "stripe"
 import bcrypt from "bcryptjs"
 import crypto from "crypto"
 import { sendOrderConfirmationEmail, sendAccountCreatedEmail } from "@/lib/email"
+import { baseCurrencyCode } from "@/lib/settings"
+import { resolveOrderShipping } from "@/lib/shippingServer"
+import { resolveTax, taxSettingsFromSettings } from "@/lib/tax"
+import { postOrderEntry } from "@/lib/accounting"
 import {
-  calculateCustomFee,
+  calculateCustomFeeBreakdown,
   resolveSurcharge,
   roundMoney,
   validateMeasurements,
+  type MeasurementFieldSpec,
   type MeasurementSnapshot,
 } from "@/lib/measurement"
 
@@ -38,9 +43,8 @@ export async function POST(req: NextRequest) {
       paymentDetails,
       pointsRedeemed,
       promoCode,
-      shippingCarrier,
-      shippingMethod,
-      shippingFee,
+      shippingMethodId,
+      shippingDestination,
       currencyCode,
       currencySymbol,
       exchangeRate,
@@ -99,6 +103,16 @@ export async function POST(req: NextRequest) {
     }
     // else: existing real account — leave credentials untouched, just attach the order.
 
+    // Shipping is priced before the transaction opens: a UPS service needs an
+    // outbound re-quote, and holding a pooled DB connection across that call is
+    // what turns a slow carrier into a database outage.
+    const resolvedShipping = await resolveOrderShipping({
+      settings: settingsObj,
+      shippingMethodId,
+      destination: shippingDestination,
+      items,
+    })
+
     // 2. Run order creation inside an atomic transaction
     const order = await prisma.$transaction(async (tx) => {
       // Refetch user inside transaction to get latest rewardPoints and prevent race conditions
@@ -132,7 +146,7 @@ export async function POST(req: NextRequest) {
           },
           include: {
             product: {
-              include: { measurementTemplate: { include: { fields: true } } }
+              include: { measurementTemplate: { include: { fields: { include: { tiers: true } } } } }
             }
           }
         })
@@ -143,7 +157,7 @@ export async function POST(req: NextRequest) {
             where: { productId: item.productId },
             include: {
               product: {
-                include: { measurementTemplate: { include: { fields: true } } }
+                include: { measurementTemplate: { include: { fields: { include: { tiers: true } } } } }
               }
             }
           })
@@ -170,6 +184,7 @@ export async function POST(req: NextRequest) {
         }
 
         let measurementSnapshot: MeasurementSnapshot | null = null
+        let fieldSpecs: MeasurementFieldSpec[] = []
         let customFee = 0
 
         if (wantsCustom && product.measurementTemplate) {
@@ -185,17 +200,17 @@ export async function POST(req: NextRequest) {
             Object.assign(rawValues, item.custom.values)
           }
 
-          const validation = validateMeasurements(
-            template.fields.map((f) => ({
-              key: f.key,
-              label: f.label,
-              unit: f.unit,
-              required: f.required,
-              minValue: f.minValue,
-              maxValue: f.maxValue,
-            })),
-            rawValues
-          )
+          fieldSpecs = template.fields.map((f) => ({
+            key: f.key,
+            label: f.label,
+            unit: f.unit,
+            required: f.required,
+            minValue: f.minValue,
+            maxValue: f.maxValue,
+            tiers: f.tiers,
+          }))
+
+          const validation = validateMeasurements(fieldSpecs, rawValues)
 
           if (!validation.ok) {
             throw new Error(`${product.title}: ${validation.error}`)
@@ -236,8 +251,17 @@ export async function POST(req: NextRequest) {
         // Calculate actual price
         const unitPrice = variant.price || product.discountPrice || product.basePrice;
 
-        if (wantsCustom) {
-          customFee = calculateCustomFee(unitPrice, resolveSurcharge(product, product.measurementTemplate))
+        if (wantsCustom && measurementSnapshot) {
+          // Base tailoring fee plus any size upcharge the measurements land in —
+          // all of it re-derived from the database, never from the cart.
+          const breakdown = calculateCustomFeeBreakdown(
+            unitPrice,
+            resolveSurcharge(product, product.measurementTemplate),
+            fieldSpecs,
+            measurementSnapshot.values
+          )
+          customFee = breakdown.total
+          measurementSnapshot.feeBreakdown = breakdown.lines
         }
 
         const actualPrice = roundMoney(unitPrice + customFee);
@@ -264,7 +288,45 @@ export async function POST(req: NextRequest) {
         if (coupon.expiresAt && new Date() > coupon.expiresAt) throw new Error("This coupon has expired.");
         if (coupon.maxUses !== null && coupon.usedCount >= coupon.maxUses) throw new Error("This coupon has reached its usage limit.");
         if (coupon.minOrderAmount && calculatedTotal < coupon.minOrderAmount) throw new Error(`This coupon requires a minimum order of ৳${coupon.minOrderAmount.toFixed(0)}.`);
-        
+
+        // Signup-reward codes only work for someone who actually signed up.
+        // Checked here rather than only at /api/coupons/validate because the
+        // cart applies the code before an email is known — this is the first
+        // point where the buyer is identified, and the last before money moves.
+        if (coupon.subscribersOnly) {
+          // Case-insensitive: nothing normalises the address on the way in, so
+          // subscribing as Sam@Example.com and checking out as sam@example.com
+          // must still count as the same person.
+          const subscriber = await tx.subscriber.findFirst({
+            where: { email: { equals: email, mode: "insensitive" } },
+            select: { id: true },
+          });
+          if (!subscriber) {
+            throw new Error(
+              "This code is for email subscribers. Sign up with this email address first, then apply the code."
+            );
+          }
+        }
+
+        // "…off your first order". Matched on the order email rather than the
+        // user id so a guest checkout counts as an order too — otherwise the
+        // same person could reuse the code by not signing in.
+        if (coupon.firstOrderOnly) {
+          // Orders carry no email of their own; guest checkout still creates a
+          // User row with the real address, so the relation covers both.
+          const previousOrder = await tx.order.findFirst({
+            where: {
+              user: { email: { equals: email, mode: "insensitive" } },
+              status: { not: "CANCELLED" },
+            },
+            select: { id: true },
+          });
+          if (previousOrder) {
+            throw new Error("This code is for first orders only.");
+          }
+        }
+
+
         if (coupon.type === "PERCENTAGE") {
           appliedDiscount = Math.min((calculatedTotal * coupon.discount) / 100, calculatedTotal);
         } else {
@@ -279,15 +341,18 @@ export async function POST(req: NextRequest) {
         });
       }
       
-      // Calculate tax and shipping safely on the backend
-      const tax = preTaxAmount * 0.05; // 5% Standard Tax
-      const flatRate = Number(settingsObj["shipping_flat_rate"]) || 10;
-      const freeThreshold = Number(settingsObj["shipping_free_threshold"]) || 150;
-      const shippingEnabled = settingsObj["shipping_enabled"] !== "false";
-      
-      const finalShippingFee = shippingCarrier 
-        ? Number(shippingFee || 0)
-        : (shippingEnabled ? (freeThreshold > 0 && calculatedTotal >= freeThreshold ? 0 : flatRate) : 0);
+      const finalShippingFee = resolvedShipping.fee;
+
+      // Tax is by destination and comes from the same settings the storefront
+      // displayed. It is worked out after shipping because the merchant can
+      // choose to tax the shipping fee too, which is the rule in Canada.
+      const resolvedTax = resolveTax(taxSettingsFromSettings(settingsObj), {
+        country: shippingDestination?.countryCode,
+        state: shippingDestination?.state,
+        taxableAmount: preTaxAmount,
+        shippingFee: finalShippingFee,
+      });
+      const tax = resolvedTax.amount;
       
       const finalPayableAmount = preTaxAmount + tax + finalShippingFee;
       
@@ -398,9 +463,14 @@ export async function POST(req: NextRequest) {
           paymentStatus: paymentMethod === "cod" ? "PENDING" : "PAID",
           shippingAddress: address,
           shippingPhone: phone,
-          shippingCarrier: shippingCarrier || null,
-          shippingMethod: shippingMethod || null,
+          shippingCarrier: resolvedShipping.carrier,
+          shippingMethod: resolvedShipping.methodName,
           shippingFee: finalShippingFee,
+          shippingState: shippingDestination?.state || null,
+          shippingCountry: shippingDestination?.countryCode || null,
+          taxAmount: tax,
+          taxRate: resolvedTax.rate,
+          taxLabel: resolvedTax.label,
           pointsRedeemed: pointsToDeduct,
           pointsEarned: pointsEarned,
           currencyCode: typeof currencyCode === "string" ? currencyCode : "USD",
@@ -449,6 +519,13 @@ export async function POST(req: NextRequest) {
       return newOrder
     })
 
+    // Mirror the sale into the ledger (non-blocking; the order already exists)
+    try {
+      await postOrderEntry(order.id)
+    } catch (e) {
+      console.error("[ACCOUNTING_POST_ERROR]", e)
+    }
+
     // Send order confirmation email (non-blocking)
     try {
       const orderItems = items.map((item: any) => ({
@@ -487,6 +564,15 @@ export async function POST(req: NextRequest) {
       success: true,
       orderId: order.id,
       accountCreated: !!generatedPassword,
+      // For the GA4 `purchase` event. Sent from here rather than recomputed in
+      // the browser because coupons, shipping, tax and redeemed points are all
+      // applied server-side — a client-side total would not match what was
+      // actually charged.
+      analytics: {
+        value: order.totalAmount,
+        currency: baseCurrencyCode(settingsObj),
+        shipping: order.shippingFee,
+      },
     })
   } catch (error: any) {
     console.error("[CHECKOUT_POST_ERROR]", error)

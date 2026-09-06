@@ -1,5 +1,9 @@
+import React from "react";
 import { prisma } from "@/lib/prisma";
+import { Metadata } from "next";
+import { Roboto_Flex } from "next/font/google";
 import { getCache, setCache } from "@/lib/redis";
+import { getSettings } from "@/lib/settings";
 import { formatImageUrl, formatProductUrls, footerCategories } from "@/lib/utils";
 import { PRODUCT_CARD_SELECT } from "@/lib/productSelect";
 import Link from "next/link";
@@ -8,16 +12,59 @@ import NewArrivals from "@/components/home/NewArrivals";
 import FlashSale from "@/components/FlashSale";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
+import PromoBanners from "@/components/PromoBanners";
 import RecentlyViewed from "@/components/RecentlyViewed";
 import HomeHero from "@/components/home/HomeHero";
 import PillarsCarousel from "@/components/home/PillarsCarousel";
+import StyleSection from "@/components/home/StyleSection";
 import TrendingCategories from "@/components/home/TrendingCategories";
-import ValueProps from "@/components/home/ValueProps";
-import Reviews from "@/components/home/Reviews";
-import NewsletterCard from "@/components/home/NewsletterCard";
+import Reels from "@/components/home/Reels";
+import SocialProof from "@/components/home/SocialProof";
+import CustomerReviews from "@/components/home/CustomerReviews";
+import JournalTeaser from "@/components/home/JournalTeaser";
+import ProductShowcase from "@/components/home/ProductShowcase";
+import { HOME_REELS_SETTING_KEY, parseHomeReels } from "@/lib/homeReels";
+import IconsGrid from "@/components/home/IconsGrid";
+import { HOME_ICONS_SETTING_KEY, parseHomeIcons, type HomeIconTile } from "@/lib/homeIcons";
+import VideoBanner from "@/components/home/VideoBanner";
+import {
+  HOME_VIDEO_BANNERS_SETTING_KEY,
+  parseHomeVideoBanners,
+  type HomeVideoBanner,
+  type HomeVideoBannerSlot
+} from "@/lib/homeVideoBanners";
+import { REVIEW_CARD_SELECT, REVIEW_VISIBLE_WHERE, toReviewCards } from "@/lib/reviews";
+import { HOME_SHOWCASE_SETTING_KEY, parseHomeShowcase } from "@/lib/homeShowcase";
+import {
+  HOME_SECTIONS_SETTING_KEY,
+  parseHomeSections,
+  type HomeSectionKey
+} from "@/lib/homeSections";
+import { categoryImageAlt } from "@/lib/imageMeta";
+import { FALLBACK_MEN, FALLBACK_WOMEN, FALLBACK_SLUGS, type FallbackTile } from "@/lib/homeTiles";
+import {
+  Sparkles,
+  ShieldCheck,
+  RotateCcw,
+  Truck
+} from "lucide-react";
 import ScrollReveal from "@/components/ScrollReveal";
 
+// Home-page-only typeface (site keeps Outfit); wdth axis powers .at-heading
+const robotoFlex = Roboto_Flex({
+  subsets: ["latin"],
+  variable: "--font-roboto-flex",
+  axes: ["wdth"],
+});
+
 export const revalidate = 300;
+
+// Resolved against `metadataBase` in app/layout.tsx. Set per page rather than in
+// the root layout — inherited metadata would make every route claim "/" as its
+// canonical.
+export const metadata: Metadata = {
+  alternates: { canonical: "/" },
+};
 
 export default async function Home() {
   // Fetch real categories, products, and brands from DB
@@ -51,7 +98,15 @@ export default async function Home() {
     brands,
     heroSlidesSetting,
     communityTabsSetting,
-    flashSaleProducts
+    flashSaleProducts,
+    styleSections,
+    reelsSection,
+    showcaseRows,
+    socialProofStats,
+    homeReviews,
+    journalPosts,
+    videoBanners,
+    iconsSection
   ] = await Promise.all([
     // The only consumer on this page is <Footer>, which lists four root category
     // names. The previous query pulled two levels of children and every scalar on
@@ -66,14 +121,17 @@ export default async function Home() {
       })
     ),
     // Only the men/women heuristic and `toTile` below read these, and between
-    // them they touch name, slug, image and the parent's name/slug.
-    fetchWithCache("home:trendingCategories:v2", async () => {
+    // them they touch name, slug, image, its alt text and the parent's
+    // name/slug. Key bumped to v3 with imageAlt: a cache entry written before
+    // it existed would tile without any alt at all.
+    fetchWithCache("home:trendingCategories:v3", async () => {
       const raw = await prisma.category.findMany({
         where: { isTrending: true, deletedAt: null },
         select: {
           name: true,
           slug: true,
           image: true,
+          imageAlt: true,
           parent: { select: { name: true, slug: true } }
         },
         orderBy: { createdAt: "desc" },
@@ -195,6 +253,17 @@ export default async function Home() {
         if (parsed.heights && parsed.heights.image) parsed.heights.image = formatImageUrl(parsed.heights.image);
         if (parsed.fit && parsed.fit.image) parsed.fit.image = formatImageUrl(parsed.fit.image);
         if (parsed.purpose && parsed.purpose.image) parsed.purpose.image = formatImageUrl(parsed.purpose.image);
+        // The product slide plays a video, and the carousel's shared imagery
+        // (figures, before/after pairs) lives under `media`.
+        if (parsed.product) {
+          if (parsed.product.video) parsed.product.video = formatImageUrl(parsed.product.video);
+          if (parsed.product.poster) parsed.product.poster = formatImageUrl(parsed.product.poster);
+        }
+        if (parsed.media) {
+          for (const key of Object.keys(parsed.media)) {
+            if (parsed.media[key]) parsed.media[key] = formatImageUrl(parsed.media[key]);
+          }
+        }
         return parsed;
       } catch (e) {
         return null;
@@ -209,7 +278,9 @@ export default async function Home() {
         const ids = JSON.parse(s.value);
         if (!Array.isArray(ids) || ids.length === 0) return [];
         const specificProducts = await prisma.product.findMany({
-          where: { id: { in: ids } },
+          // The setting keeps ids indefinitely, so a product deleted after it
+          // was picked would otherwise still headline the flash sale.
+          where: { id: { in: ids }, deletedAt: null },
           select: PRODUCT_CARD_SELECT
         });
         const sorted = ids.map(id => specificProducts.find(p => p.id === id)).filter(Boolean);
@@ -217,22 +288,303 @@ export default async function Home() {
       } catch (e) {
         return [];
       }
+    }),
+    // Seasonal category tiles ("Summer Styles"). The admin
+    // picks categories per gender; the tile image/name/link are derived from the
+    // category itself, so renaming a category updates the homepage too.
+    // Returns null when the setting has never been saved — <StyleSection> then
+    // falls back to its built-in tiles instead of rendering nothing.
+    fetchWithCache("home:style:sections:v2", async () => {
+      const s = await prisma.setting.findUnique({
+        where: { key: "home_style_sections" }
+      });
+      if (!s) return null;
+      try {
+        const parsed = JSON.parse(s.value);
+        // Only `summer` is configurable now; a `winter` key surviving in an
+        // older stored value is deliberately not rendered.
+        const order: Array<"summer"> = ["summer"];
+        const active = order
+          .map(key => ({ key, ...(parsed?.[key] || {}) }))
+          .filter(sec => sec.active !== false);
+
+        const ids = Array.from(
+          new Set(
+            active.flatMap(sec => [
+              ...(Array.isArray(sec.men) ? sec.men : []),
+              ...(Array.isArray(sec.women) ? sec.women : [])
+            ])
+          )
+        );
+        if (ids.length === 0) return [];
+
+        const cats = await prisma.category.findMany({
+          // A category deleted after it was picked would otherwise still tile.
+          where: { id: { in: ids }, deletedAt: null },
+          select: { id: true, name: true, slug: true, image: true, imageAlt: true }
+        });
+        const byId = new Map(cats.map(c => [c.id, c]));
+
+        // Map by the admin's selected order, not the DB's.
+        const toTiles = (selected: unknown) =>
+          (Array.isArray(selected) ? selected : [])
+            .map((id: string) => byId.get(id))
+            .filter((c): c is NonNullable<typeof c> => Boolean(c))
+            .map(c => ({
+              title: c.name,
+              image: c.image ? formatImageUrl(c.image) : "/images/hero.jpg",
+              alt: categoryImageAlt({ custom: c.imageAlt, name: c.name, kind: "tile" }),
+              href: `/category/${c.slug}`
+            }));
+
+        return active
+          .map(sec => ({
+            key: sec.key,
+            title: sec.title || "Summer Styles",
+            highlight: sec.highlight || "Styles",
+            men: toTiles(sec.men),
+            women: toTiles(sec.women)
+          }))
+          .filter(sec => sec.men.length > 0 || sec.women.length > 0);
+      } catch (e) {
+        return null;
+      }
+    }),
+    // Reels strip — vertical clips uploaded in Settings → Homepage. Empty rows
+    // are already dropped by parseHomeReels, so `reels.length` is the whole
+    // "should this render" test.
+    fetchWithCache("home:reels", async () => {
+      const s = await prisma.setting.findUnique({
+        where: { key: HOME_REELS_SETTING_KEY }
+      });
+      const config = parseHomeReels(s?.value);
+      return {
+        ...config,
+        reels: config.reels.map(r => ({
+          ...r,
+          video: formatImageUrl(r.video),
+          poster: r.poster ? formatImageUrl(r.poster) : ""
+        }))
+      };
+    }),
+    // Editorial product strips ("Our Bestselling Jeans") — Settings → Homepage →
+    // Product Showcase. Each row names itself and picks where its products come
+    // from; rows that resolve to nothing are dropped so no empty strip renders.
+    fetchWithCache("home:showcase:v1", async () => {
+      const s = await prisma.setting.findUnique({
+        where: { key: HOME_SHOWCASE_SETTING_KEY }
+      });
+      const config = parseHomeShowcase(s?.value);
+      if (!config.active || config.rows.length === 0) return [];
+
+      const resolved = await Promise.all(
+        config.rows.map(async row => {
+          let raw: any[] = [];
+
+          if (row.source === "manual") {
+            // The setting keeps ids indefinitely, so a product unpublished or
+            // deleted after it was picked would otherwise still headline the row.
+            const picked = await prisma.product.findMany({
+              where: { id: { in: row.productIds }, published: true, deletedAt: null },
+              select: PRODUCT_CARD_SELECT
+            });
+            const byId = new Map(picked.map(p => [p.id, p]));
+            // The admin's order, not the DB's.
+            raw = row.productIds.map(id => byId.get(id)).filter(Boolean) as any[];
+          } else if (row.source === "category") {
+            // Sub-categories count: a row pointing at "Jeans" should still fill
+            // when every product hangs off "Men's Jeans" / "Women's Jeans".
+            const children = await prisma.category.findMany({
+              where: { parentId: row.categoryId, deletedAt: null },
+              select: { id: true }
+            });
+            const grandChildren = children.length
+              ? await prisma.category.findMany({
+                  where: { parentId: { in: children.map(c => c.id) }, deletedAt: null },
+                  select: { id: true }
+                })
+              : [];
+            const categoryIds = [
+              row.categoryId,
+              ...children.map(c => c.id),
+              ...grandChildren.map(c => c.id)
+            ];
+            raw = await prisma.product.findMany({
+              where: { categoryId: { in: categoryIds }, published: true, deletedAt: null },
+              select: PRODUCT_CARD_SELECT,
+              orderBy: { createdAt: "desc" },
+              take: row.limit
+            });
+          } else {
+            raw = await prisma.product.findMany({
+              where: {
+                published: true,
+                deletedAt: null,
+                ...(row.source === "featured" ? { featured: true } : {})
+              },
+              select: PRODUCT_CARD_SELECT,
+              orderBy: { createdAt: "desc" },
+              take: row.limit
+            });
+          }
+
+          return {
+            title: row.title,
+            highlight: row.highlight,
+            subtitle: row.subtitle,
+            ctaLabel: row.ctaLabel,
+            ctaHref: row.ctaHref,
+            products: raw.map(p => formatProductUrls(p))
+          };
+        })
+      );
+
+      return resolved.filter(row => row.products.length > 0);
+    }),
+    // Counted rather than typed into a setting — see components/home/SocialProof.
+    // A day's TTL: these move slowly and each one is a full-table aggregate.
+    fetchWithCache("home:socialProof:v1", async () => {
+      const [ratings, orderCount, customerCount, publishedProducts] = await Promise.all([
+        prisma.review.aggregate({ _avg: { rating: true }, _count: { rating: true } }),
+        prisma.order.count({ where: { status: { not: "CANCELLED" } } }),
+        // An EXISTS subquery, not a groupBy over every order row.
+        prisma.user.count({ where: { orders: { some: { status: { not: "CANCELLED" } } } } }),
+        prisma.product.count({ where: { published: true, deletedAt: null } })
+      ]);
+      return {
+        avgRating: ratings._avg.rating ?? null,
+        reviewCount: ratings._count.rating,
+        orderCount,
+        customerCount,
+        publishedProducts
+      };
+    }, 86400),
+    // Only 4- and 5-star reviews on this strip — it is a marketing block, and
+    // /reviews is where the full, unfiltered list lives. Shape and author
+    // handling are shared with that page via lib/reviews.
+    fetchWithCache("home:reviews:v1", async () => {
+      const raw = await prisma.review.findMany({
+        where: { ...REVIEW_VISIBLE_WHERE, rating: { gte: 4 } },
+        orderBy: { createdAt: "desc" },
+        take: 12,
+        select: REVIEW_CARD_SELECT
+      });
+      return toReviewCards(raw);
+    }, 900),
+    fetchWithCache("home:journal:v1", async () => {
+      const raw = await prisma.journalPost.findMany({
+        where: { published: true },
+        orderBy: [{ publishedAt: "desc" }, { createdAt: "desc" }],
+        take: 3,
+        select: {
+          slug: true,
+          title: true,
+          excerpt: true,
+          coverImage: true,
+          readTime: true,
+          publishedAt: true,
+          createdAt: true,
+          category: { select: { name: true, slug: true } }
+        }
+      });
+      // Dates are serialised because this shape goes through the Redis cache —
+      // JournalCard already accepts a string here.
+      return raw.map(p => ({
+        ...p,
+        publishedAt: p.publishedAt ? p.publishedAt.toISOString() : null,
+        createdAt: p.createdAt.toISOString()
+      }));
+    }, 900),
+    // Full-bleed video banners — Settings → Homepage → Video Banners. Inactive
+    // and file-less rows are already dropped by parseHomeVideoBanners.
+    fetchWithCache("home:videoBanners:v1", async () => {
+      const s = await prisma.setting.findUnique({
+        where: { key: HOME_VIDEO_BANNERS_SETTING_KEY }
+      });
+      return parseHomeVideoBanners(s?.value).map(b => ({
+        ...b,
+        video: formatImageUrl(b.video),
+        videoMobile: b.videoMobile ? formatImageUrl(b.videoMobile) : "",
+        poster: b.poster ? formatImageUrl(b.poster) : "",
+        posterMobile: b.posterMobile ? formatImageUrl(b.posterMobile) : ""
+      }));
+    }),
+    // Featured icons — Settings → Homepage → Featured Icons. Tiles carry their
+    // own artwork and link rather than pointing at a Product, so there is
+    // nothing to resolve here beyond rewriting the image paths.
+    fetchWithCache("home:icons:v1", async () => {
+      const setting = await prisma.setting.findUnique({
+        where: { key: HOME_ICONS_SETTING_KEY }
+      });
+      const config = parseHomeIcons(setting?.value);
+      const withUrls = (tiles: HomeIconTile[]) =>
+        tiles.map(t => ({ ...t, image: formatImageUrl(t.image) }));
+
+      return { ...config, men: withUrls(config.men), women: withUrls(config.women) };
     })
   ]);
 
-  // Split trending categories into men/women for the category tabs.
-  // Safe heuristic (check women first — "women" contains "men"); matches parent + own slug/name.
+  // Split trending categories into men/women for the Trending Tall Categories tabs.
+  // Safe heuristic (check women first — "woman"/"women" both contain "man"/"men");
+  // matches parent + own slug/name.
+  //
+  // `m[ae]n` on purpose: the seeded slugs are singular (`woman-socks`, `man-jeans`)
+  // while the display names are plural ("Women", "Men"), and only matching one
+  // spelling silently dropped every category into neither tab.
   const catText = (c: any) =>
     `${c.slug ?? ""} ${c.name ?? ""} ${c.parent?.slug ?? ""} ${c.parent?.name ?? ""}`.toLowerCase();
-  const isWomenCat = (c: any) => /women|womens|ladies/.test(catText(c));
-  const isMenCat = (c: any) => !isWomenCat(c) && /\bmen|mens/.test(catText(c));
+  const isWomenCat = (c: any) => /wom[ae]n|ladies/.test(catText(c));
+  // \b keeps "woman" from matching as "man" — belt and braces, since women win above.
+  const isMenCat = (c: any) => !isWomenCat(c) && /\bm[ae]n/.test(catText(c));
   const toTile = (c: any) => ({
     title: c.name,
     image: c.image || "/images/hero.jpg",
+    // Resolved here rather than in the tile components: they are client
+    // components, and the fallback only needs the category name they already have.
+    alt: categoryImageAlt({ custom: c.imageAlt, name: c.name, kind: "tile" }),
     href: `/category/${c.slug}`
   });
-  const menCategoryTiles = trendingCategories.filter(isMenCat).slice(0, 6).map(toTile);
-  const womenCategoryTiles = trendingCategories.filter(isWomenCat).slice(0, 6).map(toTile);
+  // Free-text block above the footer. Read through getSettings rather than a
+  // cache key of its own — it is already memoised per request and the settings
+  // save handler invalidates it.
+  const settings = await getSettings();
+  const homeDescription = settings.home_description?.trim() || "";
+  // Read through getSettings rather than a cache key of its own — it is already
+  // memoised per request and the settings save handler invalidates it.
+  const sectionOrder = parseHomeSections(settings[HOME_SECTIONS_SETTING_KEY]);
+
+  const curatedMen = trendingCategories.filter(isMenCat).slice(0, 6).map(toTile);
+  const curatedWomen = trendingCategories.filter(isWomenCat).slice(0, 6).map(toTile);
+
+  // With nothing flagged isTrending the row falls back to a built-in list. Those
+  // tiles name categories that usually do exist, so resolve each one and link to
+  // the category page; the /shop text search they used to point at is a strictly
+  // worse destination than the category they are named after.
+  const needFallback = curatedMen.length === 0 && curatedWomen.length === 0;
+  const fallbackCategories = needFallback
+    ? await prisma.category
+        .findMany({
+          where: { slug: { in: FALLBACK_SLUGS }, deletedAt: null },
+          select: { slug: true, name: true, image: true, imageAlt: true },
+        })
+        .catch(() => [])
+    : [];
+  const bySlug = new Map(fallbackCategories.map(c => [c.slug, c]));
+
+  const toFallbackTile = (tile: FallbackTile) => {
+    const category = bySlug.get(tile.slug);
+    return {
+      title: tile.title,
+      // The category's own artwork wins; most stores never upload one, which is
+      // what the bundled image is for.
+      image: category?.image ? formatImageUrl(category.image) : tile.image,
+      alt: categoryImageAlt({ custom: category?.imageAlt, name: category?.name || tile.title, kind: "tile" }),
+      href: category ? `/category/${category.slug}` : tile.search,
+    };
+  };
+
+  const menCategoryTiles = needFallback ? FALLBACK_MEN.map(toFallbackTile) : curatedMen;
+  const womenCategoryTiles = needFallback ? FALLBACK_WOMEN.map(toFallbackTile) : curatedWomen;
 
   // `spotlightProducts` and the `heroLeft`/`heroRight` image pair used to be
   // derived here for <FeaturedProductsSlider> and a category-driven hero. Neither
@@ -244,102 +596,254 @@ export default async function Home() {
     ? flashSaleProducts
     : products;
 
-  return (
-    <div className="flex flex-col min-h-screen selection:bg-brand-200 selection:text-brand-950">
-
-      <Header />
-
-      {/* Signature runs one column of panels on the cream page — each section
-          owns its own max-width and padding, so `main` only holds them. */}
-      <main className="w-full">
-
-        {/* Hero panel */}
-        <HomeHero slides={heroSlidesSetting} />
-
-        {/* Categories */}
-        <ScrollReveal>
-          <TrendingCategories men={menCategoryTiles} women={womenCategoryTiles} />
+  // Banners name the section they follow rather than an index, so inserting or
+  // reordering a section above them does not silently move them somewhere else.
+  const bannersAt = (slot: HomeVideoBannerSlot) =>
+    (videoBanners as HomeVideoBanner[])
+      .filter(b => b.position === slot)
+      .map((banner, i) => (
+        <ScrollReveal key={`${slot}-${i}`}>
+          <VideoBanner banner={banner} />
         </ScrollReveal>
+      ));
 
-        {/* Best sellers */}
+  // Every block the homepage can show, keyed the same way as the stored order
+  // in `home_sections`. A block whose content is empty still belongs here — it
+  // renders null, which is how "on but nothing to show" and "switched off" stay
+  // two different things.
+  const sectionNodes: Record<HomeSectionKey, React.ReactNode> = {
+    hero: <HomeHero slides={heroSlidesSetting} />,
+
+    pillars: (
+      <ScrollReveal>
+        <PillarsCarousel initialTabs={communityTabsSetting} />
+      </ScrollReveal>
+    ),
+
+    "flash-sale": (
+      <ScrollReveal>
+        <FlashSale products={finalFlashSaleProducts} />
+      </ScrollReveal>
+    ),
+
+    style:
+      styleSections === null ? (
         <ScrollReveal>
-          <BestSellers products={bestSellerProducts.length > 0 ? bestSellerProducts : products} />
+          <StyleSection />
         </ScrollReveal>
-
-        {/* Flash sale — copper band + the discounted grid */}
-        <ScrollReveal>
-          <FlashSale products={finalFlashSaleProducts} />
-        </ScrollReveal>
-
-        {/* The four promises */}
-        <ScrollReveal>
-          <ValueProps />
-        </ScrollReveal>
-
-        {/* New arrivals */}
-        {products.length > 0 && (
-          <ScrollReveal>
-            <NewArrivals products={products} />
+      ) : (
+        styleSections.map((section: any) => (
+          <ScrollReveal key={section.key}>
+            <StyleSection
+              title={section.title}
+              highlight={section.highlight}
+              men={section.men}
+              women={section.women}
+            />
           </ScrollReveal>
-        )}
+        ))
+      ),
 
-        {/* Brand showcase */}
-        {brands.length > 0 && (
-          <ScrollReveal>
-            <section className="w-full max-w-[1400px] mx-auto px-5 sm:px-7 py-10 lg:py-14">
-              <div className="sg-card sg-card-lg overflow-hidden grid grid-cols-1 lg:grid-cols-2">
-                <div className="flex flex-col justify-center p-8 sm:p-12 lg:p-14">
-                  <span className="sg-kicker">Our brand collection</span>
-                  <h2 className="text-[28px] sm:text-[34px] font-extrabold mt-2.5">
-                    {brands.length} premium brands, one fit standard
-                  </h2>
-                  <p className="text-soft text-[15px] leading-relaxed mt-3 max-w-[46ch]">
-                    We partner with labels that will cut for height. Every piece is selected,
-                    authenticity-verified and held to the same length standard as our own.
-                  </p>
-                  <Link href="/shop" className="sg-btn sg-btn-primary self-start mt-7">
-                    Shop all brands →
-                  </Link>
-                </div>
+    showcase: showcaseRows.map((row: any, i: number) => (
+      <ScrollReveal key={`${row.title}-${i}`}>
+        <ProductShowcase
+          title={row.title}
+          highlight={row.highlight}
+          subtitle={row.subtitle}
+          ctaLabel={row.ctaLabel}
+          ctaHref={row.ctaHref}
+          products={row.products}
+          listId={`showcase-${i + 1}`}
+        />
+      </ScrollReveal>
+    )),
 
-                <div className="bg-cream p-8 sm:p-12 lg:p-14 grid grid-cols-2 sm:grid-cols-3 gap-3.5 content-center">
-                  {brands.map((brand: any) => (
-                    <div
-                      key={brand.id}
-                      className="sg-card grid place-items-center min-h-[86px] p-4"
-                    >
-                      {brand.image ? (
-                        <img src={brand.image} alt={brand.name} className="max-h-9 object-contain opacity-80" />
-                      ) : (
-                        <span className="text-soft text-[12px] font-bold text-center">{brand.name}</span>
-                      )}
-                    </div>
-                  ))}
-                </div>
+    bestsellers: (
+      <ScrollReveal>
+        <BestSellers products={bestSellerProducts.length > 0 ? bestSellerProducts : products} />
+      </ScrollReveal>
+    ),
+
+    trending: (
+      <ScrollReveal>
+        <TrendingCategories men={menCategoryTiles} women={womenCategoryTiles} />
+      </ScrollReveal>
+    ),
+
+    reels:
+      reelsSection.active && reelsSection.reels.length > 0 ? (
+        <ScrollReveal>
+          <Reels
+            title={reelsSection.title}
+            highlight={reelsSection.highlight}
+            subtitle={reelsSection.subtitle}
+            reels={reelsSection.reels}
+          />
+        </ScrollReveal>
+      ) : null,
+
+    icons:
+      iconsSection.active && (iconsSection.men.length > 0 || iconsSection.women.length > 0) ? (
+        <ScrollReveal>
+          <IconsGrid
+            title={iconsSection.title}
+            highlight={iconsSection.highlight}
+            subtitle={iconsSection.subtitle}
+            ctaLabel={iconsSection.ctaLabel}
+            ctaHref={iconsSection.ctaHref}
+            men={iconsSection.men}
+            women={iconsSection.women}
+          />
+        </ScrollReveal>
+      ) : null,
+
+    brands: (
+      <ScrollReveal>
+        <section className="w-full grid grid-cols-1 md:grid-cols-2 bg-zinc-950 text-white min-h-[50vh] overflow-hidden">
+          <div className="flex flex-col justify-center p-8 sm:p-24 max-w-xl">
+            <span className="text-zinc-400 text-xs font-bold tracking-widest uppercase mb-3 block">Our Brand Collection</span>
+            <h2 className="at-heading text-at-subheading mb-4">
+              {brands.length > 0 ? `${brands.length} Premium Brands` : "Premium Brands"}
+            </h2>
+            <p className="text-zinc-300 text-sm sm:text-base mb-6 font-light leading-relaxed">
+              We partner with the world&apos;s finest labels. Every piece in our collection is carefully selected, authenticity-verified, and crafted to the highest standards of luxury fashion.
+            </p>
+            <div className="flex items-center gap-6 mb-8 text-zinc-300 text-sm">
+              <span className="flex items-center gap-1.5"><Sparkles className="w-4 h-4 text-white" /> Authentic Items</span>
+              <span className="flex items-center gap-1.5"><ShieldCheck className="w-4 h-4 text-white" /> Quality Assured</span>
+            </div>
+            <Link href="/shop" className="rounded-at-btn bg-white text-at-ink px-8 py-3.5 text-xs font-bold tracking-widest uppercase hover:bg-white/90 transition-colors shadow-lg self-start">
+              Shop All Brands
+            </Link>
+          </div>
+          <div className="relative min-h-[35vh] md:min-h-0 flex items-center justify-center p-8">
+            {brands.length > 0 ? (
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 w-full max-w-sm">
+                {brands.map((brand: any) => (
+                  <div key={brand.id} className="bg-zinc-800/60 border border-zinc-700/50 rounded-at-btn p-4 flex items-center justify-center min-h-[80px]">
+                    {brand.image ? (
+                      <img src={brand.image} alt={brand.name} className="max-h-12 max-w-full object-contain" />
+                    ) : (
+                      <span className="text-zinc-300 text-xs font-bold uppercase tracking-widest text-center">{brand.name}</span>
+                    )}
+                  </div>
+                ))}
               </div>
-            </section>
-          </ScrollReveal>
-        )}
+            ) : (
+              <div className="relative w-full h-full bg-zinc-900 flex items-center justify-center">
+                <span className="text-zinc-600 font-bold uppercase tracking-widest text-xs">Premium Fashion</span>
+              </div>
+            )}
+          </div>
+        </section>
+      </ScrollReveal>
+    ),
 
-        {/* Reviews */}
+    "new-arrivals":
+      products.length > 0 ? (
         <ScrollReveal>
-          <Reviews />
+          <NewArrivals products={products} />
         </ScrollReveal>
+      ) : null,
 
-        {/* Pillars — Designed For Real Heights (content from home_community_tabs Setting) */}
+    // Every figure is counted out of the DB, so the strip is held back until
+    // there is something worth showing.
+    "social-proof":
+      socialProofStats.reviewCount > 0 ? (
         <ScrollReveal>
-          <PillarsCarousel initialTabs={communityTabsSetting} />
+          <SocialProof stats={socialProofStats} />
         </ScrollReveal>
+      ) : null,
 
-        {/* Recently viewed */}
+    reviews:
+      homeReviews.length > 0 ? (
         <ScrollReveal>
-          <RecentlyViewed currentProductId="" />
+          <CustomerReviews reviews={homeReviews} />
         </ScrollReveal>
+      ) : null,
 
-        {/* Newsletter */}
+    "recently-viewed": (
+      <ScrollReveal>
+        <RecentlyViewed currentProductId="" />
+      </ScrollReveal>
+    ),
+
+    "value-props": (
+      <ScrollReveal>
+        <section className="w-full py-12 bg-zinc-900 text-white border-t border-zinc-800">
+          <div className="max-w-[1600px] mx-auto px-6 lg:px-8 grid grid-cols-2 md:grid-cols-4 gap-8 text-center">
+            {[
+              { icon: <Truck className="w-6 h-6 mx-auto mb-2 text-white" />, title: "Free Shipping", text: "On all orders over $150" },
+              { icon: <RotateCcw className="w-6 h-6 mx-auto mb-2 text-white" />, title: "30-Day Returns", text: "Hassle-free dynamic returns" },
+              { icon: <ShieldCheck className="w-6 h-6 mx-auto mb-2 text-white" />, title: "Secure Checkout", text: "100% encrypted checkout layers" },
+              { icon: <Sparkles className="w-6 h-6 mx-auto mb-2 text-white" />, title: "Elite Quality", text: "Carefully sourced dynamic luxury materials" }
+            ].map((item, idx) => (
+              <div key={idx} className="flex flex-col items-center">
+                {item.icon}
+                <h4 className="text-xs font-bold tracking-widest uppercase mb-1">{item.title}</h4>
+                <p className="text-[12px] text-zinc-400 font-light">{item.text}</p>
+              </div>
+            ))}
+          </div>
+        </section>
+      </ScrollReveal>
+    ),
+
+    journal:
+      journalPosts.length > 0 ? (
         <ScrollReveal>
-          <NewsletterCard />
+          <JournalTeaser posts={journalPosts} />
         </ScrollReveal>
+      ) : null,
+
+    description: homeDescription ? (
+      <ScrollReveal>
+        {/* Container mirrors <FooterOpenGrid> exactly — same outer padding,
+            same 1280px card, same inner padding — so the copy lines up with
+            the footer directly beneath it. */}
+        <section className="w-full bg-white px-4 py-10 sm:px-6 md:py-14 lg:px-8">
+          <div className="mx-auto max-w-[1280px]">
+            {/* Rich text from the admin editor — same trust model and prose
+                styling as the category description block. */}
+            <div
+              className="home-prose max-w-none px-6 text-[13px] leading-6 text-at-muted sm:px-8 lg:px-12"
+              dangerouslySetInnerHTML={{ __html: homeDescription }}
+            />
+          </div>
+        </section>
+      </ScrollReveal>
+    ) : null,
+  };
+
+  return (
+    <div className="flex flex-col min-h-screen bg-white text-at-ink selection:bg-at-ink selection:text-white antialiased">
+
+      <Header transparent />
+
+      {/* Negative top margin = header height, so the hero sits under the transparent header */}
+      <main className={`${robotoFlex.variable} font-home w-full max-w-[2000px] mx-auto -mt-14`}>
+
+        {/* Order and visibility come from Settings → Homepage → Section Order.
+            Video banners are emitted with the section they are anchored to, so
+            moving that section takes its banner along instead of stranding it. */}
+        {sectionOrder.map(({ key, active }) => (
+          <React.Fragment key={key}>
+            {active ? (
+              <>
+                {sectionNodes[key]}
+                {bannersAt(`after-${key}` as HomeVideoBannerSlot)}
+              </>
+            ) : null}
+
+            {/* Promo banners (Admin → Banners) sit outside the section toggles:
+                they follow the hero / best-sellers slot whether or not that
+                section is switched on, and hide themselves when empty. */}
+            {key === "hero" && <PromoBanners position="home_top" />}
+            {key === "bestsellers" && <PromoBanners position="home_middle" />}
+          </React.Fragment>
+        ))}
+
+        <PromoBanners position="home_bottom" />
 
       </main>
 
@@ -348,4 +852,3 @@ export default async function Home() {
     </div>
   );
 }
-

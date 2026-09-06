@@ -55,8 +55,8 @@ export default function ContactForm() {
   }
 
   const fieldClass =
-    "w-full pl-10 pr-4 py-3 text-sm border border-line bg-white focus:border-aqua-400 focus:outline-none focus:ring-0 transition rounded-sg disabled:opacity-60 placeholder:text-faint"
-  const labelClass = "block text-[11px] font-bold uppercase tracking-[0.14em] text-soft mb-2"
+    "w-full pl-10 pr-4 py-3 text-sm border border-zinc-200 bg-white focus:border-zinc-950 focus:outline-none focus:ring-1 focus:ring-zinc-950 transition rounded-lg disabled:opacity-60 placeholder:text-zinc-400"
+  const labelClass = "block text-[10px] font-bold uppercase tracking-widest text-zinc-500 mb-2"
 
   // ─── Success state ──────────────────────────────────────────────────────────
   if (status === "success") {
@@ -65,11 +65,11 @@ export default function ContactForm() {
         <div className="w-14 h-14 rounded-full bg-emerald-50 border border-emerald-100 flex items-center justify-center mx-auto mb-5">
           <CheckCircle2 className="w-7 h-7 text-emerald-600" />
         </div>
-        <h3 className="text-lg font-extrabold uppercase tracking-tight text-foreground">Message sent</h3>
-        <p className="text-sm text-soft mt-2 max-w-sm mx-auto">{feedback}</p>
+        <h3 className="text-lg font-black uppercase tracking-tight text-zinc-900">Message sent</h3>
+        <p className="text-sm text-zinc-500 mt-2 max-w-sm mx-auto">{feedback}</p>
         <button
           onClick={() => { setStatus("idle"); setFeedback("") }}
-          className="mt-6 px-6 py-3 text-[11px] font-bold uppercase tracking-[0.14em] border border-line rounded-full hover:bg-brand-600 hover:text-white hover:border-brand-600 transition cursor-pointer"
+          className="mt-6 px-6 py-3 text-[10px] font-bold uppercase tracking-widest border border-zinc-200 rounded-lg hover:bg-zinc-950 hover:text-white hover:border-zinc-950 transition cursor-pointer"
         >
           Send another message
         </button>
@@ -81,16 +81,16 @@ export default function ContactForm() {
     <form onSubmit={handleSubmit} className="space-y-5">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
         <div>
-          <label htmlFor="cf-name" className={labelClass}>Full Name <span className="text-faint">*</span></label>
+          <label htmlFor="cf-name" className={labelClass}>Full Name <span className="text-zinc-400">*</span></label>
           <div className="relative">
-            <User className="absolute left-3.5 top-3.5 w-4 h-4 text-faint" />
+            <User className="absolute left-3.5 top-3.5 w-4 h-4 text-zinc-400" />
             <input id="cf-name" type="text" required value={name} onChange={e => setName(e.target.value)} placeholder="Your name" disabled={loading} className={fieldClass} />
           </div>
         </div>
         <div>
-          <label htmlFor="cf-email" className={labelClass}>Email <span className="text-faint">*</span></label>
+          <label htmlFor="cf-email" className={labelClass}>Email <span className="text-zinc-400">*</span></label>
           <div className="relative">
-            <Mail className="absolute left-3.5 top-3.5 w-4 h-4 text-faint" />
+            <Mail className="absolute left-3.5 top-3.5 w-4 h-4 text-zinc-400" />
             <input id="cf-email" type="email" required value={email} onChange={e => setEmail(e.target.value)} placeholder="you@example.com" disabled={loading} className={fieldClass} />
           </div>
         </div>
@@ -98,21 +98,21 @@ export default function ContactForm() {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
         <div>
-          <label htmlFor="cf-reason" className={labelClass}>What is it about? <span className="text-faint">*</span></label>
+          <label htmlFor="cf-reason" className={labelClass}>What is it about? <span className="text-zinc-400">*</span></label>
           <div className="relative">
-            <Tag className="absolute left-3.5 top-3.5 w-4 h-4 text-faint pointer-events-none" />
+            <Tag className="absolute left-3.5 top-3.5 w-4 h-4 text-zinc-400 pointer-events-none" />
             <select id="cf-reason" value={reason} onChange={e => setReason(e.target.value)} disabled={loading} className={`${fieldClass} appearance-none cursor-pointer pr-10`}>
               {REASONS.map(r => <option key={r} value={r}>{r}</option>)}
             </select>
-            <svg className="absolute right-4 top-4 w-3 h-3 text-faint pointer-events-none" viewBox="0 0 12 12" fill="none">
+            <svg className="absolute right-4 top-4 w-3 h-3 text-zinc-400 pointer-events-none" viewBox="0 0 12 12" fill="none">
               <path d="M2 4l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
           </div>
         </div>
         <div>
-          <label htmlFor="cf-order" className={labelClass}>Order Number <span className="text-faint font-medium normal-case tracking-normal">(optional)</span></label>
+          <label htmlFor="cf-order" className={labelClass}>Order Number <span className="text-zinc-400 font-medium normal-case tracking-normal">(optional)</span></label>
           <div className="relative">
-            <Package className="absolute left-3.5 top-3.5 w-4 h-4 text-faint" />
+            <Package className="absolute left-3.5 top-3.5 w-4 h-4 text-zinc-400" />
             <input id="cf-order" type="text" value={orderNumber} onChange={e => setOrderNumber(e.target.value)} placeholder="e.g. #A1B2C3D4" disabled={loading} className={fieldClass} />
           </div>
         </div>
@@ -120,14 +120,14 @@ export default function ContactForm() {
 
       <div>
         <div className="flex items-baseline justify-between">
-          <label htmlFor="cf-message" className={labelClass}>Message <span className="text-faint">*</span></label>
-          <span className="text-[10px] text-faint tabular-nums">{message.length}/{MESSAGE_LIMIT}</span>
+          <label htmlFor="cf-message" className={labelClass}>Message <span className="text-zinc-400">*</span></label>
+          <span className="text-[10px] text-zinc-400 tabular-nums">{message.length}/{MESSAGE_LIMIT}</span>
         </div>
         <textarea
           id="cf-message" required rows={7} maxLength={MESSAGE_LIMIT} value={message}
           onChange={e => setMessage(e.target.value)} disabled={loading}
           placeholder="Tell us what happened, and include your height and usual size if you're asking about fit — the more detail, the faster we can help."
-          className="w-full px-4 py-3 text-sm border border-line bg-white focus:border-aqua-400 focus:outline-none focus:ring-0 transition rounded-sg resize-none disabled:opacity-60 placeholder:text-faint"
+          className="w-full px-4 py-3 text-sm border border-zinc-200 bg-white focus:border-zinc-950 focus:outline-none focus:ring-1 focus:ring-zinc-950 transition rounded-lg resize-none disabled:opacity-60 placeholder:text-zinc-400"
         />
       </div>
 
@@ -140,13 +140,13 @@ export default function ContactForm() {
       <div className="flex flex-col sm:flex-row sm:items-center gap-4 pt-1">
         <button
           type="submit" disabled={loading}
-          className="w-full sm:w-auto bg-brand-600 hover:bg-brand-700 text-white font-bold py-3.5 px-8 rounded-full transition text-[11px] uppercase tracking-[0.14em] disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer shrink-0"
+          className="w-full sm:w-auto bg-zinc-950 hover:bg-zinc-800 text-white font-bold py-3.5 px-8 rounded-lg transition text-[11px] uppercase tracking-widest disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer shrink-0"
         >
           {loading
             ? <><Loader2 className="w-4 h-4 animate-spin" /> Sending...</>
             : <><Send className="w-4 h-4" /> Send Message</>}
         </button>
-        <p className="text-[11px] text-faint leading-relaxed">
+        <p className="text-[11px] text-zinc-400 leading-relaxed">
           We only use your details to answer this enquiry — never for marketing.
         </p>
       </div>

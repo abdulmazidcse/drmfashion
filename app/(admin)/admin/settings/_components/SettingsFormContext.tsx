@@ -3,6 +3,106 @@
 import { createContext, useContext, useEffect, useState } from "react"
 import api from "@/lib/axios"
 import Swal from "sweetalert2"
+import {
+  DEFAULT_HEIGHTS_GUIDE,
+  HEIGHTS_GUIDE_SETTING_KEY,
+  parseHeightsGuide,
+  type HeightsGuide,
+  type HeightsGuideModel,
+} from "@/lib/heightsGuide"
+import {
+  DEFAULT_HOME_REELS,
+  EMPTY_HOME_REEL,
+  HOME_REELS_SETTING_KEY,
+  MAX_HOME_REELS,
+  parseHomeReels,
+  type HomeReel,
+  type HomeReelsConfig,
+} from "@/lib/homeReels"
+import {
+  DEFAULT_HOME_ICONS,
+  EMPTY_HOME_ICON_TILE,
+  HOME_ICONS_SETTING_KEY,
+  MAX_HOME_ICONS,
+  parseHomeIcons,
+  type HomeIconsConfig,
+  type HomeIconTile,
+} from "@/lib/homeIcons"
+import {
+  DEFAULT_ANNOUNCEMENT_BAR,
+  EMPTY_ANNOUNCEMENT_SLIDE,
+  ANNOUNCEMENT_BAR_SETTING_KEY,
+  MAX_ANNOUNCEMENT_SLIDES,
+  parseAnnouncementBar,
+  type AnnouncementBarConfig,
+  type AnnouncementSlide,
+} from "@/lib/announcementBar"
+import {
+  DEFAULT_HOME_SECTIONS,
+  HOME_SECTIONS_SETTING_KEY,
+  parseHomeSections,
+  type HomeSectionKey,
+  type HomeSectionState,
+} from "@/lib/homeSections"
+import {
+  EMPTY_HOME_VIDEO_BANNER,
+  HOME_VIDEO_BANNERS_SETTING_KEY,
+  MAX_HOME_VIDEO_BANNERS,
+  parseHomeVideoBanners,
+  type HomeVideoBanner,
+} from "@/lib/homeVideoBanners"
+import {
+  DEFAULT_HOME_SHOWCASE,
+  EMPTY_HOME_SHOWCASE_ROW,
+  HOME_SHOWCASE_SETTING_KEY,
+  MAX_HOME_SHOWCASE_PRODUCTS,
+  MAX_HOME_SHOWCASE_ROWS,
+  parseHomeShowcase,
+  type HomeShowcaseConfig,
+  type HomeShowcaseRow,
+} from "@/lib/homeShowcase"
+
+// Seasonal homepage tile sections — rendered by components/home/StyleSection.tsx
+// from the `home_style_sections` Setting. Tiles are categories, so the image,
+// name and link all come from the Category row rather than being typed in here.
+export type StyleSectionKey = "summer"
+
+export interface StyleSectionConfig {
+  active: boolean
+  title: string
+  highlight: string
+  men: string[]
+  women: string[]
+}
+
+const DEFAULT_STYLE_SECTIONS: Record<StyleSectionKey, StyleSectionConfig> = {
+  summer: { active: true, title: "Summer Styles", highlight: "Styles", men: [], women: [] },
+}
+
+// The stored JSON is hand-editable in the DB, so every field is checked rather
+// than spread blindly — a bad `men` value would otherwise crash the picker.
+function mergeStyleSection(base: StyleSectionConfig, raw: any): StyleSectionConfig {
+  return {
+    active: typeof raw?.active === "boolean" ? raw.active : base.active,
+    title: typeof raw?.title === "string" ? raw.title : base.title,
+    highlight: typeof raw?.highlight === "string" ? raw.highlight : base.highlight,
+    men: Array.isArray(raw?.men) ? raw.men.filter((id: any) => typeof id === "string") : base.men,
+    women: Array.isArray(raw?.women) ? raw.women.filter((id: any) => typeof id === "string") : base.women,
+  }
+}
+
+// /api/admin/categories returns a nested tree; the picker wants one flat list
+// with the depth kept for indentation.
+function flattenCategories(nodes: any[], depth = 0): any[] {
+  if (!Array.isArray(nodes)) return []
+  return nodes.flatMap(node => {
+    if (!node || node.deletedAt) return []
+    return [
+      { id: node.id, name: node.name, slug: node.slug, image: node.image, depth },
+      ...flattenCategories(node.children || [], depth + 1),
+    ]
+  })
+}
 
 // Every field lives here so the tab panels can stay presentational and be code
 // split — without this they would need ~200 props drilled through the page.
@@ -28,8 +128,12 @@ function useSettingsFormState() {
   const [brandStoreName, setBrandStoreName] = useState("My Store")
   const [brandLogoUrl, setBrandLogoUrl] = useState("")
   const [brandFaviconUrl, setBrandFaviconUrl] = useState("")
-  const [brandSlogan, setBrandSlogan] = useState("Free shipping over ৳5,000 · 30-day easy returns")
+  const [brandSlogan, setBrandSlogan] = useState("Tall Men 6' - 7'1\" | Tall Women 5'9\" - 6'6\"")
   const [contactEmail, setContactEmail] = useState("support@store.local")
+  const [whatsappNumber, setWhatsappNumber] = useState("")
+  const [whatsappMessage, setWhatsappMessage] = useState("Hi! I have a question about my order.")
+  const [tawkPropertyId, setTawkPropertyId] = useState("")
+  const [tawkWidgetId, setTawkWidgetId] = useState("default")
 
   // Social Links state
   const [socialFacebook, setSocialFacebook] = useState("")
@@ -77,8 +181,11 @@ function useSettingsFormState() {
   const [uploadingPromoPopupImage, setUploadingPromoPopupImage] = useState(false)
 
   // SEO & Analytics state
+  const [seoMetaTitle, setSeoMetaTitle] = useState("")
+  const [seoMetaDescription, setSeoMetaDescription] = useState("")
   const [googleSiteVerification, setGoogleSiteVerification] = useState("")
   const [facebookDomainVerification, setfacebookDomainVerification] = useState("")
+  const [gtmId, setGtmId] = useState("")
   const [googleAnalyticsId, setGoogleAnalyticsId] = useState("")
   const [facebookPixelId, setfacebookPixelId] = useState("")
   const [customHeadScripts, setCustomHeadScripts] = useState("")
@@ -90,25 +197,351 @@ function useSettingsFormState() {
   const [slideMenActive, setSlideMenActive] = useState(true)
   const [slideMenTitle, setSlideMenTitle] = useState("FINALLY, CLOTHES THAT FIT.")
   const [slideMenSubtitle, setSlideMenSubtitle] = useState("Designed specifically for men up to 7'1\". Proportions perfected for vertical precision.")
+  /** Alt text for the poster image; empty falls back to the slide title. */
+  const [slideMenImageAlt, setSlideMenImageAlt] = useState("")
   const [slideMenImage, setSlideMenImage] = useState("/images/men_hero.png")
   const [slideMenVideo, setSlideMenVideo] = useState("/videos/men.mp4")
   const [slideMenVideoFallback, setSlideMenVideoFallback] = useState("/videos/fashion.mp4")
   const [slideMenButtonText, setSlideMenButtonText] = useState("Shop Men")
   const [slideMenShopLink, setSlideMenShopLink] = useState("/shop")
-  const [slideMenTopBarTag, setSlideMenTopBarTag] = useState("New season")
+  const [slideMenTopBarTag, setSlideMenTopBarTag] = useState("Made for Tall")
 
   const [slideWomenActive, setSlideWomenActive] = useState(true)
-  const [slideWomenTitle, setSlideWomenTitle] = useState("Elegance in every inch.")
-  const [slideWomenSubtitle, setSlideWomenSubtitle] = useState("Contemporary womenswear with a considered drape and a precise length.")
+  const [slideWomenTitle, setSlideWomenTitle] = useState("ELEGANCE IN EVERY INCH.")
+  const [slideWomenSubtitle, setSlideWomenSubtitle] = useState("Tailored specifically for tall women up to 6'6\". Modern style with perfect length.")
+  /** Alt text for the poster image; empty falls back to the slide title. */
+  const [slideWomenImageAlt, setSlideWomenImageAlt] = useState("")
   const [slideWomenImage, setSlideWomenImage] = useState("/images/olaszkolda-fashion-10318918.jpg")
   const [slideWomenVideo, setSlideWomenVideo] = useState("/videos/women.mp4")
   const [slideWomenVideoFallback, setSlideWomenVideoFallback] = useState("/videos/main-side-video.mp4")
   const [slideWomenButtonText, setSlideWomenButtonText] = useState("Shop Women")
   const [slideWomenShopLink, setSlideWomenShopLink] = useState("/shop")
-  const [slideWomenTopBarTag, setSlideWomenTopBarTag] = useState("New season")
+  const [slideWomenTopBarTag, setSlideWomenTopBarTag] = useState("Made for Tall")
+
+  // Free-text block rendered just above the storefront footer
+  const [homeDescription, setHomeDescription] = useState("")
+
+  // "Our Heights & Fit" panel of the product size-chart modal — brand-level, so
+  // the same content shows on every product. See lib/heightsGuide.ts.
+  const [heightsGuide, setHeightsGuide] = useState<HeightsGuide>(DEFAULT_HEIGHTS_GUIDE)
+
+  function updateHeightsGuide(patch: Partial<HeightsGuide>) {
+    setHeightsGuide(prev => ({ ...prev, ...patch }))
+  }
+
+  function updateHeightsCell(rowIndex: number, colIndex: number, value: string) {
+    setHeightsGuide(prev => ({
+      ...prev,
+      rows: prev.rows.map((row, i) =>
+        i === rowIndex ? row.map((cell, c) => (c === colIndex ? value : cell)) : row
+      ),
+    }))
+  }
+
+  function addHeightsRow() {
+    setHeightsGuide(prev => ({
+      ...prev,
+      rows: [...prev.rows, Array.from({ length: prev.columns.length }, () => "")],
+    }))
+  }
+
+  function removeHeightsRow(index: number) {
+    setHeightsGuide(prev => ({ ...prev, rows: prev.rows.filter((_, i) => i !== index) }))
+  }
+
+  function updateHeightsColumn(index: number, value: string) {
+    setHeightsGuide(prev => ({
+      ...prev,
+      columns: prev.columns.map((column, i) => (i === index ? value : column)),
+    }))
+  }
+
+  // Columns and rows are widened together — a row shorter than the header count
+  // would render a ragged table, and parseHeightsGuide squares it off anyway.
+  function addHeightsColumn() {
+    setHeightsGuide(prev => ({
+      ...prev,
+      columns: [...prev.columns, ""],
+      rows: prev.rows.map(row => [...row, ""]),
+    }))
+  }
+
+  function removeHeightsColumn(index: number) {
+    setHeightsGuide(prev => ({
+      ...prev,
+      columns: prev.columns.filter((_, i) => i !== index),
+      rows: prev.rows.map(row => row.filter((_, i) => i !== index)),
+    }))
+  }
+
+  function updateHeightsModel(index: number, patch: Partial<HeightsGuideModel>) {
+    setHeightsGuide(prev => ({
+      ...prev,
+      models: prev.models.map((model, i) => (i === index ? { ...model, ...patch } : model)),
+    }))
+  }
+
+  function addHeightsModel() {
+    setHeightsGuide(prev => ({ ...prev, models: [...prev.models, { label: "", range: "", image: "" }] }))
+  }
+
+  function removeHeightsModel(index: number) {
+    setHeightsGuide(prev => ({ ...prev, models: prev.models.filter((_, i) => i !== index) }))
+  }
+
+  // Homepage seasonal style section (Summer)
+  const [styleSections, setStyleSections] = useState<Record<StyleSectionKey, StyleSectionConfig>>(DEFAULT_STYLE_SECTIONS)
+  const [styleEditTab, setStyleEditTab] = useState<Record<StyleSectionKey, "men" | "women">>({ summer: "men" })
+  const [allCategories, setAllCategories] = useState<any[]>([])
+  const [categoriesLoaded, setCategoriesLoaded] = useState(false)
+
+  function updateStyleSection(key: StyleSectionKey, patch: Partial<StyleSectionConfig>) {
+    setStyleSections(prev => ({ ...prev, [key]: { ...prev[key], ...patch } }))
+  }
+
+  function toggleStyleCategory(key: StyleSectionKey, gender: "men" | "women", categoryId: string) {
+    setStyleSections(prev => {
+      const selected = prev[key][gender]
+      return {
+        ...prev,
+        [key]: {
+          ...prev[key],
+          [gender]: selected.includes(categoryId)
+            ? selected.filter(id => id !== categoryId)
+            : [...selected, categoryId],
+        },
+      }
+    })
+  }
+
+  // Featured icons grid
+  const [homeIcons, setHomeIcons] = useState<HomeIconsConfig>(DEFAULT_HOME_ICONS)
+
+  function updateHomeIcons(patch: Partial<HomeIconsConfig>) {
+    setHomeIcons(prev => ({ ...prev, ...patch }))
+  }
+
+  function updateHomeIconTile(
+    gender: "men" | "women",
+    index: number,
+    patch: Partial<HomeIconTile>
+  ) {
+    setHomeIcons(prev => ({
+      ...prev,
+      [gender]: prev[gender].map((t, i) => (i === index ? { ...t, ...patch } : t)),
+    }))
+  }
+
+  function addHomeIconTile(gender: "men" | "women") {
+    setHomeIcons(prev =>
+      prev[gender].length >= MAX_HOME_ICONS
+        ? prev
+        : { ...prev, [gender]: [...prev[gender], { ...EMPTY_HOME_ICON_TILE }] }
+    )
+  }
+
+  function removeHomeIconTile(gender: "men" | "women", index: number) {
+    setHomeIcons(prev => ({
+      ...prev,
+      [gender]: prev[gender].filter((_, i) => i !== index),
+    }))
+  }
+
+  function moveHomeIconTile(gender: "men" | "women", index: number, direction: -1 | 1) {
+    setHomeIcons(prev => {
+      const target = index + direction
+      if (target < 0 || target >= prev[gender].length) return prev
+      const tiles = [...prev[gender]]
+      ;[tiles[index], tiles[target]] = [tiles[target], tiles[index]]
+      return { ...prev, [gender]: tiles }
+    })
+  }
+
+  // Site-wide announcement strip
+  const [announcementBar, setAnnouncementBar] =
+    useState<AnnouncementBarConfig>(DEFAULT_ANNOUNCEMENT_BAR)
+
+  function updateAnnouncementBar(patch: Partial<AnnouncementBarConfig>) {
+    setAnnouncementBar(prev => ({ ...prev, ...patch }))
+  }
+
+  function updateAnnouncementSlide(index: number, patch: Partial<AnnouncementSlide>) {
+    setAnnouncementBar(prev => ({
+      ...prev,
+      slides: prev.slides.map((s, i) => (i === index ? { ...s, ...patch } : s)),
+    }))
+  }
+
+  function addAnnouncementSlide() {
+    setAnnouncementBar(prev =>
+      prev.slides.length >= MAX_ANNOUNCEMENT_SLIDES
+        ? prev
+        : { ...prev, slides: [...prev.slides, { ...EMPTY_ANNOUNCEMENT_SLIDE }] }
+    )
+  }
+
+  function removeAnnouncementSlide(index: number) {
+    setAnnouncementBar(prev => ({
+      ...prev,
+      slides: prev.slides.filter((_, i) => i !== index),
+    }))
+  }
+
+  function moveAnnouncementSlide(index: number, direction: -1 | 1) {
+    setAnnouncementBar(prev => {
+      const target = index + direction
+      if (target < 0 || target >= prev.slides.length) return prev
+      const slides = [...prev.slides]
+      ;[slides[index], slides[target]] = [slides[target], slides[index]]
+      return { ...prev, slides }
+    })
+  }
+
+  // Homepage block order and visibility
+  const [homeSections, setHomeSections] = useState<HomeSectionState[]>(DEFAULT_HOME_SECTIONS)
+
+  function moveHomeSection(index: number, direction: -1 | 1) {
+    setHomeSections(prev => {
+      const target = index + direction
+      if (target < 0 || target >= prev.length) return prev
+      const next = [...prev]
+      ;[next[index], next[target]] = [next[target], next[index]]
+      return next
+    })
+  }
+
+  function toggleHomeSection(key: HomeSectionKey) {
+    setHomeSections(prev =>
+      prev.map(s => (s.key === key ? { ...s, active: !s.active } : s))
+    )
+  }
+
+  function resetHomeSections() {
+    setHomeSections(DEFAULT_HOME_SECTIONS)
+  }
+
+  // Full-bleed homepage video banners
+  const [videoBanners, setVideoBanners] = useState<HomeVideoBanner[]>([])
+
+  function updateVideoBanner(index: number, patch: Partial<HomeVideoBanner>) {
+    setVideoBanners(prev => prev.map((b, i) => (i === index ? { ...b, ...patch } : b)))
+  }
+
+  function addVideoBanner() {
+    setVideoBanners(prev =>
+      prev.length >= MAX_HOME_VIDEO_BANNERS ? prev : [...prev, { ...EMPTY_HOME_VIDEO_BANNER }]
+    )
+  }
+
+  function removeVideoBanner(index: number) {
+    setVideoBanners(prev => prev.filter((_, i) => i !== index))
+  }
+
+  /** Only affects two banners sharing one slot — otherwise `position` decides. */
+  function moveVideoBanner(index: number, direction: -1 | 1) {
+    setVideoBanners(prev => {
+      const target = index + direction
+      if (target < 0 || target >= prev.length) return prev
+      const next = [...prev]
+      ;[next[index], next[target]] = [next[target], next[index]]
+      return next
+    })
+  }
+
+  // Homepage reels strip
+  const [homeReels, setHomeReels] = useState<HomeReelsConfig>(DEFAULT_HOME_REELS)
+
+  function updateHomeReelsSection(patch: Partial<HomeReelsConfig>) {
+    setHomeReels(prev => ({ ...prev, ...patch }))
+  }
+
+  function updateHomeReel(index: number, patch: Partial<HomeReel>) {
+    setHomeReels(prev => ({
+      ...prev,
+      reels: prev.reels.map((reel, i) => (i === index ? { ...reel, ...patch } : reel)),
+    }))
+  }
+
+  function addHomeReel() {
+    setHomeReels(prev =>
+      prev.reels.length >= MAX_HOME_REELS
+        ? prev
+        : { ...prev, reels: [...prev.reels, { ...EMPTY_HOME_REEL }] }
+    )
+  }
+
+  function removeHomeReel(index: number) {
+    setHomeReels(prev => ({ ...prev, reels: prev.reels.filter((_, i) => i !== index) }))
+  }
+
+  /** Reordering by drag would need a library; ± buttons keep it to one click. */
+  function moveHomeReel(index: number, direction: -1 | 1) {
+    setHomeReels(prev => {
+      const target = index + direction
+      if (target < 0 || target >= prev.reels.length) return prev
+      const reels = [...prev.reels]
+      ;[reels[index], reels[target]] = [reels[target], reels[index]]
+      return { ...prev, reels }
+    })
+  }
+
+  // Homepage product showcase rows ("Our Bestselling Jeans")
+  const [homeShowcase, setHomeShowcase] = useState<HomeShowcaseConfig>(DEFAULT_HOME_SHOWCASE)
+
+  function updateHomeShowcaseSection(patch: Partial<HomeShowcaseConfig>) {
+    setHomeShowcase(prev => ({ ...prev, ...patch }))
+  }
+
+  function updateHomeShowcaseRow(index: number, patch: Partial<HomeShowcaseRow>) {
+    setHomeShowcase(prev => ({
+      ...prev,
+      rows: prev.rows.map((row, i) => (i === index ? { ...row, ...patch } : row)),
+    }))
+  }
+
+  /** Ticking a product appends it — the strip follows the order they were picked. */
+  function toggleHomeShowcaseProduct(index: number, productId: string) {
+    setHomeShowcase(prev => ({
+      ...prev,
+      rows: prev.rows.map((row, i) => {
+        if (i !== index) return row
+        const picked = row.productIds.includes(productId)
+        if (!picked && row.productIds.length >= MAX_HOME_SHOWCASE_PRODUCTS) return row
+        return {
+          ...row,
+          productIds: picked
+            ? row.productIds.filter(id => id !== productId)
+            : [...row.productIds, productId],
+        }
+      }),
+    }))
+  }
+
+  function addHomeShowcaseRow() {
+    setHomeShowcase(prev =>
+      prev.rows.length >= MAX_HOME_SHOWCASE_ROWS
+        ? prev
+        : { ...prev, rows: [...prev.rows, { ...EMPTY_HOME_SHOWCASE_ROW, productIds: [] }] }
+    )
+  }
+
+  function removeHomeShowcaseRow(index: number) {
+    setHomeShowcase(prev => ({ ...prev, rows: prev.rows.filter((_, i) => i !== index) }))
+  }
+
+  function moveHomeShowcaseRow(index: number, direction: -1 | 1) {
+    setHomeShowcase(prev => {
+      const target = index + direction
+      if (target < 0 || target >= prev.rows.length) return prev
+      const rows = [...prev.rows]
+      ;[rows[index], rows[target]] = [rows[target], rows[index]]
+      return { ...prev, rows }
+    })
+  }
 
   // Homepage Community Tabs Settings
-  const [activeCommunityEditTab, setActiveCommunityEditTab] = useState<"heights" | "fit" | "purpose">("heights")
+  const [activeCommunityEditTab, setActiveCommunityEditTab] =
+    useState<"heights" | "fit" | "purpose" | "product">("heights")
   const [uploadingTabImage, setUploadingTabImage] = useState(false)
 
   // Homepage slide upload states
@@ -119,11 +552,11 @@ function useSettingsFormState() {
   const [uploadingWomenVideo, setUploadingWomenVideo] = useState(false)
   const [uploadingWomenVideoFallback, setUploadingWomenVideoFallback] = useState(false)
 
-  const [tabHeightsLabel, setTabHeightsLabel] = useState("Our Fit")
-  const [tabHeightsHeading, setTabHeightsHeading] = useState("Three lengths, one standard.")
-  const [tabHeightsDescription, setTabHeightsDescription] = useState("Every style is graded in short, regular and long. Each pattern is adjusted vertically so the waist, elbows and knees land exactly where they should.")
+  const [tabHeightsLabel, setTabHeightsLabel] = useState("Our Heights")
+  const [tabHeightsHeading, setTabHeightsHeading] = useState("Designed For Real Heights.")
+  const [tabHeightsDescription, setTabHeightsDescription] = useState("We engineer clothing specifically for tall men from 6'3\" to 7'1\" and tall women from 5'9\" to 6'6\". Every pattern is scaled vertically to ensure the waist, elbows, and knees land exactly where they should.")
   const [tabHeightsImage, setTabHeightsImage] = useState("/images/men_hero.png")
-  const [tabHeightsCtaText, setTabHeightsCtaText] = useState("Explore the fit")
+  const [tabHeightsCtaText, setTabHeightsCtaText] = useState("Explore Heights")
   const [tabHeightsCtaLink, setTabHeightsCtaLink] = useState("/about")
 
   const [tabFitLabel, setTabFitLabel] = useState("Our Fit")
@@ -135,10 +568,32 @@ function useSettingsFormState() {
 
   const [tabPurposeLabel, setTabPurposeLabel] = useState("Our Purpose")
   const [tabPurposeHeading, setTabPurposeHeading] = useState("We're All About Community.")
-  const [tabPurposeDescription, setTabPurposeDescription] = useState("We know the frustration of searching endlessly for clothing that fits—and coming up short. What started as one family's workshop in Dhaka has grown into a community with a shared standard for fit.")
+  const [tabPurposeDescription, setTabPurposeDescription] = useState("We know the frustration of searching endlessly for clothing that fits—and coming up short. What started as one family's mission to solve fit challenges with better options has reached a global community of tall people with a shared vision.")
   const [tabPurposeImage, setTabPurposeImage] = useState("/images/community.png")
   const [tabPurposeCtaText, setTabPurposeCtaText] = useState("Learn More")
   const [tabPurposeCtaLink, setTabPurposeCtaLink] = useState("/about")
+
+  // Fourth carousel slide — a video rather than a still, so no image field.
+  const [tabProductLabel, setTabProductLabel] = useState("Our Product")
+  const [tabProductHeading, setTabProductHeading] = useState("Intentional Design.")
+  const [tabProductDescription, setTabProductDescription] = useState("Every garment is created with purpose, whether it's a request from our community or a suggestion from our seasoned design team.")
+  const [tabProductVideo, setTabProductVideo] = useState("/videos/main-side-video.mp4")
+  const [tabProductPoster, setTabProductPoster] = useState("/images/hero.jpg")
+
+  // Imagery shared by the carousel rather than owned by one tab.
+  const [pillarFigureWomen, setPillarFigureWomen] = useState("/images/women_hero.png")
+  // One cut-out per height range for the heights slide's sliding ladder. Left
+  // empty on purpose: each falls back to the single Men/Women figure above, so
+  // the animation works before a store has shot five separate photos.
+  const [pillarFigureMen1, setPillarFigureMen1] = useState("")
+  const [pillarFigureMen2, setPillarFigureMen2] = useState("")
+  const [pillarFigureMen3, setPillarFigureMen3] = useState("")
+  const [pillarFigureWomen1, setPillarFigureWomen1] = useState("")
+  const [pillarFigureWomen2, setPillarFigureWomen2] = useState("")
+  const [pillarCompareMenBefore, setPillarCompareMenBefore] = useState("/images/hero.jpg")
+  const [pillarCompareMenAfter, setPillarCompareMenAfter] = useState("/images/olaszkolda-fashion-10318918.jpg")
+  const [pillarCompareWomenBefore, setPillarCompareWomenBefore] = useState("/images/women_hero.png")
+  const [pillarCompareWomenAfter, setPillarCompareWomenAfter] = useState("/images/fashion-show-1746622_1280.jpg")
 
   useEffect(() => {
     async function fetchSettings() {
@@ -161,6 +616,10 @@ function useSettingsFormState() {
           if (res.data.brand_favicon_url !== undefined) setBrandFaviconUrl(res.data.brand_favicon_url)
           if (res.data.brand_slogan !== undefined) setBrandSlogan(res.data.brand_slogan)
           if (res.data.contact_email !== undefined) setContactEmail(res.data.contact_email)
+          if (res.data.whatsapp_number !== undefined) setWhatsappNumber(res.data.whatsapp_number)
+          if (res.data.whatsapp_message !== undefined) setWhatsappMessage(res.data.whatsapp_message)
+          if (res.data.tawk_property_id !== undefined) setTawkPropertyId(res.data.tawk_property_id)
+          if (res.data.tawk_widget_id !== undefined) setTawkWidgetId(res.data.tawk_widget_id)
           if (res.data.social_facebook !== undefined) setSocialFacebook(res.data.social_facebook)
           if (res.data.social_instagram !== undefined) setSocialInstagram(res.data.social_instagram)
           if (res.data.social_youtube !== undefined) setSocialYoutube(res.data.social_youtube)
@@ -173,8 +632,11 @@ function useSettingsFormState() {
           if (res.data.payment_nagad_enabled !== undefined) setPaymentNagadEnabled(res.data.payment_nagad_enabled)
           if (res.data.payment_square_enabled !== undefined) setPaymentSquareEnabled(res.data.payment_square_enabled)
 
+          if (res.data.seo_meta_title !== undefined) setSeoMetaTitle(res.data.seo_meta_title)
+          if (res.data.seo_meta_description !== undefined) setSeoMetaDescription(res.data.seo_meta_description)
           if (res.data.google_site_verification !== undefined) setGoogleSiteVerification(res.data.google_site_verification)
           if (res.data.facebook_domain_verification !== undefined) setfacebookDomainVerification(res.data.facebook_domain_verification)
+          if (res.data.gtm_id !== undefined) setGtmId(res.data.gtm_id)
           if (res.data.google_analytics_id !== undefined) setGoogleAnalyticsId(res.data.google_analytics_id)
           if (res.data.facebook_pixel_id !== undefined) setfacebookPixelId(res.data.facebook_pixel_id)
           if (res.data.custom_head_scripts !== undefined) setCustomHeadScripts(res.data.custom_head_scripts)
@@ -218,6 +680,7 @@ function useSettingsFormState() {
                 if (slides.men.title !== undefined) setSlideMenTitle(slides.men.title)
                 if (slides.men.subtitle !== undefined) setSlideMenSubtitle(slides.men.subtitle)
                 if (slides.men.image !== undefined) setSlideMenImage(slides.men.image)
+                if (slides.men.imageAlt !== undefined) setSlideMenImageAlt(slides.men.imageAlt)
                 if (slides.men.video !== undefined) setSlideMenVideo(slides.men.video)
                 if (slides.men.videoFallback !== undefined) setSlideMenVideoFallback(slides.men.videoFallback)
                 if (slides.men.buttonText !== undefined) setSlideMenButtonText(slides.men.buttonText)
@@ -230,6 +693,7 @@ function useSettingsFormState() {
                 if (slides.women.title !== undefined) setSlideWomenTitle(slides.women.title)
                 if (slides.women.subtitle !== undefined) setSlideWomenSubtitle(slides.women.subtitle)
                 if (slides.women.image !== undefined) setSlideWomenImage(slides.women.image)
+                if (slides.women.imageAlt !== undefined) setSlideWomenImageAlt(slides.women.imageAlt)
                 if (slides.women.video !== undefined) setSlideWomenVideo(slides.women.video)
                 if (slides.women.videoFallback !== undefined) setSlideWomenVideoFallback(slides.women.videoFallback)
                 if (slides.women.buttonText !== undefined) setSlideWomenButtonText(slides.women.buttonText)
@@ -258,6 +722,25 @@ function useSettingsFormState() {
                 if (tabs.fit.ctaText !== undefined) setTabFitCtaText(tabs.fit.ctaText)
                 if (tabs.fit.ctaLink !== undefined) setTabFitCtaLink(tabs.fit.ctaLink)
               }
+              if (tabs.product) {
+                if (tabs.product.label !== undefined) setTabProductLabel(tabs.product.label)
+                if (tabs.product.heading !== undefined) setTabProductHeading(tabs.product.heading)
+                if (tabs.product.description !== undefined) setTabProductDescription(tabs.product.description)
+                if (tabs.product.video !== undefined) setTabProductVideo(tabs.product.video)
+                if (tabs.product.poster !== undefined) setTabProductPoster(tabs.product.poster)
+              }
+              if (tabs.media) {
+                if (tabs.media.figureWomen !== undefined) setPillarFigureWomen(tabs.media.figureWomen)
+                if (tabs.media.figureMen1 !== undefined) setPillarFigureMen1(tabs.media.figureMen1)
+                if (tabs.media.figureMen2 !== undefined) setPillarFigureMen2(tabs.media.figureMen2)
+                if (tabs.media.figureMen3 !== undefined) setPillarFigureMen3(tabs.media.figureMen3)
+                if (tabs.media.figureWomen1 !== undefined) setPillarFigureWomen1(tabs.media.figureWomen1)
+                if (tabs.media.figureWomen2 !== undefined) setPillarFigureWomen2(tabs.media.figureWomen2)
+                if (tabs.media.compareMenBefore !== undefined) setPillarCompareMenBefore(tabs.media.compareMenBefore)
+                if (tabs.media.compareMenAfter !== undefined) setPillarCompareMenAfter(tabs.media.compareMenAfter)
+                if (tabs.media.compareWomenBefore !== undefined) setPillarCompareWomenBefore(tabs.media.compareWomenBefore)
+                if (tabs.media.compareWomenAfter !== undefined) setPillarCompareWomenAfter(tabs.media.compareWomenAfter)
+              }
               if (tabs.purpose) {
                 if (tabs.purpose.label !== undefined) setTabPurposeLabel(tabs.purpose.label)
                 if (tabs.purpose.heading !== undefined) setTabPurposeHeading(tabs.purpose.heading)
@@ -267,6 +750,62 @@ function useSettingsFormState() {
                 if (tabs.purpose.ctaLink !== undefined) setTabPurposeCtaLink(tabs.purpose.ctaLink)
               }
             } catch(e) {}
+          }
+
+          if (res.data.home_description !== undefined) setHomeDescription(res.data.home_description)
+
+          if (res.data.home_style_sections) {
+            try {
+              const parsed = JSON.parse(res.data.home_style_sections)
+              // Any `winter` key left in an older stored value is ignored here
+              // and dropped on the next save.
+              setStyleSections(prev => ({
+                summer: mergeStyleSection(prev.summer, parsed?.summer),
+              }))
+            } catch(e) {}
+          }
+
+          // keepEmpty: a tile the admin added but has not uploaded to yet must
+          // survive a reload here, even though the storefront drops it.
+          if (res.data[HOME_ICONS_SETTING_KEY]) {
+            setHomeIcons(parseHomeIcons(res.data[HOME_ICONS_SETTING_KEY], { keepEmpty: true }))
+          }
+
+          // keepEmpty so a message the admin just added survives a reload
+          // before they have typed anything into it.
+          if (res.data[ANNOUNCEMENT_BAR_SETTING_KEY]) {
+            setAnnouncementBar(
+              parseAnnouncementBar(res.data[ANNOUNCEMENT_BAR_SETTING_KEY], { keepEmpty: true })
+            )
+          }
+
+          // parseHomeSections repairs the stored order itself — dropping keys
+          // that no longer exist and slotting in sections added since — so an
+          // absent or stale value simply comes back corrected.
+          setHomeSections(parseHomeSections(res.data[HOME_SECTIONS_SETTING_KEY]))
+
+          if (res.data[HOME_VIDEO_BANNERS_SETTING_KEY]) {
+            setVideoBanners(
+              parseHomeVideoBanners(res.data[HOME_VIDEO_BANNERS_SETTING_KEY], { keepEmpty: true })
+            )
+          }
+
+          // keepEmpty: a row the admin added but has not uploaded to yet must
+          // survive a reload here, even though the storefront drops it.
+          if (res.data[HOME_REELS_SETTING_KEY]) {
+            setHomeReels(parseHomeReels(res.data[HOME_REELS_SETTING_KEY], { keepEmpty: true }))
+          }
+
+          // Same keepEmpty deal: a row still being written has no products on it
+          // yet, and the storefront is the only place that has to care.
+          if (res.data[HOME_SHOWCASE_SETTING_KEY]) {
+            setHomeShowcase(parseHomeShowcase(res.data[HOME_SHOWCASE_SETTING_KEY], { keepEmpty: true }))
+          }
+
+          // parseHeightsGuide already falls back field by field, so an absent or
+          // malformed value simply leaves the defaults in place.
+          if (res.data[HEIGHTS_GUIDE_SETTING_KEY]) {
+            setHeightsGuide(parseHeightsGuide(res.data[HEIGHTS_GUIDE_SETTING_KEY]))
           }
         }
       } catch (error) {
@@ -278,11 +817,12 @@ function useSettingsFormState() {
     fetchSettings()
   }, [])
 
-  // The product list is only ever read by the Flash Sale picker, so it is
-  // fetched when that tab is first opened rather than on page load — it used to
-  // block the settings spinner behind a second round trip nobody had asked for.
+  // The product list is only read by the Flash Sale picker and the homepage
+  // showcase rows, so it is fetched when one of those tabs is first opened
+  // rather than on page load — it used to block the settings spinner behind a
+  // second round trip nobody had asked for.
   useEffect(() => {
-    if (activeSettingsTab !== "flashsale" || productsLoaded) return
+    if ((activeSettingsTab !== "flashsale" && activeSettingsTab !== "homepage") || productsLoaded) return
 
     let cancelled = false
     async function fetchProducts() {
@@ -303,6 +843,31 @@ function useSettingsFormState() {
       cancelled = true
     }
   }, [activeSettingsTab, productsLoaded])
+
+  // Same deal for the category list behind the seasonal style-section pickers —
+  // only the Homepage tab reads it.
+  useEffect(() => {
+    if (activeSettingsTab !== "homepage" || categoriesLoaded) return
+
+    let cancelled = false
+    async function fetchCategories() {
+      try {
+        const res = await api.get("/admin/categories")
+        if (!cancelled && Array.isArray(res.data)) {
+          setAllCategories(flattenCategories(res.data))
+        }
+      } catch (e) {
+        console.error("Failed to fetch categories", e)
+      } finally {
+        if (!cancelled) setCategoriesLoaded(true)
+      }
+    }
+    fetchCategories()
+
+    return () => {
+      cancelled = true
+    }
+  }, [activeSettingsTab, categoriesLoaded])
 
   async function handleLogoUpload(e: React.ChangeEvent<HTMLInputElement>) {
     if (!e.target.files || e.target.files.length === 0) return
@@ -425,6 +990,10 @@ function useSettingsFormState() {
         brand_favicon_url: brandFaviconUrl,
         brand_slogan: brandSlogan,
         contact_email: contactEmail,
+        whatsapp_number: whatsappNumber,
+        whatsapp_message: whatsappMessage,
+        tawk_property_id: tawkPropertyId,
+        tawk_widget_id: tawkWidgetId,
         social_facebook: socialFacebook,
         social_instagram: socialInstagram,
         social_youtube: socialYoutube,
@@ -436,8 +1005,11 @@ function useSettingsFormState() {
         payment_bkash_enabled: paymentBkashEnabled,
         payment_nagad_enabled: paymentNagadEnabled,
         payment_square_enabled: paymentSquareEnabled,
+        seo_meta_title: seoMetaTitle,
+        seo_meta_description: seoMetaDescription,
         google_site_verification: googleSiteVerification,
         facebook_domain_verification: facebookDomainVerification,
+        gtm_id: gtmId,
         google_analytics_id: googleAnalyticsId,
         facebook_pixel_id: facebookPixelId,
         custom_head_scripts: customHeadScripts,
@@ -470,6 +1042,7 @@ function useSettingsFormState() {
             title: slideMenTitle,
             subtitle: slideMenSubtitle,
             image: slideMenImage,
+            imageAlt: slideMenImageAlt,
             video: slideMenVideo,
             videoFallback: slideMenVideoFallback,
             buttonText: slideMenButtonText,
@@ -481,6 +1054,7 @@ function useSettingsFormState() {
             title: slideWomenTitle,
             subtitle: slideWomenSubtitle,
             image: slideWomenImage,
+            imageAlt: slideWomenImageAlt,
             video: slideWomenVideo,
             videoFallback: slideWomenVideoFallback,
             buttonText: slideWomenButtonText,
@@ -512,8 +1086,36 @@ function useSettingsFormState() {
             image: tabPurposeImage,
             ctaText: tabPurposeCtaText,
             ctaLink: tabPurposeCtaLink
+          },
+          product: {
+            label: tabProductLabel,
+            heading: tabProductHeading,
+            description: tabProductDescription,
+            video: tabProductVideo,
+            poster: tabProductPoster
+          },
+          media: {
+            figureWomen: pillarFigureWomen,
+            figureMen1: pillarFigureMen1,
+            figureMen2: pillarFigureMen2,
+            figureMen3: pillarFigureMen3,
+            figureWomen1: pillarFigureWomen1,
+            figureWomen2: pillarFigureWomen2,
+            compareMenBefore: pillarCompareMenBefore,
+            compareMenAfter: pillarCompareMenAfter,
+            compareWomenBefore: pillarCompareWomenBefore,
+            compareWomenAfter: pillarCompareWomenAfter
           }
-        })
+        }),
+        home_style_sections: JSON.stringify(styleSections),
+        [HOME_REELS_SETTING_KEY]: JSON.stringify(homeReels),
+        [HOME_VIDEO_BANNERS_SETTING_KEY]: JSON.stringify(videoBanners),
+        [HOME_SECTIONS_SETTING_KEY]: JSON.stringify(homeSections),
+        [ANNOUNCEMENT_BAR_SETTING_KEY]: JSON.stringify(announcementBar),
+        [HOME_ICONS_SETTING_KEY]: JSON.stringify(homeIcons),
+        [HOME_SHOWCASE_SETTING_KEY]: JSON.stringify(homeShowcase),
+        home_description: homeDescription,
+        [HEIGHTS_GUIDE_SETTING_KEY]: JSON.stringify(heightsGuide)
       })
       window.dispatchEvent(new Event("brand-settings-updated"))
       Swal.fire({ text: "Settings saved successfully!", confirmButtonColor: "#18181b", icon: "success" })
@@ -555,6 +1157,14 @@ function useSettingsFormState() {
     setBrandSlogan,
     contactEmail,
     setContactEmail,
+    whatsappNumber,
+    setWhatsappNumber,
+    whatsappMessage,
+    setWhatsappMessage,
+    tawkPropertyId,
+    setTawkPropertyId,
+    tawkWidgetId,
+    setTawkWidgetId,
     socialFacebook,
     setSocialFacebook,
     socialInstagram,
@@ -627,10 +1237,16 @@ function useSettingsFormState() {
     setPromoPopupFrequencyDays,
     uploadingPromoPopupImage,
     setUploadingPromoPopupImage,
+    seoMetaTitle,
+    setSeoMetaTitle,
+    seoMetaDescription,
+    setSeoMetaDescription,
     googleSiteVerification,
     setGoogleSiteVerification,
     facebookDomainVerification,
     setfacebookDomainVerification,
+    gtmId,
+    setGtmId,
     googleAnalyticsId,
     setGoogleAnalyticsId,
     facebookPixelId,
@@ -649,6 +1265,8 @@ function useSettingsFormState() {
     setSlideMenSubtitle,
     slideMenImage,
     setSlideMenImage,
+    slideMenImageAlt,
+    setSlideMenImageAlt,
     slideMenVideo,
     setSlideMenVideo,
     slideMenVideoFallback,
@@ -667,6 +1285,8 @@ function useSettingsFormState() {
     setSlideWomenSubtitle,
     slideWomenImage,
     setSlideWomenImage,
+    slideWomenImageAlt,
+    setSlideWomenImageAlt,
     slideWomenVideo,
     setSlideWomenVideo,
     slideWomenVideoFallback,
@@ -677,6 +1297,27 @@ function useSettingsFormState() {
     setSlideWomenShopLink,
     slideWomenTopBarTag,
     setSlideWomenTopBarTag,
+    homeDescription,
+    setHomeDescription,
+    heightsGuide,
+    updateHeightsGuide,
+    updateHeightsCell,
+    addHeightsRow,
+    removeHeightsRow,
+    updateHeightsColumn,
+    addHeightsColumn,
+    removeHeightsColumn,
+    updateHeightsModel,
+    addHeightsModel,
+    removeHeightsModel,
+    styleSections,
+    setStyleSections,
+    updateStyleSection,
+    toggleStyleCategory,
+    styleEditTab,
+    setStyleEditTab,
+    allCategories,
+    categoriesLoaded,
     activeCommunityEditTab,
     setActiveCommunityEditTab,
     uploadingTabImage,
@@ -729,6 +1370,70 @@ function useSettingsFormState() {
     setTabPurposeCtaText,
     tabPurposeCtaLink,
     setTabPurposeCtaLink,
+    tabProductLabel,
+    setTabProductLabel,
+    tabProductHeading,
+    setTabProductHeading,
+    tabProductDescription,
+    setTabProductDescription,
+    tabProductVideo,
+    setTabProductVideo,
+    tabProductPoster,
+    setTabProductPoster,
+    pillarFigureWomen,
+    setPillarFigureWomen,
+    pillarFigureMen1,
+    setPillarFigureMen1,
+    pillarFigureMen2,
+    setPillarFigureMen2,
+    pillarFigureMen3,
+    setPillarFigureMen3,
+    pillarFigureWomen1,
+    setPillarFigureWomen1,
+    pillarFigureWomen2,
+    setPillarFigureWomen2,
+    pillarCompareMenBefore,
+    setPillarCompareMenBefore,
+    pillarCompareMenAfter,
+    setPillarCompareMenAfter,
+    pillarCompareWomenBefore,
+    setPillarCompareWomenBefore,
+    pillarCompareWomenAfter,
+    setPillarCompareWomenAfter,
+    homeIcons,
+    updateHomeIcons,
+    updateHomeIconTile,
+    addHomeIconTile,
+    removeHomeIconTile,
+    moveHomeIconTile,
+    announcementBar,
+    updateAnnouncementBar,
+    updateAnnouncementSlide,
+    addAnnouncementSlide,
+    removeAnnouncementSlide,
+    moveAnnouncementSlide,
+    homeSections,
+    moveHomeSection,
+    toggleHomeSection,
+    resetHomeSections,
+    videoBanners,
+    updateVideoBanner,
+    addVideoBanner,
+    removeVideoBanner,
+    moveVideoBanner,
+    homeReels,
+    updateHomeReelsSection,
+    updateHomeReel,
+    addHomeReel,
+    removeHomeReel,
+    moveHomeReel,
+    homeShowcase,
+    updateHomeShowcaseSection,
+    updateHomeShowcaseRow,
+    toggleHomeShowcaseProduct,
+    addHomeShowcaseRow,
+    removeHomeShowcaseRow,
+    moveHomeShowcaseRow,
     handleLogoUpload,
     handleFaviconUpload,
     handleTabImageUpload,

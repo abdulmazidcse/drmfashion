@@ -15,9 +15,9 @@ const DEFAULTS: Record<string, string> = {
   fit_hero_image: "https://placehold.co/600x800/e2e8f0/64748b.png?text=Store+Image",
 
   // Section 2: Designed Exclusively
-  fit_s2_heading: "Designed Around The Fit",
+  fit_s2_heading: "Designed Exclusively For Tall",
   fit_s2_problem_label: "The Problem",
-  fit_s2_problem_text: "Most brands grade a single sample size up and down and call it a size run. Sleeves, rises and hems all move together, so only one body in the range ever gets the fit that was designed.",
+  fit_s2_problem_text: "Most brands assume that if you're taller, you must be wider. They just add inches to the bottom hem, resulting in boxy, ill-fitting clothes that look terrible on a tall, lean frame.",
   fit_s2_solution_label: "Our Brand — The Solution",
   fit_s2_solution_text: "Extra length without extra width. We adjust the entire garment — lowering the waistline, deepening the armholes, dropping the knee break, and extending the sleeves — for a truly proportionate fit.",
   fit_section2_image: "https://placehold.co/600x800/e2e8f0/64748b.png?text=Store+Image",
@@ -25,7 +25,7 @@ const DEFAULTS: Record<string, string> = {
   // Section 3: All the Length
   fit_s3_heading: "All the Length You Need & More",
   fit_s3_subheading: "Extra Length, Not Extra Width",
-  fit_s3_text: "It takes more than a few inches at the hem. We move the waistline, the armhole, the knee break and the sleeve independently, and we measure every detail — so you get a truly proportionate fit, every time.",
+  fit_s3_text: "It takes more than just a few inches at the hem to fit a tall frame. We lower the waistline, deepen the armholes, drop the knee break, and extend the sleeves. We measure every single detail so you get a truly proportionate fit — every time.",
   fit_problem_image: "https://placehold.co/600x800/e2e8f0/64748b.png?text=Store+Image",
 
   // Section 4: Proud of our guys
@@ -33,22 +33,22 @@ const DEFAULTS: Record<string, string> = {
   fit_section4_image: "https://placehold.co/600x800/e2e8f0/64748b.png?text=Store+Image",
 
   // Section 5: Heights
-  fit_men_tall: "5'8\" - 6'0\"",
-  fit_men_xtall: "6'1\" - 6'5\"",
-  fit_women_tall: "5'4\" - 5'8\"",
-  fit_women_xtall: "5'9\" - 6'1\"",
+  fit_men_tall: "6'0\" - 6'3\"",
+  fit_men_xtall: "6'4\" - 7'1\"",
+  fit_women_tall: "5'9\" - 6'1\"",
+  fit_women_xtall: "6'2\" - 6'6\"",
 
   // Section 6: Fit for all bodies
-  fit_s6_heading: "A fit created for every body.",
-  fit_s6_text: "We don't just cater to one body type. We grade every style across three lengths.",
+  fit_s6_heading: "A fit created for all tall bodies.",
+  fit_s6_text: "We don't just cater to one body type. We build for the entire tall community.",
   fit_section5_image: "https://placehold.co/600x800/e2e8f0/64748b.png?text=Store+Image",
 
   // Section 7: Science of Fit
-  fit_s7_heading: "Our Fit Details",
+  fit_s7_heading: "Our Tall Fit Details",
   fit_section6_image: "https://placehold.co/600x800/e2e8f0/64748b.png?text=Store+Image",
 
   // Section 9: Brand Mission
-  fit_s9_heading: "Fit is not an afterthought — it's the whole design. Every style starts from the body it is cut for.",
+  fit_s9_heading: "Tall is not a size — it's a body type. And it deserves clothing designed from the ground up.",
 }
 
 export default function AboutSettingsPage() {
@@ -140,7 +140,7 @@ export default function AboutSettingsPage() {
       </SectionCard>
 
       {/* ─── Section 2: Designed Exclusively ─── */}
-      <SectionCard title="Section 2 — Designed Around The Fit" badge="Split: Text Left + Image Right">
+      <SectionCard title="Section 2 — Designed Exclusively For Tall" badge="Split: Text Left + Image Right">
         <InputRow label="Section Heading" field="fit_s2_heading" value={form.fit_s2_heading} onChange={handleChange} />
         <InputRow label="Problem Label" field="fit_s2_problem_label" value={form.fit_s2_problem_label} onChange={handleChange} />
         <RichTextRow label="Problem Text" field="fit_s2_problem_text" value={form.fit_s2_problem_text} onChange={handleChange} />
@@ -169,15 +169,15 @@ export default function AboutSettingsPage() {
       {/* ─── Section 5: Height Sizing ─── */}
       <SectionCard title="Section 5 — Size Chart" badge="4-column grid">
         <div className="grid grid-cols-2 gap-4">
-          <InputRow label="Men — Regular" field="fit_men_tall" value={form.fit_men_tall} onChange={handleChange} />
-          <InputRow label="Men — Long" field="fit_men_xtall" value={form.fit_men_xtall} onChange={handleChange} />
-          <InputRow label="Women — Regular" field="fit_women_tall" value={form.fit_women_tall} onChange={handleChange} />
-          <InputRow label="Women — Long" field="fit_women_xtall" value={form.fit_women_xtall} onChange={handleChange} />
+          <InputRow label="Men — Tall" field="fit_men_tall" value={form.fit_men_tall} onChange={handleChange} />
+          <InputRow label="Men — X-Tall" field="fit_men_xtall" value={form.fit_men_xtall} onChange={handleChange} />
+          <InputRow label="Women — Tall" field="fit_women_tall" value={form.fit_women_tall} onChange={handleChange} />
+          <InputRow label="Women — X-Tall" field="fit_women_xtall" value={form.fit_women_xtall} onChange={handleChange} />
         </div>
       </SectionCard>
 
       {/* ─── Section 6: Fit for all bodies ─── */}
-      <SectionCard title="Section 6 — A Fit For Every Body" badge="Split: Text Left + Image Right">
+      <SectionCard title="Section 6 — Fit For All Tall Bodies" badge="Split: Text Left + Image Right">
         <InputRow label="Section Heading" field="fit_s6_heading" value={form.fit_s6_heading} onChange={handleChange} />
         <RichTextRow label="Body Text" field="fit_s6_text" value={form.fit_s6_text} onChange={handleChange} />
         <InputRow label="Right Side Image URL" field="fit_section5_image" value={form.fit_section5_image} onChange={handleChange} />

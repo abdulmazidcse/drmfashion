@@ -47,6 +47,16 @@ export async function POST(req: NextRequest) {
           data: { name: user.name === "Guest Customer" ? name || "Google User" : user.name, password: randomPassword }
         })
       }
+
+      // Google has already proven the address, so signing in this way counts as
+      // verification — otherwise a Google user would be locked out by the
+      // check in the password login route.
+      if (!user.emailVerifiedAt) {
+        user = await prisma.user.update({
+          where: { email },
+          data: { emailVerifiedAt: new Date() },
+        })
+      }
     } else {
       // Create new user
       const randomPassword = await bcrypt.hash(Math.random().toString(36).slice(-10), 10)
@@ -55,7 +65,8 @@ export async function POST(req: NextRequest) {
           email,
           name: name || "Google User",
           password: randomPassword,
-          role: "USER"
+          role: "USER",
+          emailVerifiedAt: new Date()
         }
       })
       

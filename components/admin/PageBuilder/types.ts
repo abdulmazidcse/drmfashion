@@ -18,6 +18,12 @@ export interface HeroProps {
   buttonText: string
   buttonLink: string
   backgroundImage: string
+  /**
+   * Alt text for the background photo. Optional, and empty by default: a hero
+   * whose meaning is fully carried by its heading is decorative, and "" is the
+   * correct markup for that. Filled in, it is what search and screen readers get.
+   */
+  backgroundImageAlt?: string
   backgroundColor: string
   overlayOpacity: number
   textAlign: 'left' | 'center' | 'right'
@@ -47,6 +53,9 @@ export interface TwoColumnProps {
   rightHtml: string
   leftImage: string
   rightImage: string
+  /** Alt text for each column's image; empty renders as decorative. */
+  leftImageAlt?: string
+  rightImageAlt?: string
   leftWidth: '30' | '40' | '50' | '60' | '70'
   gap: 'small' | 'medium' | 'large'
   reverseOnMobile: boolean
@@ -64,6 +73,8 @@ export interface CtaProps {
   buttonColor: string
   align: 'left' | 'center' | 'right'
   backgroundImage: string
+  /** Alt text for the background photo; empty renders as decorative. */
+  backgroundImageAlt?: string
 }
 
 export interface DividerProps {

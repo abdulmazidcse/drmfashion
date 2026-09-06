@@ -9,10 +9,16 @@ import { useSettingsForm } from "./SettingsFormContext"
 
 export default function SeoTab() {
   const {
+    seoMetaTitle,
+    setSeoMetaTitle,
+    seoMetaDescription,
+    setSeoMetaDescription,
     googleSiteVerification,
     setGoogleSiteVerification,
     facebookDomainVerification,
     setfacebookDomainVerification,
+    gtmId,
+    setGtmId,
     googleAnalyticsId,
     setGoogleAnalyticsId,
     facebookPixelId,
@@ -25,6 +31,51 @@ export default function SeoTab() {
 
   return (
     <div className="space-y-6 animate-in fade-in-50 duration-200">
+          {/* SITE META TAGS */}
+        <CollapsibleCard
+          title="Site Meta Tags"
+          description="The title and description search engines show for the site. Leave empty to fall back to the store name."
+          icon={Globe}
+        >
+          <div className="space-y-6">
+            <div className="space-y-3">
+              <Label className={fieldLabel}>
+                Meta Title{" "}
+                <span className={seoMetaTitle.length > 60 ? "text-destructive" : "text-muted-foreground"}>
+                  ({seoMetaTitle.length} characters)
+                </span>
+              </Label>
+              <Input
+                type="text"
+                value={seoMetaTitle}
+                onChange={(e) => setSeoMetaTitle(e.target.value)}
+                placeholder="Tall Plus | Tall Men's & Women's Clothing"
+              />
+              <p className={helpText}>
+                * Aim for 30–60 characters. Shorter titles get padded by Google, longer ones truncated.
+              </p>
+            </div>
+
+            <div className="space-y-3">
+              <Label className={fieldLabel}>
+                Meta Description{" "}
+                <span className={seoMetaDescription.length > 160 ? "text-destructive" : "text-muted-foreground"}>
+                  ({seoMetaDescription.length} characters)
+                </span>
+              </Label>
+              <Textarea
+                rows={3}
+                value={seoMetaDescription}
+                onChange={(e) => setSeoMetaDescription(e.target.value)}
+                placeholder="High-end contemporary fashion tailored for modern individuals…"
+              />
+              <p className={helpText}>
+                * Aim for 120–160 characters.
+              </p>
+            </div>
+          </div>
+        </CollapsibleCard>
+
           {/* SEO & ANALYTICS SETTINGS */}
         <CollapsibleCard
           title="SEO & Tracking Analytics"
@@ -64,6 +115,24 @@ export default function SeoTab() {
 
             <div className="space-y-3">
               <Label className={fieldLabel}>
+                Google Tag Manager Container ID (GTM-XXXX)
+              </Label>
+              <Input
+                type="text"
+                value={gtmId}
+                onChange={(e) => setGtmId(e.target.value)}
+                placeholder="e.g. GTM-XXXXXXX"
+              />
+              <p className={helpText}>
+                * Loads the GTM container and sends <code>view_item</code>,{" "}
+                <code>add_to_cart</code> and <code>purchase</code> to its dataLayer.
+                Configure GA4 inside GTM — set this and the Measurement ID below is
+                skipped, so page views are not counted twice.
+              </p>
+            </div>
+
+            <div className="space-y-3">
+              <Label className={fieldLabel}>
                 Google Analytics Measurement ID (G-XXXX)
               </Label>
               <Input
@@ -73,7 +142,8 @@ export default function SeoTab() {
                 placeholder="e.g. G-XXXXXXXXXX"
               />
               <p className={helpText}>
-                * Google Analytics 4 tracking ID. Standard tag will be automatically injected.
+                * Google Analytics 4 tracking ID, for sites not using GTM. Ignored while
+                a Container ID is set above.
               </p>
             </div>
 

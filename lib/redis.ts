@@ -88,6 +88,47 @@ export async function invalidateCache(key: string): Promise<void> {
 }
 
 /**
+ * Delete every key matching a glob pattern (e.g. `home:*`).
+ *
+ * Uses SCAN rather than KEYS so a large keyspace never blocks the Redis event
+ * loop. Returns the number of keys removed (0 when Redis is unavailable).
+ */
+export async function invalidateCachePattern(pattern: string): Promise<number> {
+  try {
+    if (redis.status !== "ready") return 0
+
+    let cursor = "0"
+    let removed = 0
+
+    do {
+      const [next, keys] = await redis.scan(cursor, "MATCH", pattern, "COUNT", 200)
+      cursor = next
+      if (keys.length) removed += await redis.unlink(...keys)
+    } while (cursor !== "0")
+
+    return removed
+  } catch (error) {
+    console.warn(`[REDIS_PATTERN_DEL] ${pattern}`, error)
+    return 0
+  }
+}
+
+/**
+ * Drop the homepage entries that are derived from Category rows.
+ *
+ * app/page.tsx caches these for an hour, so `revalidatePath("/")` on its own is
+ * not enough — the page would re-render straight back off the stale Redis copy
+ * and an admin's category edit would take up to an hour to appear.
+ */
+export async function invalidateCategoryHomeCache(): Promise<void> {
+  await Promise.all([
+    invalidateCache("home:categories:v2"),          // footer category links
+    invalidateCache("home:trendingCategories:v2"),  // Trending Tall Categories tiles
+    invalidateCache("home:style:sections"),         // Summer tiles
+  ])
+}
+
+/**
  * Retrieve data from cache or fetch and cache it if not present.
  */
 export async function fetchWithCache<T>(key: string, fetchFn: () => Promise<T>, ttlSeconds: number = 300): Promise<T> {

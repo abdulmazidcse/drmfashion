@@ -1,14 +1,19 @@
 import { NextRequest, NextResponse } from "next/server"
 import { revalidatePath } from "next/cache"
 import { prisma } from "@/lib/prisma"
+import { invalidateCache } from "@/lib/redis"
 import { getAdminPayload } from "@/lib/auth"
 import { buildExcerpt, estimateReadTime, normalizeTags, slugify } from "@/lib/journal"
 
 export const dynamic = "force-dynamic"
 
-function revalidateJournal() {
+async function revalidateJournal() {
   revalidatePath("/journal")
   revalidatePath("/journal/[slug]", "page")
+  // The homepage teaser reads the three newest posts through this Redis key,
+  // so publishing without clearing it leaves the strip stale for 15 minutes.
+  await invalidateCache("home:journal:v1")
+  revalidatePath("/")
 }
 
 // GET all journal posts (admin listing)
@@ -83,7 +88,7 @@ export async function POST(req: NextRequest) {
       })
     }
 
-    revalidateJournal()
+    await revalidateJournal()
 
     return NextResponse.json(post)
   } catch (error: any) {

@@ -6,6 +6,7 @@ import Link from "next/link"
 import dynamic from "next/dynamic"
 import { ArrowLeft, Save, Loader2, LayoutTemplate } from "lucide-react"
 import Swal from "sweetalert2"
+import PageSeoFields from "@/components/admin/PageSeoFields"
 
 const PageBuilder = dynamic(() => import("@/components/admin/PageBuilder"), { 
   ssr: false,
@@ -27,6 +28,9 @@ export default function NewPage() {
   const [slug, setSlug] = useState("")
   const [content, setContent] = useState("[]") // Default empty array of blocks
   const [published, setPublished] = useState(true)
+  const [metaTitle, setMetaTitle] = useState("")
+  const [metaDescription, setMetaDescription] = useState("")
+  const [metaKeywords, setMetaKeywords] = useState("")
 
   // Auto-generate slug from title
   const handleTitleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -47,7 +51,7 @@ export default function NewPage() {
       const res = await fetch("/api/admin/pages", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title, slug, content, published })
+        body: JSON.stringify({ title, slug, content, published, metaTitle, metaDescription, metaKeywords })
       })
       
       const data = await res.json()
@@ -114,6 +118,18 @@ export default function NewPage() {
             </div>
           </div>
         </div>
+
+        {/* SEO */}
+        <PageSeoFields
+          title={title}
+          slug={slug}
+          metaTitle={metaTitle}
+          metaDescription={metaDescription}
+          metaKeywords={metaKeywords}
+          onMetaTitleChange={setMetaTitle}
+          onMetaDescriptionChange={setMetaDescription}
+          onMetaKeywordsChange={setMetaKeywords}
+        />
 
         {/* Page Builder */}
         <PageBuilder initialContent={content} onChange={handleContentChange} />

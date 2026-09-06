@@ -39,26 +39,26 @@ export default function NewsletterForm({ inline = false }: { inline?: boolean })
   if (inline) {
     return (
       <div className="flex w-full flex-col gap-2">
-        <form onSubmit={handleSubmit} className="flex gap-2">
+        <form onSubmit={handleSubmit} className="flex border border-zinc-300 rounded-sm overflow-hidden bg-white shadow-sm">
           <input
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             placeholder="Enter your email address"
-            className="sg-input text-[14px] py-3"
+            className="px-4 py-3 text-xs w-full outline-none text-zinc-800 placeholder-zinc-400"
             required
             disabled={status === "loading" || status === "success"}
           />
           <button 
             type="submit" 
             disabled={status === "loading" || status === "success"}
-            className="sg-btn sg-btn-sm sg-btn-primary"
+            className="bg-zinc-950 hover:bg-zinc-800 disabled:bg-zinc-500 text-white px-6 text-xs font-black uppercase tracking-widest transition-colors cursor-pointer"
           >
             {status === "loading" ? "Wait..." : status === "success" ? "Done" : "Subscribe"}
           </button>
         </form>
         {message && (
-          <span className={`text-[12px] font-bold ${status === "success" ? "text-emerald-600" : "text-red-500"}`}>
+          <span className={`text-[10px] font-bold ${status === "success" ? "text-emerald-600" : "text-red-500"}`}>
             {message}
           </span>
         )}
@@ -67,21 +67,21 @@ export default function NewsletterForm({ inline = false }: { inline?: boolean })
   }
 
   return (
-    <div className="flex flex-col w-full">
+    <div className="flex flex-col w-full max-w-md mx-auto">
       <form onSubmit={handleSubmit} className="flex flex-col sm:flex-row gap-3">
         <input 
           type="email" 
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           placeholder="Enter your email address" 
-          className="sg-input flex-1"
+          className="flex-1 px-5 py-4 text-sm bg-white border border-zinc-200 focus:outline-none focus:border-zinc-950 focus:ring-1 focus:ring-zinc-950 transition-all rounded-sm shadow-sm"
           required 
           disabled={status === "loading" || status === "success"}
         />
         <button 
           type="submit" 
           disabled={status === "loading" || status === "success"}
-          className="sg-btn sg-btn-primary"
+          className="bg-zinc-950 text-white px-8 py-4 text-xs font-bold tracking-widest uppercase hover:bg-zinc-900 disabled:bg-zinc-500 transition-colors shadow-md rounded-sm"
         >
           {status === "loading" ? "Please Wait..." : status === "success" ? "Subscribed" : "Subscribe"}
         </button>

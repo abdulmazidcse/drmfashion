@@ -40,7 +40,7 @@ const SETTINGS_TABS = [
   { id: "rewards", label: "Rewards & Currency", icon: Star },
   { id: "flashsale", label: "Flash Sale", icon: Sparkles },
   { id: "promopopup", label: "Promo Popup", icon: Gift },
-  { id: "homepage", label: "Homepage Banners", icon: ImageIcon },
+  { id: "homepage", label: "Homepage", icon: ImageIcon },
   { id: "seo", label: "SEO & Analytics", icon: Code },
 ] as const
 

@@ -30,9 +30,19 @@ export async function GET() {
 // POST create a new page
 export async function POST(req: NextRequest) {
   try {
-    const { title, slug, content, published } = await req.json()
+    const { title, slug, content, published, metaTitle, metaDescription, metaKeywords } = await req.json()
     const page = await prisma.page.create({
-      data: { title, slug, content, published }
+      data: {
+        title,
+        slug,
+        content,
+        published,
+        // Blank inputs are stored as NULL, not "", so generateMetadata's
+        // fallback chain treats "left empty" and "never set" the same way.
+        metaTitle: String(metaTitle || "").trim() || null,
+        metaDescription: String(metaDescription || "").trim() || null,
+        metaKeywords: String(metaKeywords || "").trim() || null,
+      }
     })
 
     revalidatePath("/")

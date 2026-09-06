@@ -262,6 +262,11 @@ export default function MenusPage() {
     setSelectedPages(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id])
   }
 
+  // Drives the select-all links: once everything is ticked the same link clears
+  // the list instead, so there is a way back out of a full selection.
+  const allCatsSelected = categories.length > 0 && selectedCategories.length === categories.length
+  const allPagesSelected = pages.length > 0 && selectedPages.length === pages.length
+
   // Full width, unlike the other admin screens: the tree nests three levels
   // deep and each level costs horizontal room, so a centred max-width container
   // left no space for the deepest labels.
@@ -298,7 +303,7 @@ export default function MenusPage() {
                   ))}
                 </div>
                 <div className="flex justify-between items-center pt-2 border-t border-border">
-                  <Button type="button" variant="link" size="sm" className="h-auto p-0 text-xs" onClick={() => setSelectedCategories(categories.map(c => c.id))}>Select All</Button>
+                  <Button type="button" variant="link" size="sm" className="h-auto p-0 text-xs" onClick={() => setSelectedCategories(allCatsSelected ? [] : categories.map(c => c.id))}>{allCatsSelected ? 'Unselect All' : 'Select All'}</Button>
                   <Button type="button" size="sm" onClick={onAddCategories} disabled={submitting || selectedCategories.length === 0}>Add to Menu</Button>
                 </div>
               </div>
@@ -323,7 +328,7 @@ export default function MenusPage() {
                   ))}
                 </div>
                 <div className="flex justify-between items-center pt-2 border-t border-border">
-                  <Button type="button" variant="link" size="sm" className="h-auto p-0 text-xs" onClick={() => setSelectedPages(pages.map(p => p.id))}>Select All</Button>
+                  <Button type="button" variant="link" size="sm" className="h-auto p-0 text-xs" onClick={() => setSelectedPages(allPagesSelected ? [] : pages.map(p => p.id))}>{allPagesSelected ? 'Unselect All' : 'Select All'}</Button>
                   <Button type="button" size="sm" onClick={onAddPages} disabled={submitting || selectedPages.length === 0}>Add to Menu</Button>
                 </div>
               </div>

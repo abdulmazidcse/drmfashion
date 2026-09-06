@@ -40,6 +40,10 @@ export default function HeroVideo({ src, poster, alt, priority = false }: HeroVi
   useEffect(() => {
     if (typeof window === "undefined") return;
 
+    // No video configured for this slide — the poster is the whole hero. Bailing
+    // out here also means no observer is attached and no <video> is ever mounted.
+    if (!src?.trim()) return;
+
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
     if (!window.matchMedia(`(min-width: ${MIN_VIDEO_WIDTH}px)`).matches) return;
 

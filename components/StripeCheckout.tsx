@@ -17,8 +17,8 @@ export default function StripeCheckout({
   email,
   pointsRedeemed,
   promoCode,
-  shippingCarrier,
-  shippingFee,
+  shippingMethodId,
+  shippingDestination,
   onSuccess,
   onError
 }: {
@@ -26,8 +26,8 @@ export default function StripeCheckout({
   email: string,
   pointsRedeemed: number,
   promoCode?: string,
-  shippingCarrier?: string,
-  shippingFee?: number,
+  shippingMethodId?: string,
+  shippingDestination?: { city?: string; postalCode?: string; countryCode?: string; state?: string; addressLine?: string },
   onSuccess: (paymentIntentId: string) => void,
   onError: (error: string) => void
 }) {
@@ -45,7 +45,7 @@ export default function StripeCheckout({
     fetch("/api/checkout/stripe/create-intent", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ items, email, pointsRedeemed, promoCode, shippingCarrier, shippingFee }),
+      body: JSON.stringify({ items, email, pointsRedeemed, promoCode, shippingMethodId, shippingDestination }),
     })
       .then((res) => res.json())
       .then((data) => {
@@ -58,12 +58,12 @@ export default function StripeCheckout({
         }
       })
       .catch((err) => onError(err.message));
-  }, [items, email, pointsRedeemed, promoCode, shippingCarrier, shippingFee]);
+  }, [items, email, pointsRedeemed, promoCode, shippingMethodId, shippingDestination]);
 
   if (keyError) {
     return (
       <div className="flex flex-col items-center justify-center p-8 text-red-500 bg-red-50 border border-red-100 rounded-md">
-        <p className="text-sm font-bold uppercase tracking-[0.14em] mb-1">Configuration Error</p>
+        <p className="text-sm font-bold uppercase tracking-widest mb-1">Configuration Error</p>
         <p className="text-xs text-center">Stripe API Keys are missing from your .env file.<br/>Please add NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY and STRIPE_SECRET_KEY.</p>
       </div>
     );
@@ -71,7 +71,7 @@ export default function StripeCheckout({
 
   if (!clientSecret) {
     return (
-      <div className="flex flex-col items-center justify-center p-8 text-soft">
+      <div className="flex flex-col items-center justify-center p-8 text-zinc-500">
         <Loader2 className="w-6 h-6 animate-spin mb-2" />
         <p className="text-sm">Connecting to secure payment gateway...</p>
       </div>
@@ -132,7 +132,7 @@ function CheckoutForm({ onSuccess, onError }: { onSuccess: (id: string) => void,
       <button 
         disabled={isLoading || !stripe || !elements || !isReady} 
         id="submit" 
-        className="w-full mt-6 bg-brand-600 rounded-full text-white font-bold uppercase tracking-[0.14em] text-xs py-4 px-6 hover:bg-brand-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex justify-center items-center gap-2"
+        className="w-full mt-6 bg-zinc-950 text-white font-bold uppercase tracking-widest text-xs py-4 px-6 hover:bg-zinc-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex justify-center items-center gap-2"
       >
         {isLoading ? (
           <><Loader2 className="w-4 h-4 animate-spin" /> Processing...</>

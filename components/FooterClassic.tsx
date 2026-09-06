@@ -21,7 +21,7 @@ interface Category {
  */
 export default function FooterClassic({ categories }: { categories: Category[] }) {
   return (
-    <footer className="w-full bg-white text-foreground pt-16 pb-12 z-10 relative">
+    <footer className="w-full bg-white text-zinc-900 pt-16 pb-12 z-10 relative">
       <div className="max-w-[1600px] mx-auto px-6 lg:px-8">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 mb-12">
 
@@ -35,47 +35,47 @@ export default function FooterClassic({ categories }: { categories: Category[] }
 
             {/* Support */}
             <div>
-              <h4 className="text-lg font-bold text-foreground mb-2.5">Support</h4>
-              <ul className="text-[15px] font-medium text-soft">
-                <li><Link href="/pages/help-center" className="hover:text-brand-700 transition-colors">Help Center</Link></li>
-                <li><Link href="/pages/contact-support" className="hover:text-brand-700 transition-colors">Contact Us</Link></li>
-                <li><Link href="/track-order" className="hover:text-brand-700 transition-colors">Track My Order</Link></li>
-                <li><Link href="/pages/returns-exchanges" className="hover:text-brand-700 transition-colors">Returns &amp; Exchanges</Link></li>
-                <li><Link href="/pages/shipping-policy" className="hover:text-brand-700 transition-colors">Shipping</Link></li>
-                <li><Link href="/pages/size-charts" className="hover:text-brand-700 transition-colors">Size Charts</Link></li>
+              <h4 className="text-lg font-bold text-zinc-950 mb-2.5">Support</h4>
+              <ul className="text-[15px] font-medium text-zinc-500">
+                <li><Link href="/pages/help-center" className="hover:text-zinc-950 transition-colors">Help Center</Link></li>
+                <li><Link href="/pages/contact-support" className="hover:text-zinc-950 transition-colors">Contact Us</Link></li>
+                <li><Link href="/track-order" className="hover:text-zinc-950 transition-colors">Track My Order</Link></li>
+                <li><Link href="/pages/returns-exchanges" className="hover:text-zinc-950 transition-colors">Returns &amp; Exchanges</Link></li>
+                <li><Link href="/pages/shipping-policy" className="hover:text-zinc-950 transition-colors">Shipping</Link></li>
+                <li><Link href="/pages/size-charts" className="hover:text-zinc-950 transition-colors">Size Charts</Link></li>
               </ul>
             </div>
 
             {/* Discover */}
             <div>
-              <h4 className="text-lg font-bold text-foreground mb-2.5">Discover</h4>
-              <ul className="text-[15px] font-medium text-soft">
-                <li><Link href="/account" className="hover:text-brand-700 transition-colors">Account</Link></li>
-                <li><Link href="/wishlist" className="hover:text-brand-700 transition-colors">Wishlist</Link></li>
-                <li><Link href="/cart" className="hover:text-brand-700 transition-colors">Cart</Link></li>
+              <h4 className="text-lg font-bold text-zinc-950 mb-2.5">Discover</h4>
+              <ul className="text-[15px] font-medium text-zinc-500">
+                <li><Link href="/account" className="hover:text-zinc-950 transition-colors">Account</Link></li>
+                <li><Link href="/wishlist" className="hover:text-zinc-950 transition-colors">Wishlist</Link></li>
+                <li><Link href="/cart" className="hover:text-zinc-950 transition-colors">Cart</Link></li>
               </ul>
             </div>
 
             {/* About Us */}
             <div>
-              <h4 className="text-lg font-bold text-foreground mb-2.5">About Us</h4>
-              <ul className="text-[15px] font-medium text-soft">
-                <li><Link href="/about" className="hover:text-brand-700 transition-colors">About Our Brand</Link></li>
-                <li><Link href="/journal" className="hover:text-brand-700 transition-colors">Journal</Link></li>
+              <h4 className="text-lg font-bold text-zinc-950 mb-2.5">About Us</h4>
+              <ul className="text-[15px] font-medium text-zinc-500">
+                <li><Link href="/about" className="hover:text-zinc-950 transition-colors">About Our Brand</Link></li>
+                <li><Link href="/journal" className="hover:text-zinc-950 transition-colors">Journal</Link></li>
               </ul>
             </div>
 
             {/* Shop */}
             <div>
-              <h4 className="text-lg font-bold text-foreground mb-2.5">Shop</h4>
-              <ul className="text-[15px] font-medium text-soft">
+              <h4 className="text-lg font-bold text-zinc-950 mb-2.5">Shop</h4>
+              <ul className="text-[15px] font-medium text-zinc-500">
                 {categories.slice(0, 4).map(c => (
                   <li key={c.id}>
-                    <Link href={`/category/${c.slug}`} className="hover:text-brand-700 transition-colors">{c.name}</Link>
+                    <Link href={`/category/${c.slug}`} className="hover:text-zinc-950 transition-colors">{c.name}</Link>
                   </li>
                 ))}
                 <li>
-                  <Link href="/shop" className="hover:text-brand-700 transition-colors">All Products</Link>
+                  <Link href="/shop" className="hover:text-zinc-950 transition-colors">All Products</Link>
                 </li>
               </ul>
             </div>
@@ -85,12 +85,12 @@ export default function FooterClassic({ categories }: { categories: Category[] }
         </div>
 
         {/* Copyright section */}
-        <div className="pt-8 flex flex-col sm:flex-row justify-between items-center text-xs text-faint gap-4">
+        <div className="pt-8 flex flex-col sm:flex-row justify-between items-center text-xs text-zinc-400 gap-4">
           <FooterSocialIcons variant="classic" />
           <div className="flex space-x-6">
-            <Link href="/pages/privacy-policy" className="text-[13px] hover:text-brand-700 transition-colors uppercase">Privacy Policy</Link>
-            <Link href="/pages/terms-of-use" className="text-[13px] hover:text-brand-700 transition-colors uppercase">Terms of Use</Link>
-            <Link href="/pages/accessibility-statement" className="text-[13px] hover:text-brand-700 transition-colors uppercase">Accessibility Statement</Link>
+            <Link href="/pages/privacy-policy" className="text-[13px] hover:text-zinc-900 transition-colors uppercase">Privacy Policy</Link>
+            <Link href="/pages/terms-of-use" className="text-[13px] hover:text-zinc-900 transition-colors uppercase">Terms of Use</Link>
+            <Link href="/pages/accessibility-statement" className="text-[13px] hover:text-zinc-900 transition-colors uppercase">Accessibility Statement</Link>
           </div>
         </div>
 

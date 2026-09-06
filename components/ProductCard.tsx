@@ -3,10 +3,16 @@
 import React, { useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { addToCart } from "@/lib/cart";
+import { addToCart, getCart } from "@/lib/cart";
+import { existsWith, findVariant, sortLengths, sortSizes } from "@/lib/variants";
 import { toggleWishlist, isInWishlist } from "@/lib/wishlist";
 import { useCurrency } from "@/providers/CurrencyProvider";
 import { useSettings } from "@/providers/SettingsProvider";
+import { trackSelectItem } from "@/lib/analytics";
+import { formatImageUrl } from "@/lib/utils";
+import { productImageAlt } from "@/lib/imageMeta";
+import { useColors } from "@/providers/ColorsProvider";
+import { swatchStyle } from "@/lib/colorStyle";
 
 interface Variant {
   id: string;
@@ -15,6 +21,9 @@ interface Variant {
   length: string | null;
   stock: number;
   price: number | null;
+  /** Fetched by PRODUCT_CARD_SELECT but never declared here, so the card could
+   *  not see the colourway shots it was already being sent. */
+  image?: string | null;
 }
 
 interface Product {
@@ -38,6 +47,21 @@ interface ProductCardProps {
   idPrefix?: string;
   priority?: boolean;
   showBadges?: boolean;
+  /**
+   * Which listing this card belongs to, for GA4's `select_item`. Defaults to
+   * `idPrefix`, which every caller already sets — pass these only where the
+   * list needs naming more precisely (a category page, say).
+   */
+  listId?: string;
+  listName?: string;
+  /**
+   * `sizes` for the thumbnail. The default describes the grid nearly every
+   * caller uses — two across on a phone, three or four on a desktop. Pass one
+   * only where the layout genuinely differs (the wishlist is one column on a
+   * phone), since an over-stated width makes the browser download a variant
+   * several times larger than the slot it lands in.
+   */
+  sizes?: string;
 }
 
 export default function ProductCard({
@@ -45,15 +69,33 @@ export default function ProductCard({
   idPrefix = "product",
   priority = false,
   showBadges = true,
+  listId,
+  listName,
+  sizes = "(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw",
 }: ProductCardProps) {
   const { formatPrice } = useCurrency();
   const { storeName } = useSettings();
+  const { getColor } = useColors();
   const [showQuickAdd, setShowQuickAdd] = useState(false);
   const [selectedSize, setSelectedSize] = useState<string>("");
   const [selectedLength, setSelectedLength] = useState<string>("");
+  const [addError, setAddError] = useState<string>("");
   const [wishlisted, setWishlisted] = useState(false);
   const [added, setAdded] = useState(false);
   const [timeLeft, setTimeLeft] = useState<string | null>(null);
+  const [imageIndex, setImageIndex] = useState(0);
+
+  // Pairs with view_item_list: without it GA4 can report which listings were
+  // seen but not which ones actually earned the click.
+  const reportSelect = () => {
+    trackSelectItem(listId || idPrefix, listName || idPrefix, {
+      item_id: product.id,
+      item_name: product.title,
+      price: product.discountPrice ?? product.basePrice,
+      item_brand: product.brand?.name,
+      item_category: product.category?.name,
+    });
+  };
 
   React.useEffect(() => {
     if (product.flashSaleEndDate) {
@@ -84,13 +126,43 @@ export default function ProductCard({
   }, [product.id]);
 
   // Extract unique sizes, lengths, and colors from variants
-  const uniqueSizes = Array.from(new Set(product.variants.map((v) => v.size))).filter(Boolean);
-  const uniqueLengths = Array.from(
-    new Set(product.variants.filter((v) => v.length).map((v) => v.length))
-  ) as string[];
+  const uniqueSizes = sortSizes(
+    Array.from(new Set(product.variants.map((v) => v.size))).filter(Boolean)
+  );
+  const uniqueLengths = sortLengths(
+    Array.from(new Set(product.variants.filter((v) => v.length).map((v) => v.length))) as string[]
+  );
   const uniqueColors = Array.from(new Set(product.variants.map((v) => v.color))).filter(Boolean);
 
+  // Images the arrows page through: the thumbnail first, then each distinct
+  // colourway shot. Built from data the card already receives, so this costs no
+  // extra query across a 120-card grid.
+  const gallery = Array.from(
+    new Set(
+      [product.thumbnail, ...product.variants.map((v) => v.image)]
+        .filter((src): src is string => Boolean(src && src.trim()))
+    )
+  );
+
+  // One entry per colourway: the Color row that paints the swatch, plus the
+  // first variant image carrying that colour so clicking can switch the photo.
+  // Colours come from ColorsProvider (server-injected in the root layout) —
+  // `variant.color` is only a name, with no relation to the Color table.
+  const colorOptions = uniqueColors.map((name) => ({
+    name,
+    swatch: getColor(name),
+    image: product.variants.find((v) => v.color === name && v.image?.trim())?.image ?? null,
+  }));
+
   const primaryColor = uniqueColors[0] || "Classic";
+
+  // `gallery[0]` is the thumbnail, which belongs to no particular colourway;
+  // every later entry is some variant's shot, so its colour can be named.
+  const visibleShot = gallery[imageIndex];
+  const colorOfVisibleShot =
+    imageIndex === 0
+      ? null
+      : product.variants.find((v) => v.image === visibleShot)?.color ?? null;
   const additionalColorsCount = uniqueColors.length - 1;
   const colorLabel =
     additionalColorsCount > 0
@@ -103,11 +175,27 @@ export default function ProductCard({
 
   const activePrice = hasDiscount ? (discountPrice as number) : originalPrice;
 
-  // Shown on the badge instead of the word "Sale" — a number converts better and
-  // costs nothing to derive from the two prices already in hand.
-  const discountPercent = hasDiscount
-    ? Math.round(((originalPrice - (discountPrice as number)) / originalPrice) * 100)
-    : 0;
+  // Each axis is filtered by the other, so the pair on screen is always one the
+  // product is actually made in. Before either is chosen every value that
+  // exists in *some* combination is offered; picking one narrows the other.
+  //
+  // Out of stock counts as unavailable here: this is a quick-add control, and a
+  // size that cannot be bought is not worth offering.
+  const sizeAvailable = (size: string) =>
+    existsWith(product.variants, {
+      color: primaryColor || undefined,
+      size,
+      length: selectedLength || undefined,
+      inStockOnly: true,
+    });
+
+  const lengthAvailable = (len: string) =>
+    existsWith(product.variants, {
+      color: primaryColor || undefined,
+      size: selectedSize || undefined,
+      length: len,
+      inStockOnly: true,
+    });
 
   const totalStock = product.variants.reduce((acc, v) => acc + v.stock, 0);
   const isOutOfStock = totalStock === 0;
@@ -118,6 +206,31 @@ export default function ProductCard({
     const finalSize = overrideSize !== undefined ? overrideSize : (selectedSize || uniqueSizes[0] || "");
     const finalLength = overrideLength !== undefined ? overrideLength : (selectedLength || uniqueLengths[0] || "");
     const finalColor = primaryColor;
+
+    // This used to add whatever pair was on screen without ever looking a
+    // variant up, so an unmade combination — or a sold-out one — reached the
+    // cart at the product's headline price and only failed at checkout.
+    const variant = findVariant(product.variants, finalColor, finalSize, finalLength);
+    if (!variant) {
+      setAddError(`Not available in ${finalSize}${finalLength ? ` / ${finalLength}` : ""}.`);
+      setTimeout(() => setAddError(""), 2600);
+      return;
+    }
+
+    // addToCart stacks onto an existing line, so what is already in the bag
+    // counts towards the stock level.
+    const lineId = `${product.id}-${finalColor}-${finalSize}-${finalLength}`;
+    const alreadyInCart = getCart().find((c) => c.id === lineId)?.quantity ?? 0;
+
+    if (alreadyInCart + 1 > variant.stock) {
+      setAddError(
+        variant.stock === 0
+          ? "Out of stock."
+          : `Only ${variant.stock} left${alreadyInCart ? ` — ${alreadyInCart} already in your bag` : ""}.`
+      );
+      setTimeout(() => setAddError(""), 2600);
+      return;
+    }
 
     addToCart({
       productId: product.id,
@@ -135,11 +248,9 @@ export default function ProductCard({
     setTimeout(() => setAdded(false), 1800);
   };
 
-  const chip = "sg-chip absolute top-3.5 left-3.5 z-10 select-none text-white";
-
   return (
     <div
-      className="group sg-card flex flex-col overflow-hidden transition-all duration-300 hover:-translate-y-1.5 hover:border-brand-200 hover:shadow-sg"
+      className="flex flex-col group bg-white border border-zinc-100/60 transition-all duration-300 rounded-sm overflow-hidden"
       id={`${idPrefix}-${product.id}`}
       // No `hovered` state here any more: it was write-only, so every pointer
       // enter/leave re-rendered the whole card (× up to 120 cards in a grid) to
@@ -147,22 +258,28 @@ export default function ProductCard({
       onMouseLeave={() => setShowQuickAdd(false)}
     >
       {/* ── Thumbnail ── */}
-      <div className="relative aspect-[4/5] bg-brand-50 w-full overflow-hidden">
-        <Link href={`/product/${product.slug}`} className="absolute inset-0 block z-0">
+      <div className="relative aspect-[3/4] bg-zinc-50 w-full overflow-hidden">
+        <Link href={`/product/${product.slug}`} onClick={reportSelect} className="absolute inset-0 block z-0">
           <Image
-            src={product.thumbnail}
-            alt={product.title}
+            src={formatImageUrl(gallery[imageIndex] ?? product.thumbnail)}
+            // The arrows page through colourway shots, so the alt names the one
+            // actually on screen rather than staying on the title throughout.
+            alt={productImageAlt({
+              title: product.title,
+              brand: product.brand?.name,
+              color: colorOfVisibleShot,
+            })}
             fill
-            sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+            sizes={sizes}
             // `priority` was declared but never forwarded, so every card in every
             // grid rendered `loading="lazy"` — including the LCP element. Callers
             // now opt the first row in (see the grids in /shop, /men, /women, …).
             priority={priority}
-            className="object-cover group-hover:scale-[1.05] transition-transform duration-700 select-none"
+            className="object-cover group-hover:scale-[1.02] transition-transform duration-700 select-none"
           />
         </Link>
 
-        {/* Wishlist */}
+        {/* Wishlist bookmark */}
         <button
           onClick={(e) => {
             e.preventDefault();
@@ -175,7 +292,7 @@ export default function ProductCard({
               discountPrice: product.discountPrice
             });
           }}
-          className="absolute top-3 right-3 z-10 w-9 h-9 rounded-full bg-white/95 shadow-sm grid place-items-center transition-all duration-200 cursor-pointer hover:bg-white"
+          className="absolute top-3 right-3 z-10 p-2 rounded-full bg-white/80 hover:bg-white shadow-sm transition-all duration-200 cursor-pointer"
           aria-label="Add to Wishlist"
         >
           <svg
@@ -183,42 +300,81 @@ export default function ProductCard({
             viewBox="0 0 24 24"
             fill={wishlisted ? "currentColor" : "none"}
             stroke="currentColor"
-            strokeWidth="1.8"
+            strokeWidth="1.5"
             className={`w-4 h-4 transition-colors ${
-              wishlisted ? "text-brand-600" : "text-soft group-hover:text-brand-600"
+              wishlisted ? "text-zinc-950 fill-zinc-950" : "text-zinc-500 hover:text-zinc-950"
             }`}
           >
             <path
               strokeLinecap="round"
               strokeLinejoin="round"
-              d="M12 20s-7-4.5-7-9a4 4 0 017-2.5A4 4 0 0119 11c0 4.5-7 9-7 9z"
+              d="M17.593 3.322c1.1.128 1.907 1.077 1.907 2.185V21L12 17.25 4.5 21V5.507c0-1.108.806-2.057 1.907-2.185a48.507 48.507 0 0 1 11.186 0Z"
             />
           </svg>
         </button>
 
-        {/* Badges — stock state first, then the discount, then the curator's pick */}
-        {showBadges && (
-          isOutOfStock ? (
-            <span className={`${chip} bg-faint`}>Sold out</span>
-          ) : isLowStock ? (
-            <span className={`${chip} bg-amber-600`}>Only {totalStock} left</span>
-          ) : hasDiscount ? (
-            <span className={`${chip} bg-brand-600`}>−{discountPercent}%</span>
-          ) : product.featured ? (
-            <span className={`${chip} bg-foreground`}>Featured</span>
-          ) : null
-        )}
+        {/* Badges — featured takes priority over sale */}
+        {isOutOfStock ? (
+          <span className="absolute top-3 left-3 bg-zinc-400 text-white text-[9px] font-bold tracking-widest uppercase px-2 py-1 select-none z-10">
+            Sold Out
+          </span>
+        ) : isLowStock ? (
+          <span className="absolute top-3 left-3 bg-amber-500 text-white text-[9px] font-bold tracking-widest uppercase px-2 py-1 select-none z-10">
+            Low Stock
+          </span>
+        ) : product.featured && !hasDiscount ? (
+          <span className="absolute top-3 left-3 bg-zinc-950 text-white text-[9px] font-bold tracking-widest uppercase px-2 py-1 select-none z-10">
+            Featured
+          </span>
+        ) : hasDiscount ? (
+          <span className="absolute top-3 left-3 bg-red-600 text-white text-[9px] font-bold tracking-widest uppercase px-2 py-1 select-none z-10">
+            Sale
+          </span>
+        ) : null}
 
         {/* Flash Sale Timer */}
         {timeLeft && (
-          <div className="absolute bottom-3.5 left-3.5 right-3.5 bg-brand-ink/90 backdrop-blur-sm text-white text-[11px] font-bold rounded-full text-center py-2 px-3 select-none z-10 flex items-center justify-center gap-2">
-            <span className="w-1.5 h-1.5 rounded-full bg-brand-300 animate-pulse"></span>
+          <div className="absolute bottom-3 left-3 right-3 bg-zinc-950/90 backdrop-blur-sm text-white text-[10px] font-bold tracking-wider text-center py-1.5 px-2 select-none z-10 rounded-sm flex items-center justify-center gap-1.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse"></span>
             Ends in {timeLeft}
           </div>
         )}
 
-        {/* Quick Add — slides up on hover, hidden while the size sheet is open */}
-        <button
+        {/* Left and Right navigation arrows on hover.
+            Hidden when there is only one image — arrows that cannot go anywhere
+            are what made these look broken in the first place. `preventDefault`
+            keeps the click off the full-card <Link> underneath. */}
+        {gallery.length > 1 && (
+          <>
+            <button
+              type="button"
+              aria-label="Previous image"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setImageIndex((i) => (i - 1 + gallery.length) % gallery.length);
+              }}
+              className="absolute top-1/2 -translate-y-1/2 left-3 z-10 opacity-0 group-hover:opacity-100 transition-opacity duration-300 text-white text-2xl font-light cursor-pointer select-none bg-black/10 hover:bg-black/30 w-8 h-8 rounded-full flex items-center justify-center"
+            >
+              &lt;
+            </button>
+            <button
+              type="button"
+              aria-label="Next image"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setImageIndex((i) => (i + 1) % gallery.length);
+              }}
+              className="absolute top-1/2 -translate-y-1/2 right-3 z-10 opacity-0 group-hover:opacity-100 transition-opacity duration-300 text-white text-2xl font-light cursor-pointer select-none bg-black/10 hover:bg-black/30 w-8 h-8 rounded-full flex items-center justify-center"
+            >
+              &gt;
+            </button>
+          </>
+        )}
+
+        {/* Quick Add overlay button on hover */}
+        <button 
           onMouseEnter={() => {
             if (!isOutOfStock && !isGiftCard) {
               setShowQuickAdd(true);
@@ -233,35 +389,36 @@ export default function ProductCard({
             }
           }}
           disabled={isOutOfStock}
-          className={`absolute bottom-4 left-4 right-4 py-3.5 rounded-full bg-white/95 backdrop-blur-sm text-foreground text-[12px] font-extrabold tracking-wide text-center transition-all duration-300 z-10 shadow-sg cursor-pointer hover:bg-brand-600 hover:text-white disabled:cursor-not-allowed disabled:bg-white/70 disabled:text-faint ${
-            showQuickAdd || timeLeft ? 'opacity-0 translate-y-4 pointer-events-none' : 'opacity-0 translate-y-4 group-hover:opacity-100 group-hover:translate-y-0'
+          className={`absolute bottom-6 left-6 right-6 py-4 bg-zinc-950/40 backdrop-blur-md text-white text-[12px] font-extrabold uppercase tracking-widest text-center transition-all duration-300 z-10 hover:bg-zinc-950 shadow-lg cursor-pointer disabled:cursor-not-allowed disabled:bg-zinc-400/80 ${
+            showQuickAdd ? 'opacity-0 translate-y-4 pointer-events-none' : 'opacity-0 translate-y-4 group-hover:opacity-100 group-hover:translate-y-0'
           }`}
         >
-          {added ? "Added ✓" : (isOutOfStock ? "Out of stock" : (isGiftCard ? "Add to bag" : "Quick add"))}
+          {added ? "Added!" : (isOutOfStock ? "Out of Stock" : (isGiftCard ? "Add to Cart" : "Quick Add"))}
         </button>
 
-        {/* ── Size and length sheet ── */}
-        <div
-          className={`absolute bottom-0 left-0 right-0 bg-white/97 backdrop-blur-md z-20 flex flex-col p-4 pt-7 rounded-t-[22px] border-t border-line transition-all duration-300 ease-out transform shadow-[0_-10px_40px_rgba(28,26,23,0.08)] ${
+        {/* ── Frosted size and length selector overlay ── */}
+        <div 
+          className={`absolute bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md z-20 flex flex-col p-4 pt-8 border-t border-zinc-200/80 transition-all duration-300 ease-out transform shadow-[0_-10px_40px_rgba(0,0,0,0.05)] ${
             showQuickAdd ? 'translate-y-0 opacity-100' : 'translate-y-full opacity-0 pointer-events-none'
           }`}
         >
-          <button
+          {/* Close button */}
+          <button 
             onClick={(e) => {
               e.preventDefault();
               setShowQuickAdd(false);
             }}
-            className="absolute top-2.5 right-3 text-faint hover:text-brand-700 font-bold text-sm cursor-pointer z-30 transition-colors"
+            className="absolute top-2 right-3 text-zinc-400 hover:text-black font-bold text-sm cursor-pointer z-30 transition-colors"
             aria-label="Close selector"
           >
             ✕
           </button>
 
-          <div className="flex flex-col gap-3.5 mb-4">
+          <div className="flex flex-col gap-4 mb-4">
             {/* SIZE row */}
             <div>
-              <p className="text-[10px] font-extrabold text-faint tracking-[0.14em] uppercase mb-1.5 text-center">
-                Size
+              <p className="text-[9px] font-black text-zinc-500 tracking-widest uppercase mb-1 text-center">
+                SIZE
               </p>
               <div className="flex justify-center flex-wrap gap-1.5">
                 {(uniqueSizes.length > 0 ? uniqueSizes : ["S", "M", "L", "XL", "2XL"]).map((size) => (
@@ -271,10 +428,10 @@ export default function ProductCard({
                       e.preventDefault();
                       setSelectedSize(size === selectedSize ? "" : size);
                     }}
-                    className={`px-3 py-1.5 text-[11px] font-bold uppercase rounded-full transition-all duration-200 border cursor-pointer ${
+                    className={`px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider transition-all duration-200 border cursor-pointer rounded-sm ${
                       selectedSize === size
-                        ? "bg-brand-600 rounded-full text-white border-brand-600"
-                        : "bg-cream text-soft border-line hover:border-brand-400 hover:text-brand-700"
+                        ? "bg-zinc-950 text-white border-zinc-950 shadow-sm"
+                        : "bg-white/50 text-zinc-700 border-zinc-200 hover:border-zinc-700 hover:text-zinc-950"
                     }`}
                   >
                     {size}
@@ -285,21 +442,21 @@ export default function ProductCard({
 
             {/* LENGTH row */}
             <div>
-              <p className="text-[10px] font-extrabold text-faint tracking-[0.14em] uppercase mb-1.5 text-center">
-                Length
+              <p className="text-[9px] font-black text-zinc-500 tracking-widest uppercase mb-1 text-center">
+                LENGTH
               </p>
-              <div className="flex justify-center flex-wrap gap-1.5">
-                {(uniqueLengths.length > 0 ? uniqueLengths : ["Regular", "Long"]).map((len) => (
+              <div className="flex justify-center flex-wrap gap-2">
+                {(uniqueLengths.length > 0 ? uniqueLengths : ["Tall", "Extra Tall"]).map((len) => (
                   <button
                     key={len}
                     onClick={(e) => {
                       e.preventDefault();
                       setSelectedLength(len === selectedLength ? "" : len);
                     }}
-                    className={`px-3.5 py-1.5 text-[11px] font-bold uppercase rounded-full transition-all duration-200 border cursor-pointer ${
+                    className={`px-3.5 py-1 text-[10px] font-bold uppercase tracking-wider transition-all duration-200 border cursor-pointer rounded-sm ${
                       selectedLength === len
-                        ? "bg-brand-600 rounded-full text-white border-brand-600"
-                        : "bg-cream text-soft border-line hover:border-brand-400 hover:text-brand-700"
+                        ? "bg-zinc-950 text-white border-zinc-950 shadow-sm"
+                        : "bg-white/50 text-zinc-700 border-zinc-200 hover:border-zinc-700 hover:text-zinc-950"
                     }`}
                   >
                     {len}
@@ -309,6 +466,7 @@ export default function ProductCard({
             </div>
           </div>
 
+          {/* Select Size & Length CTA */}
           <button
             onClick={(e) => {
               e.preventDefault();
@@ -318,65 +476,102 @@ export default function ProductCard({
               }
             }}
             disabled={!selectedSize || !selectedLength}
-            className="sg-btn sg-btn-sm sg-btn-primary w-full"
+            className={`w-full py-2.5 text-[10px] font-black tracking-widest uppercase transition-all duration-300 text-center rounded-sm shadow-sm cursor-pointer ${
+              selectedSize && selectedLength
+                ? "bg-zinc-900 text-white hover:bg-black active:scale-[0.98]"
+                : "bg-zinc-800/40 text-zinc-650 cursor-not-allowed"
+            }`}
           >
-            {selectedSize && selectedLength ? "Add to bag" : "Select size & length"}
+            {selectedSize && selectedLength ? "Add to Cart" : "Select Size & Length"}
           </button>
         </div>
       </div>
 
       {/* ── Info ── */}
-      <div className="p-4 sm:px-5 flex flex-col flex-1">
+      <div className="py-4 px-4 sm:px-5 flex flex-col flex-1">
         {(() => {
           const name = typeof storeName !== 'undefined' ? storeName : "Store";
           return (
-            <span className="text-[10.5px] text-aqua-700 font-extrabold uppercase tracking-[0.14em] block mb-1.5">
-              {product.category?.name || product.brand?.name || name}
+            <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest block mb-1">
+              {product.brand?.name || name} / {product.category?.name || "CLOTHING"}
             </span>
           );
         })()}
 
         {/* Title */}
-        <h3 className="text-[15px] font-bold text-foreground leading-snug line-clamp-1 mb-1">
-          <Link href={`/product/${product.slug}`} className="hover:text-brand-700 transition-colors">
+        <h3 className="text-[13px] font-bold text-zinc-900 tracking-wide uppercase line-clamp-1 mb-1 leading-snug">
+          <Link href={`/product/${product.slug}`} onClick={reportSelect} className="hover:text-zinc-600 transition-colors">
             {product.title}
           </Link>
         </h3>
 
-        {/* Colour label */}
-        <span className="text-[12.5px] text-soft mb-3 block select-none line-clamp-1">
-          {colorLabel}
-        </span>
-
-        {/* Pricing + add */}
-        <div className="mt-auto flex items-center justify-between gap-3 select-none">
-          <div className="flex items-baseline gap-2 min-w-0">
-            <span className="text-[17px] font-extrabold text-brand-700">
-              {formatPrice(activePrice)}
+        {/* Colour label, swapped for clickable swatches on hover.
+            Both layers are stacked in a fixed-height box and cross-faded with
+            `group-hover`, so the row never reflows and hovering costs no
+            re-render — the card is rendered up to 120× in a grid. */}
+        {colorOptions.length > 1 ? (
+          <div className="relative h-5 mb-1.5">
+            <span className="absolute inset-0 flex items-center text-xs text-zinc-400 font-medium select-none opacity-100 group-hover:opacity-0 transition-opacity duration-200">
+              {colorLabel}
             </span>
-            {hasDiscount && (
-              <span className="text-[13px] text-faint line-through font-medium">
+            <div className="absolute inset-0 flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+              {colorOptions.map((c) => {
+                const isActive = Boolean(c.image) && gallery[imageIndex] === c.image;
+                return (
+                  <button
+                    key={c.name}
+                    type="button"
+                    title={c.name}
+                    aria-label={`Show ${c.name}`}
+                    disabled={!c.image}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      const i = c.image ? gallery.indexOf(c.image) : -1;
+                      if (i >= 0) setImageIndex(i);
+                    }}
+                    className={`h-5 shrink-0 rounded-full border p-[2px] transition-all duration-200 ${
+                      isActive ? "w-8 border-zinc-950" : "w-5 border-zinc-200 hover:border-zinc-400"
+                    } ${c.image ? "cursor-pointer" : "cursor-default opacity-50"}`}
+                  >
+                    {/* The painted chip itself. swatchStyle() handles SOLID,
+                        GRADIENT, CHECK and IMAGE, so a striped or two-tone
+                        colourway reads the same here as on the product page.
+                        A name with no Color row falls back to flat grey. */}
+                    <span
+                      className="block h-full w-full rounded-full"
+                      style={swatchStyle(c.swatch ?? { value: "#71717a" })}
+                    />
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ) : (
+          <span className="text-xs text-zinc-400 font-medium mb-1.5 block select-none">
+            {colorLabel}
+          </span>
+        )}
+
+        {/* Pricing */}
+        <div className="flex items-center gap-2 mb-1.5 select-none">
+          {hasDiscount ? (
+            <>
+              <span className="text-[13px] font-black text-red-600">
+                {formatPrice(discountPrice as number)}
+              </span>
+              <span className="text-[11px] text-zinc-400 line-through font-light">
                 {formatPrice(originalPrice)}
               </span>
-            )}
-          </div>
-          <button
-            onClick={(e) => {
-              e.preventDefault();
-              if (isOutOfStock) return;
-              if (isGiftCard || (uniqueSizes.length <= 1 && uniqueLengths.length <= 1)) {
-                handleAddToCart();
-              } else {
-                setShowQuickAdd(true);
-              }
-            }}
-            disabled={isOutOfStock}
-            aria-label="Add to bag"
-            className="w-9 h-9 shrink-0 rounded-full bg-brand-50 text-brand-700 grid place-items-center text-lg font-bold transition-colors cursor-pointer group-hover:bg-brand-600 group-hover:text-white disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            {added ? "✓" : "+"}
-          </button>
+            </>
+          ) : (
+            <span className="text-[13px] font-black text-zinc-900">
+              {formatPrice(originalPrice)}
+            </span>
+          )}
         </div>
+
+
       </div>
     </div>
   );

@@ -2,7 +2,7 @@
 
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import SectionHead from "./SectionHead";
+import SectionHeading from "./SectionHeading";
 import ProductCard from "../ProductCard";
 
 interface Variant {
@@ -136,34 +136,30 @@ export default function BestSellers({ products }: BestSellersProps) {
 
   // Compute classes from state so the disabled (faded grey) look is guaranteed to win
   const arrowBtn = (disabled: boolean) =>
-    `z-20 grid h-11 w-11 place-items-center rounded-full transition-all ${
+    `z-20 flex h-11 w-11 items-center justify-center rounded-full transition-all ${
       disabled
-        ? 'pointer-events-none border border-line bg-white/60 text-faint'
-        : 'cursor-pointer sg-card sg-raise text-foreground hover:bg-brand-600 hover:border-brand-600 hover:text-white'
+        ? "pointer-events-none bg-white/30 text-at-ink/35"
+        : "cursor-pointer border border-at-ink/15 bg-white text-at-ink hover:bg-at-ink hover:text-white"
     }`;
 
   return (
-    <section className="w-full max-w-[1400px] mx-auto px-5 sm:px-7 py-10 lg:py-14">
-      <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-4 mb-8">
-        <div className="min-w-0">
-          <span className="sg-kicker">Trending now</span>
-          <h2 className="text-[28px] sm:text-[34px] font-extrabold mt-2.5">This month’s best sellers</h2>
-          <p className="text-soft text-[15px] mt-2 max-w-[46ch] leading-relaxed">Restocked twice already — the popular sizes move first.</p>
-        </div>
+    <section className="w-full py-[15px] md:py-5">
+      {/* Title + tabs (padded) — heading left, Men/Women pill right */}
+      <div className="mb-7 flex flex-col items-center gap-3 px-6 md:flex-row md:items-center md:justify-between lg:px-8">
+        <SectionHeading title="This Month's Best Sellers" highlight="Best Sellers" highlightStyle="muted" />
 
-        {/* Men / women pill — the same white capsule shape as the header nav. */}
-        <div className="relative flex sg-card rounded-full p-1.5 shrink-0">
+        <div className="relative flex rounded-at-btn border border-[#CBCBCB]">
           <span
-            className={`absolute bottom-1.5 top-1.5 w-[calc(50%-6px)] rounded-full bg-brand-600 transition-all duration-300 ease-out ${
-              activeTab === "women" ? "left-[calc(50%)]" : "left-1.5"
+            className={`absolute bottom-[2px] top-[2px] w-[calc(50%-2px)] rounded-at-btn bg-at-ink transition-all duration-300 ease-in ${
+              activeTab === "women" ? "left-[calc(50%)]" : "left-[2px]"
             }`}
           />
           {(["men", "women"] as Gender[]).map((g) => (
             <button
               key={g}
               onClick={() => setActiveTab(g)}
-              className={`relative z-10 min-w-[104px] cursor-pointer rounded-full px-6 py-2.5 text-center text-[14px] font-bold capitalize transition-colors duration-300 md:min-w-[124px] ${
-                activeTab === g ? "text-white" : "text-soft hover:text-brand-700"
+              className={`relative z-10 min-w-[120px] cursor-pointer px-6 py-2.5 text-center text-[13px] font-semibold capitalize transition-colors duration-300 md:min-w-[150px] ${
+                activeTab === g ? "text-white" : "text-at-muted"
               }`}
             >
               {g}
@@ -179,7 +175,7 @@ export default function BestSellers({ products }: BestSellersProps) {
           aria-label="Previous"
           onClick={() => handleScroll("left")}
           disabled={isMounted ? !canLeft : false}
-          className={`absolute -left-3 top-[38%] -translate-y-1/2 ${arrowBtn(isMounted ? !canLeft : false)}`}
+          className={`absolute left-2 top-1/2 -translate-y-1/2 ${arrowBtn(isMounted ? !canLeft : false)}`}
         >
           <ChevronLeft className="h-5 w-5" />
         </button>
@@ -188,7 +184,7 @@ export default function BestSellers({ products }: BestSellersProps) {
           aria-label="Next"
           onClick={() => handleScroll("right")}
           disabled={isMounted ? !canRight : false}
-          className={`absolute -right-3 top-[38%] -translate-y-1/2 ${arrowBtn(isMounted ? !canRight : false)}`}
+          className={`absolute right-2 top-1/2 -translate-y-1/2 ${arrowBtn(isMounted ? !canRight : false)}`}
         >
           <ChevronRight className="h-5 w-5" />
         </button>
@@ -196,13 +192,13 @@ export default function BestSellers({ products }: BestSellersProps) {
         <div
           key={activeTab}
           ref={scrollRef}
-          className="no-scrollbar flex snap-x snap-mandatory gap-4 overflow-x-auto scroll-smooth pb-2"
+          className="no-scrollbar flex snap-x snap-mandatory gap-[5px] overflow-x-auto scroll-smooth"
           style={{ scrollbarWidth: "none" }}
         >
           {visibleProducts.map((prod, i) => (
             <div
               key={prod.id}
-              className="at-card-up shrink-0 snap-start min-w-[calc((100%-16px)/2.15)] md:min-w-[calc((100%-48px)/4)]"
+              className="at-card-up shrink-0 snap-start w-[calc((100%-11.25px)/2.25)] md:w-[calc((100%-21.25px)/4.25)]"
               style={{ animationDelay: `${i * 60}ms` }}
             >
               <ProductCard product={prod} idPrefix="bestseller" />

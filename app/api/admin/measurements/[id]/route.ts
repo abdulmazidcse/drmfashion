@@ -50,7 +50,12 @@ export async function PUT(req: NextRequest, { params }: RouteParams) {
         active: body.active !== false,
         position: Number.isFinite(Number(body.position)) ? Number(body.position) : 0,
       },
-      include: { fields: { orderBy: [{ position: "asc" }, { createdAt: "asc" }] } },
+      include: {
+        fields: {
+          orderBy: [{ position: "asc" }, { createdAt: "asc" }],
+          include: { tiers: { orderBy: [{ position: "asc" }, { minValue: "asc" }] } },
+        },
+      },
     })
 
     revalidatePath("/product/[slug]", "page")

@@ -12,7 +12,7 @@ export function CtaPreview({ props: p }: { props: CtaProps }) {
   return (
     <div className="relative w-full overflow-hidden" style={{ backgroundColor: p.backgroundColor }}>
       {p.backgroundImage && (
-        <img src={p.backgroundImage} alt="" className="absolute inset-0 w-full h-full object-cover opacity-20" />
+        <img src={p.backgroundImage} alt={p.backgroundImageAlt || ''} className="absolute inset-0 w-full h-full object-cover opacity-20" />
       )}
       <div className={`relative z-10 flex flex-col ${alignClass} gap-5 px-10 py-16 max-w-4xl mx-auto`}>
         {p.heading && (
@@ -106,6 +106,11 @@ export function CtaSettings({ props: p, onChange }: Props) {
       <Field label="Background Image URL (optional)">
         <input className={inp} placeholder="https://..." value={p.backgroundImage} onChange={e => set('backgroundImage', e.target.value)} />
       </Field>
+      {p.backgroundImage && (
+        <Field label="Background Image Alt Text">
+          <input className={inp} placeholder="Leave empty if the heading already says what the image shows" value={p.backgroundImageAlt || ''} onChange={e => set('backgroundImageAlt', e.target.value)} />
+        </Field>
+      )}
       <Field label="Alignment">
         <select className={inp} value={p.align} onChange={e => set('align', e.target.value as any)}>
           {['left','center','right'].map(a => <option key={a} value={a}>{a}</option>)}

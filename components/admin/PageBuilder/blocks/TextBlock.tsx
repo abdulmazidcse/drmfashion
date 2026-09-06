@@ -1,5 +1,16 @@
 "use client"
+import dynamic from "next/dynamic"
 import { TextProps } from "../types"
+
+// CKEditor touches `window` on import, so it can never render on the server.
+const RichTextEditor = dynamic(() => import("@/components/admin/RichTextEditor"), {
+  ssr: false,
+  loading: () => (
+    <div className="p-4 text-center text-xs text-zinc-400 border border-zinc-200 rounded-xl">
+      Loading editor…
+    </div>
+  ),
+})
 
 interface Props {
   props: TextProps
@@ -17,8 +28,12 @@ const MAX_WIDTH_MAP = {
 export function TextPreview({ props: p }: { props: TextProps }) {
   return (
     <div className={`w-full px-8 py-10 mx-auto ${MAX_WIDTH_MAP[p.maxWidth]}`} style={{ textAlign: p.align }}>
+      {/* Matches BlockRenderer's TextRender exactly (`page-content`) so this
+          editor preview isn't a lie about what publishes — `prose-*:` needs
+          @tailwindcss/typography, which isn't installed here, so it rendered
+          admin-authored lists/headings flat while the real page looked fine. */}
       <div
-        className="prose prose-zinc max-w-none prose-headings:font-black prose-headings:tracking-tight"
+        className="page-content max-w-none"
         dangerouslySetInnerHTML={{ __html: p.html }}
       />
     </div>
@@ -30,13 +45,15 @@ export function TextSettings({ props: p, onChange }: Props) {
   const set = (key: keyof TextProps, val: any) => onChange({ ...p, [key]: val })
   return (
     <div className="space-y-4">
-      <Field label="Content (HTML)">
-        <div className="text-[10px] text-zinc-400 mb-1">Supports standard HTML tags: &lt;h1&gt;-&lt;h6&gt;, &lt;p&gt;, &lt;strong&gt;, &lt;em&gt;, &lt;ul&gt;, &lt;a&gt;</div>
-        <textarea
-          className="w-full px-3 py-2 text-sm border border-zinc-200 rounded-md bg-zinc-50 font-mono focus:outline-none focus:border-zinc-900 transition-colors resize-y"
-          rows={10}
-          value={p.html}
-          onChange={e => set('html', e.target.value)}
+      <Field label="Content">
+        <div className="text-[10px] text-zinc-400 mb-1">
+          Formatting, sizes and links from the toolbar. The <strong>Source</strong> button still gives
+          you the raw HTML this field used to be.
+        </div>
+        <RichTextEditor
+          initialContent={p.html}
+          onChange={(html) => set('html', html)}
+          height={260}
         />
       </Field>
       <div className="grid grid-cols-2 gap-3">

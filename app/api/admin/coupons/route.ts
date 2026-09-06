@@ -18,7 +18,7 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
-    const { code, discount, expiresAt, active } = body
+    const { code, discount, expiresAt, active, subscribersOnly, firstOrderOnly } = body
 
     if (!code || discount === undefined) {
       return NextResponse.json({ message: "Code and discount are required" }, { status: 400 })
@@ -39,7 +39,9 @@ export async function POST(req: NextRequest) {
         code: uppercaseCode,
         discount: parseFloat(discount),
         expiresAt: expiresAt ? new Date(expiresAt) : null,
-        active: active !== undefined ? active : true
+        active: active !== undefined ? active : true,
+        subscribersOnly: subscribersOnly === true,
+        firstOrderOnly: firstOrderOnly === true
       }
     })
 

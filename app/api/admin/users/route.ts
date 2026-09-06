@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 
+const ROLES = ["USER", "ADMIN", "STAFF"] as const
+type RoleValue = (typeof ROLES)[number]
+
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url)
@@ -8,7 +11,7 @@ export async function GET(req: NextRequest) {
     const limit = parseInt(searchParams.get("limit") || "20")
     const search = searchParams.get("search") || ""
     const role = searchParams.get("role") || "ALL"
-    
+
     const skip = (page - 1) * limit
 
     const whereClause: any = {}
@@ -29,6 +32,7 @@ export async function GET(req: NextRequest) {
         orderBy: { createdAt: 'desc' },
         skip,
         take: limit,
+        include: { adminRole: { select: { id: true, name: true } } },
       }),
       prisma.user.count({ where: whereClause })
     ])
@@ -51,10 +55,22 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
-    const { name, email, phone, role, password } = body
+    const { name, email, phone, password } = body
+    const role: RoleValue = ROLES.includes(body.role) ? body.role : "USER"
+    const adminRoleId: string | null = role === "STAFF" && typeof body.adminRoleId === "string" && body.adminRoleId ? body.adminRoleId : null
 
     if (!name || !email || !password) {
       return NextResponse.json({ message: "Name, email, and password are required" }, { status: 400 })
+    }
+
+    if (role === "STAFF") {
+      if (!adminRoleId) {
+        return NextResponse.json({ message: "A staff role must be selected for STAFF users" }, { status: 400 })
+      }
+      const adminRole = await prisma.adminRole.findUnique({ where: { id: adminRoleId }, select: { id: true } })
+      if (!adminRole) {
+        return NextResponse.json({ message: "Selected staff role does not exist" }, { status: 400 })
+      }
     }
 
     const existingUser = await prisma.user.findUnique({
@@ -73,9 +89,11 @@ export async function POST(req: NextRequest) {
         name,
         email,
         phone,
-        role: role || 'USER',
+        role,
+        adminRoleId,
         password: hashedPassword
-      }
+      },
+      include: { adminRole: { select: { id: true, name: true } } },
     })
 
     return NextResponse.json(newUser, { status: 201 })

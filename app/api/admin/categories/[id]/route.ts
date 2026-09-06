@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { revalidatePath } from "next/cache"
 import { prisma } from "@/lib/prisma"
+import { invalidateCategoryHomeCache } from "@/lib/redis"
 
 type Params = {
   params: Promise<{
@@ -15,7 +16,7 @@ export async function PATCH(
   try {
     const { id } = await params
     const body = await req.json()
-    const { name, slug, image, parentId, description, isTrending } = body
+    const { name, slug, image, bannerImage, imageAlt, bannerImageAlt, imageCaption, bannerImageCaption, parentId, description, isTrending, howToMeasure, howToMeasureImage, metaTitle, metaDescription, metaKeywords } = body
 
     if (!name || !slug) {
       return NextResponse.json(
@@ -85,11 +86,16 @@ export async function PATCH(
     const isTrendingBool = isTrending === true || String(isTrending).toLowerCase() === "true" || isTrending === "on"
     const category = await prisma.category.update({
       where: { id },
-      data: { name, slug, image: image || null, parentId: parentId || null, description: description || null, isTrending: isTrendingBool },
+      data: { name, slug, image: image || null, bannerImage: bannerImage || null, imageAlt: String(imageAlt || "").trim() || null, bannerImageAlt: String(bannerImageAlt || "").trim() || null, imageCaption: String(imageCaption || "").trim() || null, bannerImageCaption: String(bannerImageCaption || "").trim() || null, parentId: parentId || null, description: description || null, isTrending: isTrendingBool, howToMeasure: String(howToMeasure || "").trim() || null, howToMeasureImage: String(howToMeasureImage || "").trim() || null, metaTitle: String(metaTitle || "").trim() || null, metaDescription: String(metaDescription || "").trim() || null, metaKeywords: String(metaKeywords || "").trim() || null },
     })
+
+    await invalidateCategoryHomeCache()
 
     revalidatePath("/")
     revalidatePath("/category/[slug]", "page")
+    // The size chart a product shows can come from its category, so product
+    // pages go stale when a category changes too.
+    revalidatePath("/product/[slug]", "page")
     revalidatePath("/shop")
     revalidatePath("/api/categories")
 
@@ -142,8 +148,13 @@ export async function DELETE(
       where: { id },
     })
 
+    await invalidateCategoryHomeCache()
+
     revalidatePath("/")
     revalidatePath("/category/[slug]", "page")
+    // The size chart a product shows can come from its category, so product
+    // pages go stale when a category changes too.
+    revalidatePath("/product/[slug]", "page")
     revalidatePath("/shop")
     revalidatePath("/api/categories")
 

@@ -1,10 +1,12 @@
 "use client"
 
-import { useEffect, useState } from "react"
-import { LogOut, ExternalLink, Search, Settings, Menu, User } from "lucide-react"
+import { useState } from "react"
+import { LogOut, ExternalLink, Search, Settings, Menu, User, Check, RefreshCw } from "lucide-react"
 import Link from "next/link"
 import api from "@/lib/axios"
 import { useAdminSidebar } from "@/providers/AdminSidebarProvider"
+import { useAdminAccess } from "@/providers/AdminAccessProvider"
+import DeleteDataDialog from "@/components/admin/DeleteDataDialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
@@ -19,19 +21,30 @@ import {
 
 export default function AdminHeader() {
   const { toggle } = useAdminSidebar()
-  const [admin, setAdmin] = useState<{ name: string; email: string; role: string } | null>(null)
+  // Identity comes from AdminAccessProvider (one /api/admin/me call for the
+  // whole panel) instead of a second profile fetch here.
+  const { user: admin, can } = useAdminAccess()
+  const [cacheState, setCacheState] = useState<"idle" | "clearing" | "done">("idle")
 
-  useEffect(() => {
-    async function fetchProfile() {
-      try {
-        const res = await api.get("/admin/profile")
-        setAdmin({ name: res.data.name, email: res.data.email, role: res.data.role })
-      } catch (err) {
-        console.error("Failed to load admin profile", err)
-      }
+  const roleLabel = admin
+    ? admin.role === "STAFF"
+      ? `Staff${admin.adminRole ? ` · ${admin.adminRole.name}` : ""}`
+      : admin.role.toLowerCase()
+    : "Admin"
+
+  async function handleClearCache() {
+    if (cacheState === "clearing") return
+    setCacheState("clearing")
+    try {
+      await api.post("/admin/cache/purge")
+      setCacheState("done")
+      setTimeout(() => setCacheState("idle"), 2000)
+    } catch (err) {
+      console.error("Failed to clear cache", err)
+      setCacheState("idle")
+      alert("Could not clear the cache. Please try again.")
     }
-    fetchProfile()
-  }, [])
+  }
 
   async function handleLogout() {
     try {
@@ -78,6 +91,35 @@ export default function AdminHeader() {
 
       {/* RIGHT: actions + profile */}
       <div className="flex items-center gap-1 shrink-0">
+        {can("settings.manage") && (
+        <Button
+          onClick={handleClearCache}
+          disabled={cacheState === "clearing"}
+          variant="ghost"
+          size="sm"
+          className="rounded-full text-muted-foreground gap-1.5 px-2 sm:px-3"
+          title="Clear cached storefront data"
+          aria-label="Clear Cache"
+        >
+          {cacheState === "done" ? (
+            <Check className="size-[18px] text-emerald-600" />
+          ) : (
+            <RefreshCw
+              className={`size-[18px] ${cacheState === "clearing" ? "animate-spin" : ""}`}
+            />
+          )}
+          <span className="hidden md:inline text-xs font-medium">
+            {cacheState === "clearing"
+              ? "Clearing..."
+              : cacheState === "done"
+                ? "Cleared"
+                : "Clear Cache"}
+          </span>
+        </Button>
+        )}
+
+        {can("settings.manage") && <DeleteDataDialog />}
+
         <Button
           asChild
           variant="ghost"
@@ -90,17 +132,19 @@ export default function AdminHeader() {
           </Link>
         </Button>
 
-        <Button
-          asChild
-          variant="ghost"
-          size="icon"
-          className="rounded-full text-muted-foreground"
-          title="Settings"
-        >
-          <Link href="/admin/settings" aria-label="Settings">
-            <Settings className="size-[18px]" />
-          </Link>
-        </Button>
+        {can("settings.view") && (
+          <Button
+            asChild
+            variant="ghost"
+            size="icon"
+            className="rounded-full text-muted-foreground"
+            title="Settings"
+          >
+            <Link href="/admin/settings" aria-label="Settings">
+              <Settings className="size-[18px]" />
+            </Link>
+          </Button>
+        )}
 
         <span className="w-px h-8 bg-border mx-1.5 hidden sm:block" />
 
@@ -119,8 +163,8 @@ export default function AdminHeader() {
                 <span className="absolute bottom-0 right-0 size-2.5 rounded-full bg-emerald-500 border-2 border-card" />
               </div>
               <div className="hidden sm:block text-left leading-tight">
-                <p className="text-[11px] font-medium text-muted-foreground capitalize">
-                  {admin?.role ? admin.role.toLowerCase() : "Admin"}
+                <p className="text-[11px] font-medium text-muted-foreground capitalize truncate max-w-[180px]">
+                  {roleLabel}
                 </p>
                 <p className="text-xs font-semibold text-foreground">{admin?.name || "Admin"}</p>
               </div>
@@ -139,11 +183,13 @@ export default function AdminHeader() {
                 <User className="size-4" /> Profile
               </Link>
             </DropdownMenuItem>
-            <DropdownMenuItem asChild>
-              <Link href="/admin/settings">
-                <Settings className="size-4" /> Settings
-              </Link>
-            </DropdownMenuItem>
+            {can("settings.view") && (
+              <DropdownMenuItem asChild>
+                <Link href="/admin/settings">
+                  <Settings className="size-4" /> Settings
+                </Link>
+              </DropdownMenuItem>
+            )}
             <DropdownMenuSeparator />
             <DropdownMenuItem
               onClick={handleLogout}

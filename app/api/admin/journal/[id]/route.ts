@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { revalidatePath } from "next/cache"
 import { prisma } from "@/lib/prisma"
+import { invalidateCache } from "@/lib/redis"
 import { getAdminPayload } from "@/lib/auth"
 import { buildExcerpt, estimateReadTime, normalizeTags, slugify } from "@/lib/journal"
 
@@ -8,9 +9,13 @@ export const dynamic = "force-dynamic"
 
 type RouteParams = { params: Promise<{ id: string }> }
 
-function revalidateJournal() {
+async function revalidateJournal() {
   revalidatePath("/journal")
   revalidatePath("/journal/[slug]", "page")
+  // The homepage teaser reads the three newest posts through this Redis key,
+  // so publishing without clearing it leaves the strip stale for 15 minutes.
+  await invalidateCache("home:journal:v1")
+  revalidatePath("/")
 }
 
 // GET a single post (admin editor)
@@ -94,7 +99,7 @@ export async function PUT(req: NextRequest, { params }: RouteParams) {
       })
     }
 
-    revalidateJournal()
+    await revalidateJournal()
     revalidatePath(`/journal/${existing.slug}`)
 
     return NextResponse.json(post)
@@ -119,7 +124,7 @@ export async function DELETE(req: NextRequest, { params }: RouteParams) {
     const { id } = await params
     await prisma.journalPost.delete({ where: { id } })
 
-    revalidateJournal()
+    await revalidateJournal()
 
     return NextResponse.json({ success: true })
   } catch (error: any) {

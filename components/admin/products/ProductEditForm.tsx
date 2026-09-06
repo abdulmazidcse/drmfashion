@@ -8,6 +8,7 @@ import { Loader2, Sparkles, AlertCircle, Image as ImageIcon, Trash2, UploadCloud
 import Link from "next/link"
 
 import VariantForm from "./VariantForm"
+import ModelWearsPicker from "./ModelWearsPicker"
 import VariantTable from "./VariantTable"
 import ProductFormStepper, { type ProductFormStepDef } from "./ProductFormStepper"
 import CustomMeasurementSection, { type CustomMeasurementValue } from "./CustomMeasurementSection"
@@ -24,6 +25,7 @@ import {
   isPendingUrl,
   type UploadProgress,
 } from "@/lib/pendingUploads"
+import { readVariantImages, writeVariantImage, type VariantImageEntry } from "@/lib/imageMeta"
 
 const RichTextEditor = dynamic(() => import("@/components/admin/RichTextEditor"), {
   ssr: false,
@@ -36,23 +38,29 @@ type Props = {
 
 type FormValues = {
   title: string
+  productCode: string
   slug: string
   categoryId: string
   brandId: string
   description: string
   thumbnail: string
-  sizeChart?: string
+  sizeChartId?: string
   basePrice: number
   costPrice?: number
+  discountPrice?: number
   flashSaleEndDate?: string
   featured?: boolean
+  published?: boolean
   sizeAndFit?: string
   fabricAndCare?: string
   metaTitle?: string
   metaDescription?: string
   metaKeywords?: string
   tags?: string
+  modelWearsProductId?: string
 }
+
+type PickerProduct = { id: string; title: string; thumbnail: string | null }
 
 type Variant = {
   size: string
@@ -67,6 +75,11 @@ type Variant = {
 type ProductImageInput = {
   url: string
   color: string // Color name, or "" for General
+  /// Alt text for screen readers and image search. Blank means "generate one"
+  /// from the title and colourway — see lib/imageMeta.ts.
+  alt?: string
+  /// Optional caption shown under the shot in the storefront gallery.
+  caption?: string
 }
 
 const STEPS: ProductFormStepDef[] = [
@@ -78,10 +91,10 @@ const STEPS: ProductFormStepDef[] = [
 ]
 
 const STEP_FIELDS: Record<number, (keyof FormValues)[]> = {
-  0: ["title"],
+  0: ["title", "productCode"],
   1: ["thumbnail"],
   2: ["categoryId"],
-  3: ["basePrice", "costPrice"],
+  3: ["basePrice", "costPrice", "discountPrice"],
   4: ["slug"],
 }
 
@@ -112,7 +125,12 @@ export default function ProductEditForm({ productId }: Props) {
   useEffect(() => {
     register("sizeAndFit")
     register("fabricAndCare")
+    register("modelWearsProductId")
   }, [register])
+
+  // Details for the "Model is also wearing" product already set on this record,
+  // so the picker can show its name and photo without a lookup.
+  const [modelWearsInitial, setModelWearsInitial] = useState<PickerProduct | null>(null)
 
   const [categories, setCategories] = useState<{ id: string; name: string; children?: { id: string; name: string; children?: { id: string; name: string }[] }[] }[]>([])
   const [brands, setBrands] = useState<{ id: string; name: string }[]>([])
@@ -152,22 +170,28 @@ export default function ProductEditForm({ productId }: Props) {
         // 3. Prepopulate FormValues
         reset({
           title: product.title,
+          productCode: product.productCode || "",
           slug: product.slug,
           categoryId: product.categoryId,
           brandId: product.brandId || "",
           description: product.description,
           thumbnail: product.thumbnail,
-          sizeChart: product.sizeChart || "",
+          sizeChartId: product.sizeChartId || "",
           basePrice: product.basePrice,
           costPrice: product.costPrice || undefined,
+          discountPrice: product.discountPrice || undefined,
           flashSaleEndDate: product.flashSaleEndDate ? new Date(product.flashSaleEndDate).toISOString().slice(0, 16) : "",
+          featured: product.featured || false,
+          published: product.published ?? true,
           sizeAndFit: product.sizeAndFit || "",
           fabricAndCare: product.fabricAndCare || "",
           metaTitle: product.metaTitle || "",
           metaDescription: product.metaDescription || "",
           metaKeywords: product.metaKeywords || "",
           tags: product.tags || "",
+          modelWearsProductId: product.modelWearsProductId || "",
         })
+        setModelWearsInitial(product.modelWearsProduct ?? null)
 
         // 3b. Prepopulate made-to-measure settings
         setCustomMeasurement({
@@ -183,6 +207,8 @@ export default function ProductEditForm({ productId }: Props) {
             product.images.map((img: any) => ({
               url: img.url,
               color: img.color || "",
+              alt: img.alt || "",
+              caption: img.caption || "",
             }))
           )
         }
@@ -228,6 +254,44 @@ export default function ProductEditForm({ productId }: Props) {
     setVariants((prev) => prev.map((v, i) => (i === index ? { ...v, sku: newSku } : v)))
   }
 
+  // UPDATE VARIANT IMAGES
+  function updateVariantImages(index: number, images: Array<string | VariantImageEntry>, applyToColor: boolean, thumbnail?: string) {
+    setVariants((prev) => {
+      const target = prev[index]
+      if (!target) return prev
+
+      // `thumbnail` is only sent by the "Set thumb" control. Guarded against a
+      // stale value so a photo removed in the same edit can't be left as the
+      // thumbnail; everything else keeps the original first-image rule.
+      const urls = readVariantImages(images).map((e) => e.url)
+      const chosen = thumbnail && urls.includes(thumbnail) ? thumbnail : urls[0]
+
+      const next = prev.map((v, i) => {
+        const affected = applyToColor ? v.color === target.color : i === index
+        return affected ? { ...v, images: [...images], image: chosen } : v
+      })
+
+      // A photo dropped from every variant that used it — and not kept as the
+      // thumbnail or a gallery image — is a staged file nobody needs, so let it
+      // go rather than uploading it on save.
+      const stillUsed = new Set<string>(
+        [
+          watch("thumbnail"),
+          ...productImages.map((img) => img.url),
+          ...next.flatMap((v) => [v.image, ...readVariantImages(v.images).map((e) => e.url)]),
+        ].filter(Boolean) as string[]
+      )
+
+      for (const v of prev) {
+        for (const url of readVariantImages(v.images).map((e) => e.url)) {
+          if (!stillUsed.has(url)) releasePendingUrl(url)
+        }
+      }
+
+      return next
+    })
+  }
+
   // AUTOMATED SLUG GENERATION
   function handleTitleChange(title: string) {
     const slug = title
@@ -241,6 +305,16 @@ export default function ProductEditForm({ productId }: Props) {
 
   // FILE UPLOAD STATES
   const [uploadError, setUploadError] = useState("")
+
+  // The picker's options. Loaded once per form — the list is short and rarely
+  // changes, so there is nothing to gain from refetching it.
+  const [sizeCharts, setSizeCharts] = useState<{ id: string; name: string }[]>([])
+  useEffect(() => {
+    fetch("/api/admin/size-charts")
+      .then((r) => r.json())
+      .then((data) => { if (Array.isArray(data)) setSizeCharts(data) })
+      .catch(() => setSizeCharts([]))
+  }, [])
   const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(null)
 
   // MULTI-FILE PICKER — previews only, the upload happens on submit
@@ -260,7 +334,7 @@ export default function ProductEditForm({ productId }: Props) {
 
     const newImages: ProductImageInput[] = []
     for (let i = 0; i < files.length; i++) {
-      newImages.push({ url: stagePendingFile(files[i]), color: "" })
+      newImages.push({ url: stagePendingFile(files[i]), color: "", alt: "", caption: "" })
     }
 
     setProductImages((prev) => {
@@ -278,7 +352,7 @@ export default function ProductEditForm({ productId }: Props) {
   /** Stage a single-slot image (thumbnail / size chart), replacing any prior pick. */
   function selectSingleImage(
     e: React.ChangeEvent<HTMLInputElement>,
-    field: "thumbnail" | "sizeChart",
+    field: "thumbnail",
     maxBytes: number,
     label: string
   ) {
@@ -296,7 +370,7 @@ export default function ProductEditForm({ productId }: Props) {
   }
 
   /** Clear a single-slot image, discarding its staged file unless the gallery shares it. */
-  function clearSingleImage(field: "thumbnail" | "sizeChart") {
+  function clearSingleImage(field: "thumbnail") {
     const current = watch(field)
     if (current && !productImages.some((img) => img.url === current)) {
       releasePendingUrl(current)
@@ -316,6 +390,8 @@ export default function ProductEditForm({ productId }: Props) {
         {
           url: imageInputUrl,
           color: imageInputColor, // Can be empty for General
+          alt: "",
+          caption: "",
         },
       ]
       const currentThumbnail = watch("thumbnail")
@@ -327,6 +403,13 @@ export default function ProductEditForm({ productId }: Props) {
     setImageInputUrl("")
   }
 
+  /** Edit the alt text or caption of one gallery image in place. */
+  function updateProductImageMeta(index: number, field: "alt" | "caption", value: string) {
+    setProductImages((prev) =>
+      prev.map((img, i) => (i === index ? { ...img, [field]: value } : img))
+    )
+  }
+
   // REMOVE IMAGE
   function removeProductImage(index: number) {
     setProductImages((prev) => {
@@ -335,9 +418,8 @@ export default function ProductEditForm({ productId }: Props) {
 
       const stillUsed =
         watch("thumbnail") === url ||
-        watch("sizeChart") === url ||
         remaining.some((img) => img.url === url) ||
-        variants.some((v) => v.image === url || (Array.isArray(v.images) && v.images.includes(url)))
+        variants.some((v) => v.image === url || readVariantImages(v.images).some((e) => e.url === url))
 
       if (!stillUsed) releasePendingUrl(url)
       return remaining
@@ -417,9 +499,8 @@ export default function ProductEditForm({ productId }: Props) {
         resolved = await resolvePendingUrls(
           [
             data.thumbnail,
-            data.sizeChart,
             ...productImages.map((img) => img.url),
-            ...variants.flatMap((v) => [v.image, ...(Array.isArray(v.images) ? v.images : [])]),
+            ...variants.flatMap((v) => [v.image, ...readVariantImages(v.images).map((e) => e.url)]),
           ],
           setUploadProgress
         )
@@ -434,7 +515,6 @@ export default function ProductEditForm({ productId }: Props) {
       }
 
       const thumbnail = applyResolved(data.thumbnail, resolved) as string
-      const sizeChart = applyResolved(data.sizeChart, resolved)
 
       const uploadedImages = productImages.map((img) => ({
         ...img,
@@ -444,9 +524,10 @@ export default function ProductEditForm({ productId }: Props) {
       const uploadedVariants = variants.map((v) => ({
         ...v,
         image: applyResolved(v.image, resolved),
-        images: Array.isArray(v.images)
-          ? v.images.map((url: string) => applyResolved(url, resolved))
-          : v.images,
+        // Only the URL is swapped for its uploaded form; alt/caption survive.
+        images: readVariantImages(v.images).map((entry) =>
+          writeVariantImage({ ...entry, url: applyResolved(entry.url, resolved) ?? entry.url })
+        ),
       }))
 
       const imagesToSend = uploadedImages.length > 0
@@ -456,8 +537,8 @@ export default function ProductEditForm({ productId }: Props) {
       await api.put(`/admin/products/${productId}`, {
         ...data,
         thumbnail,
-        sizeChart,
         featured: data.featured || false,
+        published: data.published ?? true,
         images: imagesToSend,
         variants: uploadedVariants,
         ...customMeasurement,
@@ -487,9 +568,8 @@ export default function ProductEditForm({ productId }: Props) {
   // Every image the admin has picked but not yet sent to the server.
   const pendingImageCount = countPending([
     watch("thumbnail"),
-    watch("sizeChart"),
     ...productImages.map((img) => img.url),
-    ...variants.flatMap((v) => [v.image, ...(Array.isArray(v.images) ? v.images : [])]),
+    ...variants.flatMap((v) => [v.image, ...readVariantImages(v.images).map((e) => e.url)]),
   ])
 
   const submitButton = (
@@ -565,6 +645,26 @@ export default function ProductEditForm({ productId }: Props) {
             {errors.title && <span className="text-red-500 text-xs font-semibold mt-1 block">Title is required</span>}
           </div>
 
+          {/* PRODUCT CODE */}
+          <div>
+            <label className="block text-xs font-semibold text-zinc-600 mb-1.5">
+              Product Code
+            </label>
+            <input
+              {...register("productCode", { required: true })}
+              placeholder="e.g. TP-1001"
+              className={`w-full border rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition bg-zinc-50/30 hover:bg-zinc-50/50 focus:bg-white text-sm font-medium text-zinc-900 placeholder:text-zinc-400 ${errors.productCode ? 'border-red-500' : 'border-zinc-200'}`}
+            />
+            {errors.productCode ? (
+              <span className="text-red-500 text-xs font-semibold mt-1 block">Product code is required</span>
+            ) : (
+              <span className="text-[11px] text-zinc-500 mt-1 block">
+                Unique per product. Editing this does not change the URL slug — an existing product keeps its address
+                unless you edit the slug yourself in the final step.
+              </span>
+            )}
+          </div>
+
           {/* DESCRIPTION */}
           <div>
             <label className="block text-xs font-semibold text-zinc-600 mb-1.5">
@@ -616,36 +716,27 @@ export default function ProductEditForm({ productId }: Props) {
             </div>
 
             {/* SIZE CHART */}
+            {/* A picker, not an upload: charts are written once in
+                Admin → Size Charts and shared, so the same table no longer has
+                to be re-exported as an image for every product that needs it. */}
             <div>
               <label className="block text-xs font-semibold text-zinc-600 mb-1.5">
-                Size Chart Image (Max 800KB)
+                Size Chart
               </label>
-              <div className="flex gap-4 items-center">
-                {watch("sizeChart") ? (
-                  <div className="relative w-16 h-16 rounded-xl border border-zinc-200 overflow-hidden shadow-sm shrink-0">
-                    <img src={watch("sizeChart")} alt="Size Chart" className="w-full h-full object-cover" />
-                    <button type="button" onClick={() => clearSingleImage("sizeChart")} className="absolute top-1 right-1 p-1 bg-white/90 hover:bg-red-50 text-zinc-500 hover:text-red-500 rounded-lg shadow transition backdrop-blur-sm cursor-pointer">
-                      <Trash2 size={10} />
-                    </button>
-                  </div>
-                ) : (
-                  <div className="w-16 h-16 rounded-xl border border-dashed border-zinc-300 bg-zinc-50 flex items-center justify-center text-zinc-600 shrink-0">
-                    <ImageIcon size={20} />
-                  </div>
-                )}
-
-                <input type="hidden" {...register("sizeChart")} />
-
-                <label className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold py-3 px-4 rounded-xl cursor-pointer text-xs shadow-sm transition whitespace-nowrap">
-                  Choose Image
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={(e) => selectSingleImage(e, "sizeChart", 800 * 1024, "Size chart")}
-                    className="hidden"
-                  />
-                </label>
-              </div>
+              <select
+                {...register("sizeChartId")}
+                className="w-full border border-zinc-200 rounded-xl px-3 py-3 text-xs font-medium text-zinc-900 bg-white focus:outline-none focus:ring-2 focus:ring-primary transition"
+              >
+                <option value="">No size chart</option>
+                {sizeCharts.map((chart) => (
+                  <option key={chart.id} value={chart.id}>{chart.name}</option>
+                ))}
+              </select>
+              <p className="text-[10px] text-zinc-500 mt-1.5">
+                {sizeCharts.length === 0
+                  ? "None created yet — add one under Size Charts in the sidebar."
+                  : "Shown in the size guide on the product page."}
+              </p>
             </div>
           </div>
 
@@ -682,24 +773,54 @@ export default function ProductEditForm({ productId }: Props) {
             )}
 
             {/* IMAGES GRID LIST */}
+            {/* Sized by minimum card width rather than a fixed column count:
+                each tile carries an alt-text and caption input, and a third of
+                a narrow container left them about 40px wide. Columns are added
+                only once there is room for a usable one. */}
             {productImages.length > 0 ? (
-              <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-3 pt-3">
+              <div className="grid grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-3 pt-3">
                 {productImages.map((img, idx) => {
                   return (
-                    <div key={idx} className="group relative border border-zinc-150 rounded-2xl overflow-hidden bg-white shadow-sm hover:shadow transition">
-                      <div className="aspect-square relative overflow-hidden bg-zinc-100">
+                    <div key={idx} className="group relative border border-zinc-150 rounded-2xl overflow-hidden bg-white shadow-sm hover:shadow transition flex gap-3 p-3">
+                      <div className="w-20 h-20 shrink-0 relative overflow-hidden rounded-xl bg-zinc-100">
                         <img src={img.url} alt="Product Gallery" className="w-full h-full object-cover group-hover:scale-105 transition duration-300" />
                         {isPendingUrl(img.url) && (
-                          <span className="absolute bottom-1.5 left-1.5 bg-amber-500/90 text-white text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-md backdrop-blur-sm">
+                          <span className="absolute bottom-1 left-1 bg-amber-500/90 text-white text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-md backdrop-blur-sm">
                             Not saved
                           </span>
                         )}
                       </div>
 
+                      <div className="flex-1 min-w-0 space-y-1.5">
+                        {img.color && (
+                          <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 truncate">{img.color}</p>
+                        )}
+                        <input
+                          type="text"
+                          value={img.alt || ""}
+                          onChange={(e) => updateProductImageMeta(idx, "alt", e.target.value)}
+                          placeholder="Alt text (auto if blank)"
+                          maxLength={125}
+                          className="w-full border border-zinc-200 rounded-lg px-2.5 py-1.5 text-xs font-medium text-zinc-900 focus:outline-none focus:ring-2 focus:ring-primary transition"
+                        />
+                        <input
+                          type="text"
+                          value={img.caption || ""}
+                          onChange={(e) => updateProductImageMeta(idx, "caption", e.target.value)}
+                          placeholder="Caption (optional)"
+                          maxLength={160}
+                          className="w-full border border-zinc-200 rounded-lg px-2.5 py-1.5 text-xs font-medium text-zinc-900 focus:outline-none focus:ring-2 focus:ring-primary transition"
+                        />
+                      </div>
+
+                      {/* In the flex row rather than absolutely positioned: floating
+                          it meant reserving padding on the inputs for something that
+                          overlapped them anyway. */}
                       <button
                         type="button"
                         onClick={() => removeProductImage(idx)}
-                        className="absolute top-2 right-2 p-1.5 bg-white/90 hover:bg-red-50 text-zinc-500 hover:text-red-500 rounded-lg shadow-sm transition backdrop-blur-md opacity-0 group-hover:opacity-100"
+                        aria-label="Remove image"
+                        className="shrink-0 self-start p-1.5 bg-white hover:bg-red-50 text-zinc-500 hover:text-red-500 rounded-lg border border-zinc-200 transition"
                       >
                         <Trash2 size={12} />
                       </button>
@@ -812,6 +933,32 @@ export default function ProductEditForm({ productId }: Props) {
               {errors.costPrice && <span className="text-red-500 text-xs font-semibold mt-1 block">{errors.costPrice.message}</span>}
             </div>
 
+            <div>
+              <label className="block text-xs font-semibold text-zinc-600 mb-1.5">
+                Discount Price ({baseCurrency.symbol}) (Optional)
+              </label>
+              <input
+                type="number"
+                step="0.01"
+                {...register("discountPrice", {
+                  valueAsNumber: true,
+                  validate: (val) => {
+                    if (!val) return true;
+                    const base = watch("basePrice");
+                    // A "discount" at or above the base price would render as a
+                    // strikethrough that reads as a price rise on the storefront.
+                    if (base && val >= base) return "Discount Price must be below Base Price";
+                    return true;
+                  }
+                })}
+                placeholder="99.00"
+                className={`w-full border rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition bg-zinc-50/30 hover:bg-zinc-50/50 focus:bg-white text-sm font-medium text-zinc-900 placeholder:text-zinc-400 ${errors.discountPrice ? 'border-red-500' : 'border-zinc-200'}`}
+              />
+              {errors.discountPrice
+                ? <span className="text-red-500 text-xs font-semibold mt-1 block">{errors.discountPrice.message}</span>
+                : <span className="text-[10px] text-zinc-400 mt-1 block">Leave empty for no sale. When set, the base price shows struck through.</span>}
+            </div>
+
             {/* FLASH SALE END DATE */}
             <div>
               <label className="block text-xs font-semibold text-zinc-600 mb-1.5">
@@ -834,6 +981,15 @@ export default function ProductEditForm({ productId }: Props) {
                 className="w-4 h-4 text-primary border-zinc-300 rounded focus:ring-primary"
               />
               <span className="text-xs font-semibold text-zinc-700">Featured Product</span>
+            </label>
+
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                {...register("published")}
+                className="w-4 h-4 text-primary border-zinc-300 rounded focus:ring-primary"
+              />
+              <span className="text-xs font-semibold text-zinc-700">Published</span>
             </label>
           </div>
 
@@ -908,6 +1064,22 @@ export default function ProductEditForm({ productId }: Props) {
             />
           </div>
 
+          {/* MODEL IS ALSO WEARING */}
+          <div className="pb-5 mb-5 border-b border-zinc-100">
+            <label className="block text-xs font-semibold text-zinc-600 mb-1.5">
+              Model is also wearing (Optional)
+            </label>
+            <p className="text-[11px] text-zinc-400 mb-2">
+              The other item the model has on. Shown on the product page — left empty, the section is hidden.
+            </p>
+            <ModelWearsPicker
+              value={watch("modelWearsProductId") || ""}
+              onChange={(id) => setValue("modelWearsProductId", id)}
+              initial={modelWearsInitial}
+              excludeId={productId}
+            />
+          </div>
+
           <div>
             <label className="block text-xs font-semibold text-zinc-600 mb-1.5">
               Size & Fit Details (Optional)
@@ -922,7 +1094,7 @@ export default function ProductEditForm({ productId }: Props) {
 
           <div>
             <label className="block text-xs font-semibold text-zinc-600 mb-1.5">
-              Fabric & Care Instructions (Optional)
+              Material & Care Instructions (Optional)
             </label>
             <div className="prose-sm max-w-none">
               <RichTextEditor
@@ -933,10 +1105,18 @@ export default function ProductEditForm({ productId }: Props) {
           </div>
 
           <div className="space-y-4 border-t border-zinc-100 pt-5">
-            <VariantForm onAdd={addVariant} existing={variants} />
+            <VariantForm onAdd={addVariant} existing={variants} defaultPrefix={watch("productCode") || ""} />
 
             {variants.length > 0 ? (
-              <VariantTable variants={variants} onRemove={removeVariant} onUpdateSku={updateVariantSku} />
+              <VariantTable
+                variants={variants}
+                // Feeds the suggested alt/caption on each variant photo.
+                productTitle={watch("title")}
+                brandName={brands.find((b) => b.id === watch("brandId"))?.name}
+                onRemove={removeVariant}
+                onUpdateSku={updateVariantSku}
+                onUpdateImages={updateVariantImages}
+              />
             ) : (
               <div className="p-4 rounded-xl bg-zinc-50/50 border border-dashed border-zinc-200 text-center text-zinc-600 text-xs font-medium flex items-center justify-center gap-1.5">
                 <AlertCircle className="w-3.5 h-3.5 text-zinc-600" />

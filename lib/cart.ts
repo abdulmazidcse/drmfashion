@@ -1,4 +1,5 @@
-import { measurementFingerprint, type MeasurementValue } from "@/lib/measurement";
+import { measurementFingerprint, type FeeLine, type MeasurementValue } from "@/lib/measurement";
+import { trackAddToCart } from "@/lib/analytics";
 
 /** Made-to-measure details attached to a cart line. */
 export interface CartItemCustom {
@@ -7,6 +8,8 @@ export interface CartItemCustom {
   values: MeasurementValue[];
   /** Preview only — checkout re-derives the real fee from the database. */
   fee: number;
+  /** Preview only — "Tailoring fee +$20 · Waist 41–42 in +$50". */
+  feeBreakdown?: FeeLine[];
 }
 
 export interface CartItem {
@@ -35,7 +38,12 @@ export function getCart(): CartItem[] {
 }
 
 function saveCart(items: CartItem[]) {
-  localStorage.setItem(CART_KEY, JSON.stringify(items));
+  try {
+    localStorage.setItem(CART_KEY, JSON.stringify(items));
+  } catch {
+    // Same Private-Browsing quota throw guarded in getCart() above; the cart
+    // stays correct in memory for this page view even when it can't persist.
+  }
   if (typeof window !== "undefined") {
     window.dispatchEvent(new Event("cart-updated"));
   }
@@ -54,6 +62,18 @@ export function addToCart(item: Omit<CartItem, "id" | "quantity">, quantity = 1)
     cart.push({ ...item, id, quantity });
   }
   saveCart(cart);
+
+  // Reported here rather than at each call site: every path into the cart —
+  // product page, quick add, wishlist — comes through this function, so there is
+  // no way to add something without GA4 hearing about it.
+  trackAddToCart({
+    item_id: item.productId,
+    item_name: item.title,
+    price: item.price,
+    quantity,
+    item_variant: [item.color, item.size, item.length].filter(Boolean).join(" / ") || undefined,
+  });
+
   return cart;
 }
 

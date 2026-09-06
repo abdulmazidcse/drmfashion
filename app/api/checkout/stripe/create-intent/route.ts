@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import Stripe from "stripe"
+import { resolveOrderShipping } from "@/lib/shippingServer"
+import { resolveTax, taxSettingsFromSettings } from "@/lib/tax"
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "", {
   apiVersion: "2026-04-22.dahlia", // Use the latest API version or your account's default
@@ -9,7 +11,7 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "", {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
-    const { items, pointsRedeemed, email, promoCode, shippingCarrier, shippingFee } = body
+    const { items, pointsRedeemed, email, promoCode, shippingMethodId, shippingDestination } = body
 
     if (!items || items.length === 0) {
       return NextResponse.json({ message: "No items provided" }, { status: 400 })
@@ -84,15 +86,23 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Calculate tax and shipping safely on the backend
-    const tax = preTaxAmount * 0.05 // 5% Standard Tax
-    const flatRate = Number(settingsObj["shipping_flat_rate"]) || 10
-    const freeThreshold = Number(settingsObj["shipping_free_threshold"]) || 150
-    const shippingEnabled = settingsObj["shipping_enabled"] !== "false"
+    // Same resolution as /api/checkout, so the amount authorised here matches
+    // the amount the order is later written for.
+    const finalShippingFee = (
+      await resolveOrderShipping({
+        settings: settingsObj,
+        shippingMethodId,
+        destination: shippingDestination,
+        items,
+      })
+    ).fee
 
-    const finalShippingFee = shippingCarrier 
-      ? Number(shippingFee || 0)
-      : (shippingEnabled ? (freeThreshold > 0 && calculatedTotal >= freeThreshold ? 0 : flatRate) : 0)
+    const tax = resolveTax(taxSettingsFromSettings(settingsObj), {
+      country: shippingDestination?.countryCode,
+      state: shippingDestination?.state,
+      taxableAmount: preTaxAmount,
+      shippingFee: finalShippingFee,
+    }).amount
 
     const finalPayableAmount = preTaxAmount + tax + finalShippingFee
 

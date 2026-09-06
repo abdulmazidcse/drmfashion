@@ -47,7 +47,7 @@ export default function JournalShare({ slug, title }: { slug: string; title: str
 
   return (
     <div className="flex items-center gap-3">
-      <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-faint">Share</span>
+      <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-400">Share</span>
       {links.map(({ label, path, href }) => (
         <a
           key={label}
@@ -56,7 +56,7 @@ export default function JournalShare({ slug, title }: { slug: string; title: str
           rel="noopener noreferrer"
           aria-label={label}
           title={label}
-          className="flex h-9 w-9 items-center justify-center border border-line text-soft transition-colors hover:border-brand-600 hover:text-brand-700"
+          className="flex h-9 w-9 items-center justify-center border border-zinc-200 text-zinc-600 transition-colors hover:border-zinc-950 hover:text-zinc-950"
         >
           <svg viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4" aria-hidden="true">
             <path d={path} />
@@ -68,7 +68,7 @@ export default function JournalShare({ slug, title }: { slug: string; title: str
         onClick={handleCopy}
         aria-label="Copy link"
         title={copied ? "Link copied" : "Copy link"}
-        className="flex h-9 w-9 cursor-pointer items-center justify-center border border-line text-soft transition-colors hover:border-brand-600 hover:text-brand-700"
+        className="flex h-9 w-9 cursor-pointer items-center justify-center border border-zinc-200 text-zinc-600 transition-colors hover:border-zinc-950 hover:text-zinc-950"
       >
         {copied ? <Check className="h-4 w-4 text-emerald-600" /> : <Link2 className="h-4 w-4" />}
       </button>

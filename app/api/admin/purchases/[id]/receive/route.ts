@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
+import { postPurchaseEntry } from "@/lib/accounting"
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -56,6 +57,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         })
       }
     })
+
+    // Book the received stock against the supplier (non-blocking; stock is already updated)
+    try {
+      await postPurchaseEntry(id)
+    } catch (e) {
+      console.error("[ACCOUNTING_POST_ERROR]", e)
+    }
 
     return NextResponse.json({ success: true, message: "Purchase Order marked as received and stock updated" })
   } catch (error: any) {

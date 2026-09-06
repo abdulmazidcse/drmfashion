@@ -19,6 +19,8 @@ export async function generateMetadata(): Promise<Metadata> {
   return {
     title: `Journal | ${storeName}`,
     description: `Style guides, fabric deep-dives and stories from the ${storeName} community.`,
+    // Pagination and category/tag filters all resolve back to the index.
+    alternates: { canonical: "/journal" },
   }
 }
 
@@ -84,15 +86,15 @@ export default async function JournalPage({ searchParams }: { searchParams: Sear
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-white font-sans text-foreground antialiased">
+    <div className="flex min-h-screen flex-col bg-white font-sans text-zinc-950 antialiased">
       <Header />
 
       <main className="flex-1 w-full">
         {/* ─── Masthead ─────────────────────────────────────────────── */}
-        <section className="border-b border-line bg-white px-6 pb-10 pt-14 text-center md:px-12 md:pb-14 md:pt-20">
-          <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-faint">{storeName}</p>
-          <h1 className="mt-4 text-4xl font-extrabold uppercase leading-none tracking-tight md:text-6xl">Journal</h1>
-          <p className="mx-auto mt-5 max-w-xl text-sm leading-relaxed text-soft md:text-base">
+        <section className="border-b border-zinc-100 bg-white px-6 pb-10 pt-14 text-center md:px-12 md:pb-14 md:pt-20">
+          <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-zinc-400">{storeName}</p>
+          <h1 className="mt-4 text-4xl font-black uppercase leading-none tracking-tight md:text-6xl">Journal</h1>
+          <p className="mx-auto mt-5 max-w-xl text-sm leading-relaxed text-zinc-600 md:text-base">
             {activeCategory?.description ||
               "Fit guides, fabric deep-dives and the stories behind the collection — written for the people who wear it."}
           </p>
@@ -104,14 +106,14 @@ export default async function JournalPage({ searchParams }: { searchParams: Sear
             `activeCategory || tag` case keeps it rendered while a filter is
             applied, so there is always a way back to all stories. */}
         {(categories.length > 1 || activeCategory || tag) && (
-          <nav className="border-b border-line bg-white">
+          <nav className="border-b border-zinc-100 bg-white">
             <div className="mx-auto flex max-w-[1440px] gap-2 overflow-x-auto px-6 py-4 md:justify-center md:px-12">
               <Link
                 href="/journal"
                 className={`shrink-0 border px-4 py-2 text-[11px] font-bold uppercase tracking-[0.15em] transition-colors ${
                   !activeCategory
-                    ? "border-brand-600 bg-brand-600 rounded-full text-white"
-                    : "border-line text-soft hover:border-brand-600 hover:text-brand-700"
+                    ? "border-zinc-950 bg-zinc-950 text-white"
+                    : "border-zinc-200 text-zinc-600 hover:border-zinc-950 hover:text-zinc-950"
                 }`}
               >
                 All Stories
@@ -122,8 +124,8 @@ export default async function JournalPage({ searchParams }: { searchParams: Sear
                   href={`/journal?category=${cat.slug}`}
                   className={`shrink-0 border px-4 py-2 text-[11px] font-bold uppercase tracking-[0.15em] transition-colors ${
                     activeCategory?.id === cat.id
-                      ? "border-brand-600 bg-brand-600 rounded-full text-white"
-                      : "border-line text-soft hover:border-brand-600 hover:text-brand-700"
+                      ? "border-zinc-950 bg-zinc-950 text-white"
+                      : "border-zinc-200 text-zinc-600 hover:border-zinc-950 hover:text-zinc-950"
                   }`}
                 >
                   {cat.name}
@@ -135,9 +137,9 @@ export default async function JournalPage({ searchParams }: { searchParams: Sear
 
         {tag && (
           <div className="mx-auto max-w-[1440px] px-6 pt-8 md:px-12">
-            <p className="text-[11px] font-bold uppercase tracking-[0.15em] text-soft">
+            <p className="text-[11px] font-bold uppercase tracking-[0.15em] text-zinc-500">
               Tagged “{tag}” ·{" "}
-              <Link href="/journal" className="underline hover:text-brand-700">
+              <Link href="/journal" className="underline hover:text-zinc-950">
                 Clear
               </Link>
             </p>
@@ -148,7 +150,7 @@ export default async function JournalPage({ searchParams }: { searchParams: Sear
         {featured && (
           <section className="mx-auto max-w-[1440px] px-6 pt-10 md:px-12 md:pt-16">
             <Link href={`/journal/${featured.slug}`} className="group grid grid-cols-1 gap-8 lg:grid-cols-2 lg:gap-14">
-              <div className="relative aspect-[16/10] w-full overflow-hidden bg-cream lg:aspect-[4/3]">
+              <div className="relative aspect-[16/10] w-full overflow-hidden bg-zinc-100 lg:aspect-[4/3]">
                 {featured.coverImage ? (
                   <Image
                     src={featured.coverImage}
@@ -159,25 +161,25 @@ export default async function JournalPage({ searchParams }: { searchParams: Sear
                     className="object-cover transition-transform duration-700 group-hover:scale-105"
                   />
                 ) : (
-                  <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-line to-cream">
-                    <span className="text-[11px] font-bold uppercase tracking-[0.2em] text-faint">Journal</span>
+                  <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-zinc-200 to-zinc-100">
+                    <span className="text-[11px] font-bold uppercase tracking-[0.2em] text-zinc-400">Journal</span>
                   </div>
                 )}
-                <span className="absolute left-5 top-5 bg-brand-ink px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.15em] text-white">
+                <span className="absolute left-5 top-5 bg-zinc-950 px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.15em] text-white">
                   Featured
                 </span>
               </div>
 
               <div className="flex flex-col justify-center">
-                <div className="flex items-center gap-3 text-[11px] font-medium uppercase tracking-[0.15em] text-soft">
+                <div className="flex items-center gap-3 text-[11px] font-medium uppercase tracking-[0.15em] text-zinc-500">
                   {featured.category && (
                     <>
-                      <span className="text-foreground">{featured.category.name}</span>
-                      <span className="h-3 w-px bg-line" />
+                      <span className="text-zinc-950">{featured.category.name}</span>
+                      <span className="h-3 w-px bg-zinc-300" />
                     </>
                   )}
                   <span>{formatJournalDate(featured.publishedAt || featured.createdAt)}</span>
-                  <span className="h-3 w-px bg-line" />
+                  <span className="h-3 w-px bg-zinc-300" />
                   <span className="inline-flex items-center gap-1">
                     <Clock className="h-3 w-3" /> {featured.readTime} min read
                   </span>
@@ -192,12 +194,12 @@ export default async function JournalPage({ searchParams }: { searchParams: Sear
                 </h2>
 
                 {featured.excerpt && (
-                  <p className="mt-5 line-clamp-3 max-w-xl text-base leading-relaxed text-soft">
+                  <p className="mt-5 line-clamp-3 max-w-xl text-base leading-relaxed text-zinc-600">
                     {featured.excerpt}
                   </p>
                 )}
 
-                <span className="mt-7 inline-flex items-center gap-2 self-start bg-brand-600 rounded-full px-8 py-3.5 text-[11px] font-bold uppercase tracking-[0.15em] text-white transition-colors group-hover:bg-brand-700">
+                <span className="mt-7 inline-flex items-center gap-2 self-start bg-zinc-950 px-8 py-3.5 text-[11px] font-bold uppercase tracking-[0.15em] text-white transition-colors group-hover:bg-zinc-800">
                   Read the story
                   <ArrowRight className="h-3.5 w-3.5" />
                 </span>
@@ -215,11 +217,11 @@ export default async function JournalPage({ searchParams }: { searchParams: Sear
         {(posts.length > 0 || !featured) && (
           <section className="mx-auto max-w-[1440px] px-6 py-14 md:px-12 md:py-20">
             {posts.length === 0 ? (
-              <div className="mx-auto max-w-md border border-dashed border-line px-8 py-20 text-center">
-                <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-faint">
+              <div className="mx-auto max-w-md border border-dashed border-zinc-200 px-8 py-20 text-center">
+                <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-zinc-400">
                   {activeCategory || tag ? "Nothing here yet" : "Coming soon"}
                 </p>
-                <p className="mt-4 text-sm leading-relaxed text-soft">
+                <p className="mt-4 text-sm leading-relaxed text-zinc-600">
                   {activeCategory || tag
                     ? "No stories match this filter yet."
                     : "The first stories are being written. Check back shortly."}
@@ -227,7 +229,7 @@ export default async function JournalPage({ searchParams }: { searchParams: Sear
                 {(activeCategory || tag) && (
                   <Link
                     href="/journal"
-                    className="mt-7 inline-flex items-center gap-1.5 border-b border-brand-600 pb-0.5 text-[11px] font-bold uppercase tracking-[0.15em] text-foreground transition-colors hover:border-brand-300 hover:text-soft"
+                    className="mt-7 inline-flex items-center gap-1.5 border-b border-zinc-950 pb-0.5 text-[11px] font-bold uppercase tracking-[0.15em] text-zinc-950 transition-colors hover:border-zinc-400 hover:text-zinc-600"
                   >
                     View all stories
                     <ArrowRight className="h-3 w-3" />
@@ -238,8 +240,8 @@ export default async function JournalPage({ searchParams }: { searchParams: Sear
               <>
                 {featured && (
                   <div className="mb-10 flex items-center gap-4">
-                    <h2 className="text-[11px] font-bold uppercase tracking-[0.2em] text-foreground">Latest Stories</h2>
-                    <div className="h-px flex-1 bg-line" />
+                    <h2 className="text-[11px] font-bold uppercase tracking-[0.2em] text-zinc-950">Latest Stories</h2>
+                    <div className="h-px flex-1 bg-zinc-200" />
                   </div>
                 )}
 
@@ -257,7 +259,7 @@ export default async function JournalPage({ searchParams }: { searchParams: Sear
               {page > 1 && (
                 <Link
                   href={buildHref(page - 1)}
-                  className="border border-line px-4 py-2 text-[11px] font-bold uppercase tracking-[0.15em] text-soft transition-colors hover:border-brand-600 hover:text-brand-700"
+                  className="border border-zinc-200 px-4 py-2 text-[11px] font-bold uppercase tracking-[0.15em] text-zinc-600 transition-colors hover:border-zinc-950 hover:text-zinc-950"
                 >
                   Prev
                 </Link>
@@ -265,7 +267,7 @@ export default async function JournalPage({ searchParams }: { searchParams: Sear
 
               {buildPageList(page, totalPages).map((item, idx) =>
                 item === "…" ? (
-                  <span key={`gap-${idx}`} className="px-2 text-sm text-faint">
+                  <span key={`gap-${idx}`} className="px-2 text-sm text-zinc-400">
                     …
                   </span>
                 ) : (
@@ -275,8 +277,8 @@ export default async function JournalPage({ searchParams }: { searchParams: Sear
                     aria-current={item === page ? "page" : undefined}
                     className={`min-w-[38px] border px-3 py-2 text-center text-xs font-bold transition-colors ${
                       item === page
-                        ? "border-brand-600 bg-brand-600 rounded-full text-white"
-                        : "border-line text-soft hover:border-brand-600 hover:text-brand-700"
+                        ? "border-zinc-950 bg-zinc-950 text-white"
+                        : "border-zinc-200 text-zinc-600 hover:border-zinc-950 hover:text-zinc-950"
                     }`}
                   >
                     {item}
@@ -287,7 +289,7 @@ export default async function JournalPage({ searchParams }: { searchParams: Sear
               {page < totalPages && (
                 <Link
                   href={buildHref(page + 1)}
-                  className="border border-line px-4 py-2 text-[11px] font-bold uppercase tracking-[0.15em] text-soft transition-colors hover:border-brand-600 hover:text-brand-700"
+                  className="border border-zinc-200 px-4 py-2 text-[11px] font-bold uppercase tracking-[0.15em] text-zinc-600 transition-colors hover:border-zinc-950 hover:text-zinc-950"
                 >
                   Next
                 </Link>
@@ -298,9 +300,9 @@ export default async function JournalPage({ searchParams }: { searchParams: Sear
         )}
 
         {/* ─── Newsletter ───────────────────────────────────────────── */}
-        <section className="border-t border-line bg-[#fafafa] px-6 py-16 text-center md:px-12 md:py-20">
-          <h2 className="text-2xl font-extrabold uppercase tracking-tight md:text-3xl">Never miss a story</h2>
-          <p className="mx-auto mt-3 max-w-md text-sm text-soft">
+        <section className="border-t border-zinc-100 bg-[#fafafa] px-6 py-16 text-center md:px-12 md:py-20">
+          <h2 className="text-2xl font-black uppercase tracking-tight md:text-3xl">Never miss a story</h2>
+          <p className="mx-auto mt-3 max-w-md text-sm text-zinc-600">
             Get new journal entries, fit guides and early access to drops straight to your inbox.
           </p>
           <div className="mx-auto mt-7 max-w-md">

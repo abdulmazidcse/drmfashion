@@ -1,5 +1,16 @@
 "use client"
+import dynamic from "next/dynamic"
 import { TwoColumnProps } from "../types"
+
+// CKEditor touches `window` on import, so it can never render on the server.
+const RichTextEditor = dynamic(() => import("@/components/admin/RichTextEditor"), {
+  ssr: false,
+  loading: () => (
+    <div className="p-4 text-center text-xs text-zinc-400 border border-zinc-200 rounded-xl">
+      Loading editor…
+    </div>
+  ),
+})
 
 interface Props {
   props: TwoColumnProps
@@ -26,19 +37,19 @@ export function TwoColumnPreview({ props: p }: { props: TwoColumnProps }) {
       <div className={`grid ${getGridCols(p.leftWidth)} ${GAP_MAP[p.gap]} ${p.reverseOnMobile ? 'max-sm:grid-cols-1 max-sm:[&>*:first-child]:order-2' : 'max-sm:grid-cols-1'}`}>
         <div>
           {p.leftImage && (
-            <img src={p.leftImage} alt="" className="w-full object-cover rounded-lg mb-4" />
+            <img src={p.leftImage} alt={p.leftImageAlt || ''} className="w-full object-cover rounded-lg mb-4" />
           )}
           <div
-            className="prose prose-zinc max-w-none prose-headings:font-black"
+            className="page-content max-w-none"
             dangerouslySetInnerHTML={{ __html: p.leftHtml }}
           />
         </div>
         <div>
           {p.rightImage && (
-            <img src={p.rightImage} alt="" className="w-full object-cover rounded-lg mb-4" />
+            <img src={p.rightImage} alt={p.rightImageAlt || ''} className="w-full object-cover rounded-lg mb-4" />
           )}
           <div
-            className="prose prose-zinc max-w-none prose-headings:font-black"
+            className="page-content max-w-none"
             dangerouslySetInnerHTML={{ __html: p.rightHtml }}
           />
         </div>
@@ -74,8 +85,13 @@ export function TwoColumnSettings({ props: p, onChange }: Props) {
         <Field label="Image URL (optional)">
           <input className={inp} placeholder="https://..." value={p.leftImage} onChange={e => set('leftImage', e.target.value)} />
         </Field>
-        <Field label="Content (HTML)">
-          <textarea className={`${inp} font-mono resize-y bg-zinc-50`} rows={5} value={p.leftHtml} onChange={e => set('leftHtml', e.target.value)} />
+        {p.leftImage && (
+          <Field label="Image Alt Text">
+            <input className={inp} placeholder="Leave empty if the heading already says what the image shows" value={p.leftImageAlt || ''} onChange={e => set('leftImageAlt', e.target.value)} />
+          </Field>
+        )}
+        <Field label="Content">
+          <RichTextEditor initialContent={p.leftHtml} onChange={html => set('leftHtml', html)} height={200} />
         </Field>
       </div>
 
@@ -84,8 +100,13 @@ export function TwoColumnSettings({ props: p, onChange }: Props) {
         <Field label="Image URL (optional)">
           <input className={inp} placeholder="https://..." value={p.rightImage} onChange={e => set('rightImage', e.target.value)} />
         </Field>
-        <Field label="Content (HTML)">
-          <textarea className={`${inp} font-mono resize-y bg-zinc-50`} rows={5} value={p.rightHtml} onChange={e => set('rightHtml', e.target.value)} />
+        {p.rightImage && (
+          <Field label="Image Alt Text">
+            <input className={inp} placeholder="Leave empty if the heading already says what the image shows" value={p.rightImageAlt || ''} onChange={e => set('rightImageAlt', e.target.value)} />
+          </Field>
+        )}
+        <Field label="Content">
+          <RichTextEditor initialContent={p.rightHtml} onChange={html => set('rightHtml', html)} height={200} />
         </Field>
       </div>
 

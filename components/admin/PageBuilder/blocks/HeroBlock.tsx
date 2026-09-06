@@ -25,7 +25,7 @@ export function HeroPreview({ props: p }: { props: HeroProps }) {
       {p.backgroundImage && (
         <img
           src={p.backgroundImage}
-          alt=""
+          alt={p.backgroundImageAlt || ''}
           className="absolute inset-0 w-full h-full object-cover"
         />
       )}
@@ -49,8 +49,8 @@ export function HeroPreview({ props: p }: { props: HeroProps }) {
         {p.buttonText && (
           <a
             href={p.buttonLink || '#'}
-            className="inline-block px-8 py-3 text-sm font-bold uppercase tracking-widest border-2 border-white transition-all hover:bg-white hover:text-zinc-900"
-            style={{ color: p.textColor, borderColor: p.textColor }}
+            className="inline-block px-8 py-3 text-sm font-bold uppercase tracking-widest border-2 text-[var(--hero-btn)] border-[var(--hero-btn)] transition-all hover:bg-white hover:text-zinc-900 hover:border-white"
+            style={{ ['--hero-btn' as string]: p.textColor }}
           >
             {p.buttonText}
           </a>
@@ -84,6 +84,11 @@ export function HeroSettings({ props: p, onChange }: Props) {
       </Field>
       {p.backgroundImage && (
         <img src={p.backgroundImage} alt="preview" className="w-full h-24 object-cover rounded-lg border border-zinc-200" />
+      )}
+      {p.backgroundImage && (
+        <Field label="Background Image Alt Text">
+          <input className={inp} placeholder="Leave empty if the heading already says what the image shows" value={p.backgroundImageAlt || ''} onChange={e => set('backgroundImageAlt', e.target.value)} />
+        </Field>
       )}
       <div className="grid grid-cols-2 gap-3">
         <Field label="BG Color">

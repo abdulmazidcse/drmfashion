@@ -15,6 +15,9 @@ import {
   Plus,
   Minus,
   Hash,
+  Ban,
+  LogOut,
+  KeyRound,
 } from "lucide-react"
 import api from "@/lib/axios"
 import Swal from "sweetalert2";
@@ -52,6 +55,116 @@ export default function UsersPage() {
   const [totalPages, setTotalPages] = useState(1)
   const [totalRecords, setTotalRecords] = useState(0)
 
+  const [loggingOutId, setLoggingOutId] = useState<string | null>(null)
+
+  // Staff roles for the access dialog and the create form.
+  const [adminRoles, setAdminRoles] = useState<{ id: string; name: string }[]>([])
+  useEffect(() => {
+    api.get("/admin/roles")
+      .then((res) => setAdminRoles(res.data.map((r: any) => ({ id: r.id, name: r.name }))))
+      .catch((err) => console.error("Failed to load roles", err))
+  }, [])
+
+  // "Change access" dialog
+  const [isAccessModalOpen, setIsAccessModalOpen] = useState(false)
+  const [accessUser, setAccessUser] = useState<any>(null)
+  const [accessRole, setAccessRole] = useState<string>("USER")
+  const [accessRoleId, setAccessRoleId] = useState<string>("")
+  const [accessSubmitting, setAccessSubmitting] = useState(false)
+
+  function openAccessModal(user: any) {
+    setAccessUser(user)
+    setAccessRole(user.role)
+    setAccessRoleId(user.adminRoleId || user.adminRole?.id || "")
+    setIsAccessModalOpen(true)
+  }
+
+  async function handleChangeAccess(e: React.FormEvent) {
+    e.preventDefault()
+    if (!accessUser) return
+    if (accessRole === "STAFF" && !accessRoleId) {
+      Swal.fire({ text: "Select a staff role.", confirmButtonColor: "#18181b" })
+      return
+    }
+    try {
+      setAccessSubmitting(true)
+      const res = await api.put(`/admin/users/${accessUser.id}`, {
+        role: accessRole,
+        adminRoleId: accessRole === "STAFF" ? accessRoleId : null,
+      })
+      setUsers((prev) => prev.map((u) => (u.id === accessUser.id ? { ...u, ...res.data } : u)))
+      setIsAccessModalOpen(false)
+      Swal.fire({ text: `${accessUser.name}'s access has been updated. Any active admin session was signed out.`, icon: "success", confirmButtonColor: "#18181b" })
+    } catch (error: any) {
+      Swal.fire({
+        text: error.response?.data?.message || "Failed to update access.",
+        icon: "error",
+        confirmButtonColor: "#18181b",
+      })
+    } finally {
+      setAccessSubmitting(false)
+    }
+  }
+
+  async function handleForceLogout(user: any) {
+    const confirmed = await Swal.fire({
+      title: "Force logout?",
+      text: `${user.name} will be signed out on every device and must log in again.`,
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonText: "Force Logout",
+      confirmButtonColor: "#18181b",
+    })
+    if (!confirmed.isConfirmed) return
+
+    try {
+      setLoggingOutId(user.id)
+      const res = await api.post(`/admin/users/${user.id}/force-logout`)
+      Swal.fire({ text: res.data.message, icon: "success", confirmButtonColor: "#18181b" })
+    } catch (error: any) {
+      Swal.fire({
+        text: error.response?.data?.message || "Failed to force logout.",
+        icon: "error",
+        confirmButtonColor: "#18181b",
+      })
+    } finally {
+      setLoggingOutId(null)
+    }
+  }
+
+  const [togglingId, setTogglingId] = useState<string | null>(null)
+
+  async function handleToggleActive(user: any) {
+    const deactivating = user.isActive !== false
+
+    if (deactivating) {
+      const confirmed = await Swal.fire({
+        title: "Deactivate account?",
+        text: `${user.name} will be signed out and blocked from logging in again.`,
+        icon: "warning",
+        showCancelButton: true,
+        confirmButtonText: "Deactivate",
+        confirmButtonColor: "#18181b",
+      })
+      if (!confirmed.isConfirmed) return
+    }
+
+    try {
+      setTogglingId(user.id)
+      const res = await api.patch(`/admin/users/${user.id}/status`, { isActive: !deactivating })
+      setUsers((prev) => prev.map((u) => (u.id === user.id ? { ...u, isActive: !deactivating } : u)))
+      Swal.fire({ text: res.data.message, icon: "success", confirmButtonColor: "#18181b" })
+    } catch (error: any) {
+      Swal.fire({
+        text: error.response?.data?.message || "Failed to update account status.",
+        icon: "error",
+        confirmButtonColor: "#18181b",
+      })
+    } finally {
+      setTogglingId(null)
+    }
+  }
+
   async function fetchUsers() {
     try {
       setLoading(true)
@@ -86,7 +199,7 @@ export default function UsersPage() {
   const [isRewardModalOpen, setIsRewardModalOpen] = useState(false)
   const [selectedUser, setSelectedUser] = useState<any>(null)
 
-  const [newUser, setNewUser] = useState({ name: "", email: "", phone: "", role: "USER", password: "" })
+  const [newUser, setNewUser] = useState({ name: "", email: "", phone: "", role: "USER", adminRoleId: "", password: "" })
   const [submitting, setSubmitting] = useState(false)
 
   // Reward points state
@@ -100,12 +213,16 @@ export default function UsersPage() {
       Swal.fire({ text: "Name, email, and password are required", confirmButtonColor: "#18181b" })
       return
     }
+    if (newUser.role === "STAFF" && !newUser.adminRoleId) {
+      Swal.fire({ text: "Select a staff role for STAFF users", confirmButtonColor: "#18181b" })
+      return
+    }
 
     try {
       setSubmitting(true)
       await api.post("/admin/users", newUser)
       setIsAddModalOpen(false)
-      setNewUser({ name: "", email: "", phone: "", role: "USER", password: "" })
+      setNewUser({ name: "", email: "", phone: "", role: "USER", adminRoleId: "", password: "" })
       await fetchUsers()
     } catch (error: any) {
       console.error(error)
@@ -153,6 +270,7 @@ export default function UsersPage() {
   // Aggregate stats
   const totalClients = users.length
   const adminCount = users.filter((u) => u.role === "ADMIN").length
+  const staffCount = users.filter((u) => u.role === "STAFF").length
   const customerCount = users.filter((u) => u.role === "USER").length
   const totalRewardPoints = users.reduce((sum, u) => sum + (u.rewardPoints || 0), 0)
 
@@ -204,7 +322,10 @@ export default function UsersPage() {
             </div>
             <div>
               <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest">Administrators</p>
-              <h4 className="text-xl font-bold text-foreground font-mono">{adminCount}</h4>
+              <h4 className="text-xl font-bold text-foreground font-mono">
+                {adminCount}
+                <span className="ml-2 text-xs font-medium text-muted-foreground font-sans">+ {staffCount} staff</span>
+              </h4>
             </div>
           </CardContent>
         </Card>
@@ -261,6 +382,7 @@ export default function UsersPage() {
               >
                 <option value="ALL">All Member Roles</option>
                 <option value="ADMIN">Administrators</option>
+                <option value="STAFF">Staff Members</option>
                 <option value="USER">Standard Customers</option>
               </select>
             </div>
@@ -281,19 +403,21 @@ export default function UsersPage() {
                     </span>
                   </TableHead>
                   <TableHead>Joined Date</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={5} className="py-20 text-center">
+                    <TableCell colSpan={7} className="py-20 text-center">
                       <Loader2 className="w-8 h-8 animate-spin text-muted-foreground mx-auto mb-3" />
                       <p className="text-xs text-muted-foreground font-bold uppercase tracking-widest">Syncing Users...</p>
                     </TableCell>
                   </TableRow>
                 ) : users.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={5} className="text-center py-24 text-muted-foreground text-xs font-bold uppercase tracking-widest">
+                    <TableCell colSpan={7} className="text-center py-24 text-muted-foreground text-xs font-bold uppercase tracking-widest">
                       No users found matching your criteria.
                     </TableCell>
                   </TableRow>
@@ -328,8 +452,7 @@ export default function UsersPage() {
                         </div>
                       </TableCell>
 
-                      {/* ROLE — read only. Promoting or demoting a member is not
-                          something this screen offers any more. */}
+                      {/* ROLE — changed through the "Change access" dialog. */}
                       <TableCell>
                         <Badge
                           variant="outline"
@@ -337,10 +460,14 @@ export default function UsersPage() {
                             "font-semibold",
                             user.role === "ADMIN"
                               ? "bg-indigo-50 text-indigo-700 border-indigo-200"
-                              : "text-muted-foreground"
+                              : user.role === "STAFF"
+                                ? "bg-sky-50 text-sky-700 border-sky-200"
+                                : "text-muted-foreground"
                           )}
                         >
-                          {user.role}
+                          {user.role === "STAFF"
+                            ? `STAFF · ${user.adminRole?.name || "No role"}`
+                            : user.role}
                         </Badge>
                       </TableCell>
 
@@ -379,6 +506,63 @@ export default function UsersPage() {
                       {/* JOINED */}
                       <TableCell className="text-xs font-semibold text-muted-foreground font-mono">
                         {new Date(user.createdAt).toLocaleDateString()}
+                      </TableCell>
+
+                      <TableCell>
+                        <Badge variant={user.isActive === false ? "destructive" : "secondary"}>
+                          {user.isActive === false ? "Inactive" : "Active"}
+                        </Badge>
+                      </TableCell>
+
+                      <TableCell className="text-right">
+                        <div className="flex items-center justify-end gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={togglingId === user.id}
+                          onClick={() => handleToggleActive(user)}
+                          className="text-xs"
+                        >
+                          {togglingId === user.id ? (
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          ) : user.isActive === false ? (
+                            <UserCheck className="w-3.5 h-3.5" />
+                          ) : (
+                            <Ban className="w-3.5 h-3.5" />
+                          )}
+                          {user.isActive === false ? "Activate" : "Deactivate"}
+                        </Button>
+
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => openAccessModal(user)}
+                          className="text-xs"
+                        >
+                          <KeyRound className="w-3.5 h-3.5" />
+                          Change access
+                        </Button>
+
+                        {/* Customer sessions aren't revocable this way — only admin
+                            routes check tokenVersion — so the action is for
+                            admin-panel accounts only. */}
+                        {(user.role === "ADMIN" || user.role === "STAFF") && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={loggingOutId === user.id}
+                            onClick={() => handleForceLogout(user)}
+                            className="text-xs"
+                          >
+                            {loggingOutId === user.id ? (
+                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            ) : (
+                              <LogOut className="w-3.5 h-3.5" />
+                            )}
+                            Force Logout
+                          </Button>
+                        )}
+                        </div>
                       </TableCell>
 
                     </TableRow>
@@ -553,6 +737,76 @@ export default function UsersPage() {
         </DialogContent>
       </Dialog>
 
+      {/* ─── CHANGE ACCESS MODAL ─── */}
+      <Dialog open={isAccessModalOpen && !!accessUser} onOpenChange={(open) => !open && setIsAccessModalOpen(false)}>
+        <DialogContent className="sm:max-w-md">
+          {accessUser && (
+            <>
+              <DialogHeader>
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 bg-muted text-foreground rounded-lg">
+                    <KeyRound className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <DialogTitle>Change Access</DialogTitle>
+                    <DialogDescription>{accessUser.name} · {accessUser.email}</DialogDescription>
+                  </div>
+                </div>
+              </DialogHeader>
+
+              <form onSubmit={handleChangeAccess} className="space-y-4">
+                <div>
+                  <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2">System Role</Label>
+                  <select
+                    value={accessRole}
+                    onChange={(e) => setAccessRole(e.target.value)}
+                    className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-xs focus-visible:ring-2 focus-visible:ring-ring/50 outline-none cursor-pointer"
+                  >
+                    <option value="USER">USER — storefront customer</option>
+                    <option value="STAFF">STAFF — admin panel, limited by role</option>
+                    <option value="ADMIN">ADMIN — full access</option>
+                  </select>
+                </div>
+
+                {accessRole === "STAFF" && (
+                  <div>
+                    <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2">Staff Role *</Label>
+                    <select
+                      value={accessRoleId}
+                      onChange={(e) => setAccessRoleId(e.target.value)}
+                      required
+                      className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-xs focus-visible:ring-2 focus-visible:ring-ring/50 outline-none cursor-pointer"
+                    >
+                      <option value="">Select a role...</option>
+                      {adminRoles.map((r) => (
+                        <option key={r.id} value={r.id}>{r.name}</option>
+                      ))}
+                    </select>
+                    <p className="text-[10px] text-muted-foreground mt-2 font-medium">
+                      Permissions are defined under Roles &amp; Permissions.
+                    </p>
+                  </div>
+                )}
+
+                <p className="text-xs text-muted-foreground">
+                  Changing access signs this user out of the admin panel; the new access applies at their next login.
+                </p>
+
+                <div className="pt-2 flex items-center justify-end gap-3">
+                  <Button type="button" variant="outline" size="lg" onClick={() => setIsAccessModalOpen(false)}>
+                    Cancel
+                  </Button>
+                  <Button type="submit" size="lg" disabled={accessSubmitting}>
+                    {accessSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                    Save Access
+                  </Button>
+                </div>
+              </form>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+
       {/* ADD USER MODAL */}
       <Dialog open={isAddModalOpen} onOpenChange={(open) => !open && setIsAddModalOpen(false)}>
         <DialogContent className="sm:max-w-md">
@@ -597,14 +851,32 @@ export default function UsersPage() {
                 <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2">Role</Label>
                 <select
                   value={newUser.role}
-                  onChange={(e) => setNewUser({ ...newUser, role: e.target.value })}
+                  onChange={(e) => setNewUser({ ...newUser, role: e.target.value, adminRoleId: e.target.value === "STAFF" ? newUser.adminRoleId : "" })}
                   className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-xs focus-visible:ring-2 focus-visible:ring-ring/50 outline-none cursor-pointer"
                 >
                   <option value="USER">USER</option>
+                  <option value="STAFF">STAFF</option>
                   <option value="ADMIN">ADMIN</option>
                 </select>
               </div>
             </div>
+
+            {newUser.role === "STAFF" && (
+              <div>
+                <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2">Staff Role *</Label>
+                <select
+                  value={newUser.adminRoleId}
+                  onChange={(e) => setNewUser({ ...newUser, adminRoleId: e.target.value })}
+                  required
+                  className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-xs focus-visible:ring-2 focus-visible:ring-ring/50 outline-none cursor-pointer"
+                >
+                  <option value="">Select a role...</option>
+                  {adminRoles.map((r) => (
+                    <option key={r.id} value={r.id}>{r.name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
 
             <div>
               <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2">Initial Password *</Label>

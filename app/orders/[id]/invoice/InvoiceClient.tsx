@@ -5,10 +5,12 @@ import { useParams } from "next/navigation"
 import { Loader2 } from "lucide-react"
 import { useCurrency } from "@/providers/CurrencyProvider"
 import PrintInvoiceButton from "@/components/PrintInvoiceButton"
+import { taxLineLabel } from "@/lib/tax"
 
 type CustomMeasurement = {
   templateName?: string
   values?: { key: string; label: string; value: number; unit: string }[]
+  feeBreakdown?: { label: string; amount: number }[]
 }
 
 type OrderItem = {
@@ -32,6 +34,9 @@ type Order = {
   id: string
   totalAmount: number
   shippingFee: number
+  taxAmount?: number | null
+  taxRate?: number | null
+  taxLabel?: string | null
   pointsRedeemed: number
   status: string
   paymentStatus: string
@@ -113,7 +118,16 @@ export default function InvoiceClient({ id }: { id: string }) {
   const subtotal = order.items.reduce((sum, item) => sum + item.price * item.quantity, 0)
   const shippingFee = order.shippingFee ?? 0
   const pointsDiscount = order.pointsRedeemed ?? 0
-  const tax = Math.max(0, order.totalAmount - subtotal - shippingFee + pointsDiscount)
+  // Orders placed before tax was stored per-region carry taxAmount 0, so fall
+  // back to deriving it from the total the way this invoice always did.
+  const storedTax = Number(order.taxAmount) || 0
+  const tax = storedTax > 0
+    ? storedTax
+    : Math.max(0, order.totalAmount - subtotal - shippingFee + pointsDiscount)
+  const taxLabelText =
+    storedTax > 0 && Number(order.taxRate) > 0
+      ? taxLineLabel(Number(order.taxRate), order.taxLabel || "Tax")
+      : "Tax"
 
   return (
     <>
@@ -203,6 +217,15 @@ export default function InvoiceClient({ id }: { id: string }) {
                         {(item.customFee ?? 0) > 0 && (
                           <div style={{ fontSize: 10, color: "#666", marginBottom: 4 }}>
                             Custom fee: +{formatPrice(item.customFee ?? 0)}/item
+                            {(measurements?.feeBreakdown?.length ?? 0) > 1 && (
+                              <span>
+                                {" ("}
+                                {measurements!.feeBreakdown!
+                                  .map(line => `${line.label} +${formatPrice(line.amount)}`)
+                                  .join(", ")}
+                                {")"}
+                              </span>
+                            )}
                           </div>
                         )}
                         {measurements?.values && measurements.values.length > 0 && (
@@ -241,7 +264,7 @@ export default function InvoiceClient({ id }: { id: string }) {
             )}
             {tax > 0 && (
               <tr>
-                <td colSpan={4} style={{ padding: "8px 12px", textAlign: "right", fontSize: 13, color: "#555" }}>Tax (5%)</td>
+                <td colSpan={4} style={{ padding: "8px 12px", textAlign: "right", fontSize: 13, color: "#555" }}>{taxLabelText}</td>
                 <td style={{ padding: "8px 12px", textAlign: "right", fontSize: 13, color: "#555" }}>{formatPrice(tax)}</td>
               </tr>
             )}

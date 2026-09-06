@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from "react"
 import api from "@/lib/axios"
-import { Plus, Layers, Check, Images } from "lucide-react"
+import { Plus, Layers, Check, Images, X } from "lucide-react"
 import Swal from "sweetalert2";
 import { swatchStyle, type SwatchColor } from "@/lib/colorStyle"
 import { stagePendingFile, releasePendingUrl } from "@/lib/pendingUploads"
@@ -22,6 +22,11 @@ type Props = {
   onAdd: (variants: Variant[]) => void
   /** Rows already on the form: used to skip duplicates and reuse that colour's photos. */
   existing?: Variant[]
+  /**
+   * Seeds the SKU Prefix — the product code from the parent form. The field
+   * tracks it until the merchant types their own prefix, then stops following.
+   */
+  defaultPrefix?: string
 }
 
 type DBSize = {
@@ -42,6 +47,12 @@ type DBLength = {
   value: string
 }
 
+type SizePackage = {
+  id: string
+  name: string
+  sizes: { id: string; name: string; value: string }[]
+}
+
 /** `Navy Blue` + `2XL` → `NAVY-BLUE-2XL`, safe for a SKU segment. */
 function skuPart(input: string) {
   return input
@@ -51,18 +62,128 @@ function skuPart(input: string) {
     .replace(/^-+|-+$/g, "")
 }
 
-export default function VariantForm({ onAdd, existing = [] }: Props) {
+/**
+ * The SKU is built as `PREFIX` + `SEPARATOR` + a fixed-width block. The block is
+ * the chosen segments glued together (no inner separator) then left-padded with
+ * `0` to `padWidth` chars — so every code lines up on the right:
+ *
+ *   TW-TLO-5001 + "-" + pad("ST", 7)   →  TW-TLO-5001-00000ST
+ *   TW-TLO-5001 + "-" + pad("2XLT", 7) →  TW-TLO-5001-0002XLT
+ *
+ * The merchant arranges which segments go in the block and in what order.
+ */
+type SkuSegment = "size" | "length" | "color"
+const SKU_SEGMENTS: SkuSegment[] = ["size", "length", "color"]
+const SEGMENT_LABEL: Record<SkuSegment, string> = {
+  size: "Size",
+  length: "Length",
+  color: "Color",
+}
+
+type SkuFormat = {
+  segments: SkuSegment[]
+  separator: string
+  padWidth: number
+}
+const DEFAULT_SKU_FORMAT: SkuFormat = {
+  segments: ["size", "length"],
+  separator: "-",
+  padWidth: 7,
+}
+const SKU_FORMAT_KEY = "ag_sku_format"
+
+/** Last format the merchant used, so it carries over to the next product. */
+function loadSkuFormat(): SkuFormat {
+  try {
+    const raw = localStorage.getItem(SKU_FORMAT_KEY)
+    if (!raw) return DEFAULT_SKU_FORMAT
+    const parsed = JSON.parse(raw)
+    // Tolerate the older shape (a bare segments array).
+    const src = Array.isArray(parsed) ? { segments: parsed } : parsed
+    const segments = Array.isArray(src?.segments)
+      ? src.segments.filter((s: unknown): s is SkuSegment => SKU_SEGMENTS.includes(s as SkuSegment))
+      : DEFAULT_SKU_FORMAT.segments
+    return {
+      segments: new Set(segments).size === segments.length ? segments : DEFAULT_SKU_FORMAT.segments,
+      separator: typeof src?.separator === "string" ? src.separator.slice(0, 3) : DEFAULT_SKU_FORMAT.separator,
+      padWidth:
+        Number.isFinite(src?.padWidth) && src.padWidth >= 0 && src.padWidth <= 20
+          ? Math.floor(src.padWidth)
+          : DEFAULT_SKU_FORMAT.padWidth,
+    }
+  } catch {
+    /* fall through to default */
+  }
+  return DEFAULT_SKU_FORMAT
+}
+
+export default function VariantForm({ onAdd, existing = [], defaultPrefix = "" }: Props) {
   const [color, setColor] = useState("")
   const [sizes, setSizes] = useState<string[]>([])
   const [lengths, setLengths] = useState<string[]>([])
   const [stockMap, setStockMap] = useState<Record<string, number>>({})
   const [defaultStock, setDefaultStock] = useState(0)
-  const [skuPrefix, setSkuPrefix] = useState("")
+  const [skuPrefix, setSkuPrefix] = useState(defaultPrefix)
+  // Until the merchant edits the prefix themselves, it mirrors the product code.
+  const [prefixTouched, setPrefixTouched] = useState(false)
+  const [skuFormat, setSkuFormat] = useState<SkuFormat>(DEFAULT_SKU_FORMAT)
   const [images, setImages] = useState<string[]>([])
+
+  const skuSegments = skuFormat.segments
+
+  useEffect(() => {
+    if (!prefixTouched) setSkuPrefix(defaultPrefix)
+  }, [defaultPrefix, prefixTouched])
+
+  // Read the saved format on the client only — keeps SSR output stable.
+  useEffect(() => {
+    setSkuFormat(loadSkuFormat())
+  }, [])
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(SKU_FORMAT_KEY, JSON.stringify(skuFormat))
+    } catch {
+      /* ignore — the format just won't persist */
+    }
+  }, [skuFormat])
+
+  function addSkuSegment(seg: SkuSegment) {
+    setSkuFormat((f) =>
+      f.segments.includes(seg) ? f : { ...f, segments: [...f.segments, seg] }
+    )
+  }
+
+  function removeSkuSegment(seg: SkuSegment) {
+    setSkuFormat((f) => ({ ...f, segments: f.segments.filter((s) => s !== seg) }))
+  }
+
+  function moveSkuSegment(index: number, dir: -1 | 1) {
+    setSkuFormat((f) => {
+      const target = index + dir
+      if (target < 0 || target >= f.segments.length) return f
+      const next = [...f.segments]
+      ;[next[index], next[target]] = [next[target], next[index]]
+      return { ...f, segments: next }
+    })
+  }
+
+  /** `["size","length"]` + row values → `"00000ST"` (padded to `padWidth`). */
+  function buildSkuBlock(size: string, length?: string) {
+    const value: Record<SkuSegment, string> = {
+      size: skuPart(size),
+      length: length ? skuPart(length) : "",
+      color: skuPart(color),
+    }
+    const core = skuSegments.map((s) => value[s]).join("")
+    return core.padStart(skuFormat.padWidth, "0")
+  }
 
   const [dbSizes, setDbSizes] = useState<DBSize[]>([])
   const [dbColors, setDbColors] = useState<DBColor[]>([])
   const [dbLengths, setDbLengths] = useState<DBLength[]>([])
+  const [sizePackages, setSizePackages] = useState<SizePackage[]>([])
+  const [packageId, setPackageId] = useState("")
 
   useEffect(() => {
     async function loadOptions() {
@@ -73,6 +194,8 @@ export default function VariantForm({ onAdd, existing = [] }: Props) {
         setDbColors(colorsRes.data)
         const lengthsRes = await api.get("/admin/lengths")
         setDbLengths(lengthsRes.data)
+        const packagesRes = await api.get("/admin/size-packages")
+        setSizePackages(packagesRes.data)
       } catch (error) {
         console.log("Error loading variants options:", error)
       }
@@ -98,6 +221,31 @@ export default function VariantForm({ onAdd, existing = [] }: Props) {
     () => new Set(existing.filter((v) => v.color === color).map((v) => v.size)),
     [existing, color]
   )
+
+  // Sizes offered as buttons: the whole list, or just the chosen package's.
+  const activePackage = sizePackages.find((p) => p.id === packageId)
+  const visibleSizes = activePackage
+    ? dbSizes.filter((s) => activePackage.sizes.some((ps) => ps.value === s.value))
+    : dbSizes
+
+  /**
+   * Pick a package → its sizes become the shortlist and all of them start
+   * selected. The merchant then unticks the ones this product doesn't come in.
+   */
+  function handlePackageChange(id: string) {
+    setPackageId(id)
+    const pkg = sizePackages.find((p) => p.id === id)
+    if (!pkg) return
+    const values = dbSizes
+      .filter((s) => pkg.sizes.some((ps) => ps.value === s.value) && !takenSizes.has(s.value))
+      .map((s) => s.value)
+    setSizes(values)
+    setStockMap((m) => {
+      const next = { ...m }
+      values.forEach((v) => (next[v] = next[v] ?? defaultStock))
+      return next
+    })
+  }
 
   // Picking a colour pulls in the photos already attached to that colour, so the
   // second batch of sizes never needs the same upload again.
@@ -145,6 +293,13 @@ export default function VariantForm({ onAdd, existing = [] }: Props) {
     return rows
   }, [sizes, lengths, takenKeys])
 
+  /** Live sample of the SKU the current format + selections would produce. */
+  const skuPreview = useMemo(() => {
+    const prefix = skuPart(skuPrefix) || "PREFIX"
+    return prefix + skuFormat.separator + buildSkuBlock(sizes[0] || "M", lengths[0])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [skuPrefix, sizes, lengths, color, skuFormat])
+
   function handleAdd() {
     if (!color) {
       Swal.fire({ text: "Please select a color first.", confirmButtonColor: "#18181b" })
@@ -163,12 +318,11 @@ export default function VariantForm({ onAdd, existing = [] }: Props) {
     const prefix = skuPart(skuPrefix) || `SKU-${Date.now().toString(36).toUpperCase()}`
 
     const generated: Variant[] = pendingRows.map(({ size, length }) => {
-      const parts = [prefix, skuPart(color), skuPart(size)]
-      if (length) parts.push(skuPart(length))
+      const base = prefix + skuFormat.separator + buildSkuBlock(size, length)
 
-      let sku = parts.join("-")
+      let sku = base
       let n = 2
-      while (usedSkus.has(sku)) sku = `${parts.join("-")}-${n++}`
+      while (usedSkus.has(sku)) sku = `${base}${skuFormat.separator}${n++}`
       usedSkus.add(sku)
 
       return {
@@ -188,7 +342,7 @@ export default function VariantForm({ onAdd, existing = [] }: Props) {
     setLengths([])
     setStockMap({})
     setDefaultStock(0)
-    setSkuPrefix("")
+    // Prefix is product-level, not per-batch — leave it for the next colour.
     setImages([])
   }
 
@@ -260,8 +414,25 @@ export default function VariantForm({ onAdd, existing = [] }: Props) {
         <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-1">
           2. Sizes {sizes.length > 0 && <span className="text-primary">· {sizes.length} selected</span>}
         </label>
+
+        {/* Optional shortlist: pick a package to narrow 35 sizes down to a set. */}
+        {sizePackages.length > 0 && (
+          <select
+            value={packageId}
+            onChange={(e) => handlePackageChange(e.target.value)}
+            className="mb-2 w-full sm:max-w-xs border border-zinc-200 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary bg-white text-xs font-semibold transition"
+          >
+            <option value="">All sizes ({dbSizes.length})</option>
+            {sizePackages.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name} ({p.sizes.length})
+              </option>
+            ))}
+          </select>
+        )}
+
         <div className="flex flex-wrap gap-1.5">
-          {dbSizes.map((s) => {
+          {visibleSizes.map((s) => {
             const selected = sizes.includes(s.value)
             const alreadyAdded = takenSizes.has(s.value)
             return (
@@ -283,17 +454,17 @@ export default function VariantForm({ onAdd, existing = [] }: Props) {
               </button>
             )
           })}
-          {dbSizes.length > 0 && (
+          {visibleSizes.length > 0 && (
             <button
               type="button"
-              onClick={() =>
-                setSizes(
-                  sizes.length === dbSizes.length ? [] : dbSizes.map((s) => s.value)
-                )
-              }
+              onClick={() => {
+                const values = visibleSizes.map((s) => s.value)
+                const allOn = values.every((v) => sizes.includes(v))
+                setSizes(allOn ? sizes.filter((v) => !values.includes(v)) : Array.from(new Set([...sizes, ...values])))
+              }}
               className="px-3 py-1.5 rounded-xl border border-dashed border-zinc-300 text-xs font-bold text-zinc-500 hover:text-zinc-800 hover:border-zinc-400 transition cursor-pointer"
             >
-              {sizes.length === dbSizes.length ? "Clear" : "Select all"}
+              {visibleSizes.every((s) => sizes.includes(s.value)) ? "Clear" : "Select all"}
             </button>
           )}
         </div>
@@ -349,11 +520,109 @@ export default function VariantForm({ onAdd, existing = [] }: Props) {
           <input
             type="text"
             value={skuPrefix}
-            onChange={(e) => setSkuPrefix(e.target.value)}
-            placeholder="e.g. TSH  →  TSH-RED-XL"
+            onChange={(e) => {
+              setPrefixTouched(true)
+              setSkuPrefix(e.target.value)
+            }}
+            placeholder="e.g. TSH"
             className="w-full border border-zinc-200 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition bg-white text-xs font-semibold uppercase placeholder:normal-case placeholder:text-zinc-400"
           />
         </div>
+      </div>
+
+      {/* SKU FORMAT — PREFIX + SEPARATOR + a right-aligned block of the chosen
+          segments, zero-padded to a fixed width. Saved to localStorage so it
+          carries to the next product. */}
+      <div>
+        <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-1">
+          SKU Format
+        </label>
+
+        <div className="flex flex-wrap items-center gap-1.5 bg-white border border-zinc-200 rounded-xl p-2">
+          <span className="px-2.5 py-1 rounded-lg bg-zinc-900 text-white text-[10px] font-bold uppercase tracking-wide">
+            Prefix
+          </span>
+
+          {/* SEPARATOR between prefix and the padded block */}
+          <input
+            type="text"
+            value={skuFormat.separator}
+            maxLength={3}
+            onChange={(e) => setSkuFormat((f) => ({ ...f, separator: e.target.value }))}
+            title="Separator after the prefix"
+            className="w-10 text-center border border-zinc-200 rounded-lg px-1 py-1 text-[11px] font-mono font-bold text-zinc-700 focus:outline-none focus:ring-1 focus:ring-primary"
+          />
+
+          {skuSegments.map((seg, i) => (
+            <span
+              key={seg}
+              className="flex items-center gap-1 px-1.5 py-1 rounded-lg bg-primary/10 border border-primary/30 text-primary text-[10px] font-bold uppercase tracking-wide"
+            >
+              <button
+                type="button"
+                onClick={() => moveSkuSegment(i, -1)}
+                disabled={i === 0}
+                title="Move earlier"
+                className="px-0.5 leading-none text-sm disabled:opacity-30 hover:text-primary/60 cursor-pointer disabled:cursor-not-allowed"
+              >
+                ‹
+              </button>
+              {SEGMENT_LABEL[seg]}
+              <button
+                type="button"
+                onClick={() => moveSkuSegment(i, 1)}
+                disabled={i === skuSegments.length - 1}
+                title="Move later"
+                className="px-0.5 leading-none text-sm disabled:opacity-30 hover:text-primary/60 cursor-pointer disabled:cursor-not-allowed"
+              >
+                ›
+              </button>
+              <button
+                type="button"
+                onClick={() => removeSkuSegment(seg)}
+                title="Remove from SKU"
+                className="ml-0.5 hover:text-red-500 cursor-pointer"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            </span>
+          ))}
+
+          {SKU_SEGMENTS.filter((s) => !skuSegments.includes(s)).map((seg) => (
+            <button
+              key={seg}
+              type="button"
+              onClick={() => addSkuSegment(seg)}
+              className="px-2 py-1 rounded-lg border border-dashed border-zinc-300 text-zinc-500 text-[10px] font-bold uppercase tracking-wide hover:border-primary/50 hover:text-primary transition cursor-pointer"
+            >
+              + {SEGMENT_LABEL[seg]}
+            </button>
+          ))}
+
+          {/* PAD WIDTH — the block (segments glued together) is left-padded with
+              0 up to this many chars, so codes line up on the right. */}
+          <label className="flex items-center gap-1 ml-auto text-[10px] font-bold text-zinc-500 uppercase tracking-wide">
+            Pad&nbsp;to
+            <input
+              type="number"
+              min={0}
+              max={20}
+              value={skuFormat.padWidth}
+              onChange={(e) =>
+                setSkuFormat((f) => ({
+                  ...f,
+                  padWidth: Math.max(0, Math.min(20, Math.floor(Number(e.target.value) || 0))),
+                }))
+              }
+              className="w-12 border border-zinc-200 rounded-lg px-1.5 py-1 text-[11px] font-bold text-zinc-700 focus:outline-none focus:ring-1 focus:ring-primary"
+            />
+          </label>
+        </div>
+
+        <p className="mt-1 text-[10px] text-zinc-500">
+          Preview:{" "}
+          <span className="font-mono font-bold text-zinc-800">{skuPreview}</span>
+        </p>
       </div>
 
       {/* PER-SIZE STOCK OVERRIDE */}

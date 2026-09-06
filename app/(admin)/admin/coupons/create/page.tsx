@@ -18,6 +18,8 @@ export default function CreateCouponPage() {
   const [code, setCode] = useState("")
   const [discount, setDiscount] = useState("")
   const [expiresAt, setExpiresAt] = useState("")
+  const [subscribersOnly, setSubscribersOnly] = useState(false)
+  const [firstOrderOnly, setFirstOrderOnly] = useState(false)
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -34,7 +36,9 @@ export default function CreateCouponPage() {
         code,
         discount: parseFloat(discount),
         expiresAt: expiresAt ? new Date(expiresAt).toISOString() : null,
-        active: true
+        active: true,
+        subscribersOnly,
+        firstOrderOnly
       })
 
       router.push("/admin/coupons")
@@ -133,6 +137,40 @@ export default function CreateCouponPage() {
                 />
               </div>
               <p className="text-xs text-muted-foreground leading-relaxed">Leave empty to create a permanent discount code.</p>
+            </div>
+
+            <div className="space-y-2">
+              <label className="flex items-start gap-3 max-w-md cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={subscribersOnly}
+                  onChange={(e) => setSubscribersOnly(e.target.checked)}
+                  className="mt-0.5 size-4 accent-primary cursor-pointer"
+                />
+                <span>
+                  <span className="block text-sm font-medium text-foreground">Subscribers only</span>
+                  <span className="block text-xs text-muted-foreground leading-relaxed">
+                    Checkout will reject this code unless the order&apos;s email address is on the
+                    newsletter list. Use it for sign-up rewards so the code cannot be shared around.
+                  </span>
+                </span>
+              </label>
+
+              <label className="flex items-start gap-3 max-w-md cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={firstOrderOnly}
+                  onChange={(e) => setFirstOrderOnly(e.target.checked)}
+                  className="mt-0.5 size-4 accent-primary cursor-pointer"
+                />
+                <span>
+                  <span className="block text-sm font-medium text-foreground">First order only</span>
+                  <span className="block text-xs text-muted-foreground leading-relaxed">
+                    Rejected once the email address has any order that was not cancelled — guest
+                    checkouts included. Pair it with &quot;Subscribers only&quot; for a sign-up reward.
+                  </span>
+                </span>
+              </label>
             </div>
           </CardContent>
 

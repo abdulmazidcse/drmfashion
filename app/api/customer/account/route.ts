@@ -51,6 +51,13 @@ export async function GET(req: NextRequest) {
         paymentStatus: order.paymentStatus,
         shippingAddress: order.shippingAddress,
         shippingPhone: order.shippingPhone,
+        shippingCarrier: order.shippingCarrier,
+        shippingMethod: order.shippingMethod,
+        trackingNumber: order.trackingNumber,
+        trackingUrl: order.trackingUrl,
+        estimatedDeliveryAt: order.estimatedDeliveryAt,
+        shippedAt: order.shippedAt,
+        deliveredAt: order.deliveredAt,
         currencyCode: order.currencyCode,
         currencySymbol: order.currencySymbol,
         exchangeRate: order.exchangeRate,
@@ -122,5 +129,86 @@ export async function POST(req: NextRequest) {
   } catch (error: any) {
     console.error("[CUSTOMER_ACCOUNT_POST_ERROR]", error)
     return NextResponse.json({ error: "Server error saving profile changes." }, { status: 500 })
+  }
+}
+
+/**
+ * Self-service account deletion.
+ *
+ * The row is kept and its personal details overwritten rather than deleted
+ * outright: orders, payments and return requests all reference this user, and
+ * the shop's own records have to survive. What goes is everything that
+ * identifies the person — name, email, phone, password, addresses, reviews,
+ * questions, wishlist and cart.
+ *
+ * The password is required so a leaked email alone cannot wipe an account.
+ */
+export async function DELETE(req: NextRequest) {
+  try {
+    const { email, password } = await req.json()
+
+    if (!email || !password) {
+      return NextResponse.json({ error: "Email and password are required." }, { status: 400 })
+    }
+
+    const user = await prisma.user.findUnique({ where: { email } })
+
+    if (!user || user.deletedAt) {
+      return NextResponse.json({ error: "Account not found." }, { status: 404 })
+    }
+
+    // Guest rows are created by checkout with a placeholder password and were
+    // never signed up for, so there is no account to delete.
+    if (!user.password || user.password.startsWith("GUEST_")) {
+      return NextResponse.json({ error: "This email has no registered account." }, { status: 400 })
+    }
+
+    const bcrypt = (await import("bcryptjs")).default
+    if (!(await bcrypt.compare(password, user.password))) {
+      return NextResponse.json({ error: "Incorrect password." }, { status: 401 })
+    }
+
+    // Admins have to be removed by another admin — self-deleting one could
+    // leave the dashboard unreachable.
+    if (user.role === "ADMIN") {
+      return NextResponse.json(
+        { error: "Admin accounts cannot be deleted here. Contact another administrator." },
+        { status: 403 }
+      )
+    }
+
+    // Unique constraint on email means the address has to be replaced, not
+    // blanked — freeing it also lets the person sign up again later.
+    const anonymisedEmail = `deleted-${user.id}@deleted.invalid`
+
+    await prisma.$transaction([
+      prisma.address.deleteMany({ where: { userId: user.id } }),
+      prisma.review.deleteMany({ where: { userId: user.id } }),
+      prisma.productQuestion.deleteMany({ where: { userId: user.id } }),
+      prisma.wishlist.deleteMany({ where: { userId: user.id } }),
+      prisma.cart.deleteMany({ where: { userId: user.id } }),
+      prisma.subscriber.deleteMany({ where: { email: { equals: email, mode: "insensitive" } } }),
+      prisma.user.update({
+        where: { id: user.id },
+        data: {
+          name: "Deleted user",
+          email: anonymisedEmail,
+          phone: null,
+          // Not a valid bcrypt hash, so no password can ever match it.
+          password: `DELETED_${Math.random().toString(36).slice(-12)}`,
+          isActive: false,
+          deletedAt: new Date(),
+          tokenVersion: { increment: 1 },
+          rewardPoints: 0,
+        },
+      }),
+    ])
+
+    const response = NextResponse.json({ success: true, message: "Your account has been deleted." })
+    response.cookies.delete("ag_customer_token")
+    return response
+  } catch (error: any) {
+    console.error("[CUSTOMER_ACCOUNT_DELETE_ERROR]", error)
+    return NextResponse.json({ error: "Server error deleting account." }, { status: 500 })
   }
 }

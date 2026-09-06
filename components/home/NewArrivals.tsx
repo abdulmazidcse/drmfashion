@@ -4,7 +4,6 @@ import React, { useState, useRef, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import ProductCard from "../ProductCard";
-import SectionHead from "./SectionHead";
 
 interface Variant {
   id: string;
@@ -80,22 +79,25 @@ export default function NewArrivals({ products }: NewArrivalsProps) {
   };
 
   const arrowBtn = (disabled: boolean) =>
-    `z-20 grid h-11 w-11 place-items-center rounded-full transition-all ${
+    `z-20 flex h-11 w-11 items-center justify-center rounded-full transition-all ${
       disabled
-        ? 'pointer-events-none border border-line bg-white/60 text-faint'
-        : 'cursor-pointer sg-card sg-raise text-foreground hover:bg-brand-600 hover:border-brand-600 hover:text-white'
+        ? "pointer-events-none bg-white/30 text-at-ink/35"
+        : "cursor-pointer border border-at-ink/15 bg-white text-at-ink hover:bg-at-ink hover:text-white"
     }`;
 
   if (visibleProducts.length === 0) return null;
 
   return (
-    <section className="w-full max-w-[1400px] mx-auto px-5 sm:px-7 py-10 lg:py-14">
-      <SectionHead
-        kicker="Just landed"
-        title="New arrivals"
-        lead="The freshest additions to the collection, added this week."
-        href="/shop?sort=newest"
-      />
+    <section className="w-full py-[15px] md:py-5">
+      <div className="mb-7 flex flex-col items-start gap-3 px-6 sm:flex-row sm:items-end sm:justify-between lg:px-8">
+        <div>
+          <h2 className="at-heading text-at-subheading text-at-ink text-left">New Arrivals</h2>
+          <p className="text-zinc-550 text-sm mt-1 font-light">The freshest additions to our collection — just landed.</p>
+        </div>
+        <Link href="/shop?sort=newest" className="text-xs font-bold tracking-widest uppercase text-zinc-950 hover:text-zinc-600 transition-colors flex items-center gap-1 group shrink-0">
+          View All <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+        </Link>
+      </div>
 
       <div className="relative">
         <button
@@ -103,7 +105,7 @@ export default function NewArrivals({ products }: NewArrivalsProps) {
           aria-label="Previous"
           onClick={() => handleScroll("left")}
           disabled={isMounted ? !canLeft : false}
-          className={`absolute -left-3 top-[38%] -translate-y-1/2 ${arrowBtn(isMounted ? !canLeft : false)}`}
+          className={`absolute left-2 top-1/2 -translate-y-1/2 ${arrowBtn(isMounted ? !canLeft : false)}`}
         >
           <ChevronLeft className="h-5 w-5" />
         </button>
@@ -112,20 +114,20 @@ export default function NewArrivals({ products }: NewArrivalsProps) {
           aria-label="Next"
           onClick={() => handleScroll("right")}
           disabled={isMounted ? !canRight : false}
-          className={`absolute -right-3 top-[38%] -translate-y-1/2 ${arrowBtn(isMounted ? !canRight : false)}`}
+          className={`absolute right-2 top-1/2 -translate-y-1/2 ${arrowBtn(isMounted ? !canRight : false)}`}
         >
           <ChevronRight className="h-5 w-5" />
         </button>
 
         <div
           ref={scrollRef}
-          className="no-scrollbar flex snap-x snap-mandatory gap-4 overflow-x-auto scroll-smooth pb-2"
+          className="no-scrollbar flex snap-x snap-mandatory gap-[5px] overflow-x-auto scroll-smooth"
           style={{ scrollbarWidth: "none" }}
         >
           {visibleProducts.map((product, i) => (
             <div
               key={product.id}
-              className="at-card-up shrink-0 snap-start min-w-[calc((100%-16px)/2.15)] md:min-w-[calc((100%-48px)/4)]"
+              className="at-card-up shrink-0 snap-start w-[calc((100%-11.25px)/2.25)] md:w-[calc((100%-21.25px)/4.25)]"
               style={{ animationDelay: `${i * 60}ms` }}
             >
               <ProductCard product={product} idPrefix="new-arrival" />

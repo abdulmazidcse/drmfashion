@@ -5,7 +5,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   try {
     const { id } = await params;
     const body = await req.json()
-    const { active, code, type, discount, minOrderAmount, maxUses, expiresAt } = body
+    const { active, code, type, discount, minOrderAmount, maxUses, expiresAt, subscribersOnly, firstOrderOnly } = body
 
     const updated = await prisma.coupon.update({
       where: { id },
@@ -17,6 +17,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         ...(minOrderAmount !== undefined && { minOrderAmount }),
         ...(maxUses !== undefined && { maxUses }),
         ...(expiresAt !== undefined && { expiresAt: expiresAt ? new Date(expiresAt) : null }),
+        // Editable after creation — a code issued before these rules existed
+        // would otherwise have to be deleted and made again.
+        ...(subscribersOnly !== undefined && { subscribersOnly: subscribersOnly === true }),
+        ...(firstOrderOnly !== undefined && { firstOrderOnly: firstOrderOnly === true }),
       }
     })
 

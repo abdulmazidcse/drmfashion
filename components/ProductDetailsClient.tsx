@@ -1,21 +1,28 @@
 "use client";
 
-import React, { useState } from "react";
-import { Star, ChevronLeft, ChevronRight, Plus, Minus, Heart, Check, ShoppingBag, X, ChevronDown } from "lucide-react";
+import React, { useState, useMemo, useRef, useEffect } from "react";
+import { Star, ChevronLeft, ChevronRight, Plus, Minus, Heart, Check, ShoppingBag, X, ChevronDown, Maximize2, Truck, RotateCcw, ShieldCheck } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
+import { hasVariant, firstAvailableSize, sortLengths, sortSizes } from "@/lib/variants";
+import MeasureFigure, { type FigureGender } from "@/components/MeasureFigure";
 import { useCurrency } from "@/providers/CurrencyProvider";
-import { addToCart } from "@/lib/cart";
+import { addToCart, getCart } from "@/lib/cart";
 import { toggleWishlist, isInWishlist } from "@/lib/wishlist";
 import { useSettings } from "@/providers/SettingsProvider";
+import { parseHeightsGuide, HEIGHTS_GUIDE_SETTING_KEY } from "@/lib/heightsGuide";
 import ProductCard from "./ProductCard";
 import Footer from "./Footer";
-import RecentlyViewed from "./RecentlyViewed";
-import ProductQA from "./ProductQA";
 import CustomMeasurementForm, { type CustomMeasurementState } from "./CustomMeasurementForm";
 import { resolveSurcharge } from "@/lib/measurement";
-import { swatchStyle, type SwatchColor } from "@/lib/colorStyle";
+import { guidePoints, resolveHowToMeasure, resolveSizeChart, tableInUnit, type MeasurePoint, resolveHowToMeasureImage } from "@/lib/sizeChart";
+import { chartPoints, POINT_LABELS, recommendLength, recommendSize, type BodyMeasurements } from "@/lib/sizeRecommend";
+import { swatchStyle, isLightColor, relativeLuminance, DEFAULT_ANGLE, type SwatchColor } from "@/lib/colorStyle";
+import { getCachedTint, sampleImageTint } from "@/lib/imageTint";
+import { trackViewItem } from "@/lib/analytics";
+import { formatImageUrl, stripScriptTags } from "@/lib/utils";
+import { productImageAlt, productImageCaption, readVariantImages } from "@/lib/imageMeta";
 import Swal from "@/lib/swal";
 
 interface Variant {
@@ -34,6 +41,10 @@ interface ProductImage {
   id: string;
   url: string;
   color: string | null;
+  /** Admin-written alt; blank falls back to a generated one — lib/imageMeta.ts. */
+  alt?: string | null;
+  /** Optional caption rendered under the shot. */
+  caption?: string | null;
 }
 
 interface Product {
@@ -42,13 +53,32 @@ interface Product {
   slug: string;
   /** Present on the main product; related products are fetched card-shaped. */
   description?: string;
+  /** Doubles as the one-line summary above the accordions — it is already
+   *  written to be exactly that sentence, so there is no second field to keep
+   *  in step. The page query uses `include`, so it is always present here. */
+  metaDescription?: string | null;
   thumbnail: string;
   sizeChart?: string | null;
   basePrice: number;
   discountPrice: number | null;
   featured: boolean;
   brand?: { name: string } | null;
-  category?: { name: string; slug: string } | null;
+  category?: {
+    name: string;
+    slug: string;
+    // Only the measuring guide inherits up the chain now; the chart itself is
+    // named on the product.
+    howToMeasure?: string | null;
+    howToMeasureImage?: string | null;
+    parent?: {
+      name: string;
+      howToMeasure?: string | null;
+      howToMeasureImage?: string | null;
+      parent?: { name: string; howToMeasure?: string | null; howToMeasureImage?: string | null } | null;
+    } | null;
+  } | null;
+  /** The named chart this product shows, or null when it shows none. */
+  sizeChart?: { name: string; table: unknown } | null;
   variants: Variant[];
   images?: ProductImage[];
   flashSaleEndDate?: string | Date | null;
@@ -73,6 +103,13 @@ interface Product {
       step: number;
       helpText: string | null;
       placeholder: string | null;
+      tiers?: {
+        minValue: number;
+        maxValue: number;
+        surchargeType: "FLAT" | "PERCENT";
+        surchargeValue: number;
+        position: number;
+      }[];
     }[];
   } | null;
 }
@@ -87,8 +124,50 @@ interface ProductDetailsClientProps {
   product: Product;
   categories: Category[];
   relatedProducts: Product[];
+  /** Curated in Admin → the "Model is also wearing" cross-sell. Null hides it. */
+  modelWearsProduct?: Product | null;
   dbColors?: ({ name: string } & SwatchColor)[];
 }
+
+/**
+ * Which body the size-guide figure draws. Anything under the Women tree gets
+ * the women's outline; everything else (Men, unisex, accessories) the men's.
+ */
+function figureGenderFor(product: Product): FigureGender {
+  const names = [
+    product.category?.name,
+    product.category?.slug,
+    product.category?.parent?.name,
+    product.category?.parent?.parent?.name,
+  ];
+  return names.some((n) => /women|ladies|female/i.test(n || "")) ? "women" : "men";
+}
+
+/** What the built-in guide below covers, in the order it lists them. */
+const BUILT_IN_POINTS: Record<FigureGender, MeasurePoint[]> = {
+  // Same order as the numbers printed on the reference illustrations.
+  men: ["sleeve", "chest", "neck", "waist", "hips", "inseam"],
+  women: ["chest", "sleeve", "waist", "hips", "inseam"],
+};
+
+/** The default measuring steps, used when no category has written its own. */
+const BUILT_IN_GUIDE: Record<FigureGender, { title: string; text: string }[]> = {
+  men: [
+    { title: "Sleeve Length", text: "Measure from the center back of the neck at your collar seam, along the top of your shoulder, and down to your wrist." },
+    { title: "Chest", text: "Measure around the fullest part of your chest, keeping the tape horizontal under your arms and flat across the back." },
+    { title: "Neck", text: "Measure around your neck at Adam's apple height, keeping some slack in the tape for comfortable breathing." },
+    { title: "Waist", text: "Measure around your natural waistline (where you normally wear your pants), keeping some slack in the measuring tape." },
+    { title: "Hips", text: "Measure around the fullest part of your hips/seat, keeping the tape horizontal all the way around." },
+    { title: "Inseam", text: "Measure from the inner crotch seam straight down along the inside of your leg to the bottom of the ankle bone." },
+  ],
+  women: [
+    { title: "Bust", text: "Measure around the fullest part of your bust, keeping the tape horizontal under your arms and flat across the back." },
+    { title: "Sleeve Length", text: "Measure from the center back of the neck at your collar seam, along the top of your shoulder, and down to your wrist." },
+    { title: "Waist", text: "Measure around the narrowest part of your natural waistline, keeping some slack in the measuring tape." },
+    { title: "Hips", text: "Measure around the fullest part of your hips, keeping the tape horizontal all the way around." },
+    { title: "Inseam", text: "Measure from the inner crotch seam straight down along the inside of your leg to the bottom of the ankle bone." },
+  ],
+};
 
 // Swatch colors map for dynamic UI circles
 const COLOR_HEX_MAP: Record<string, string> = {
@@ -173,50 +252,202 @@ const MannequinSVG = ({ scanZone }: { scanZone: number }) => {
 
       {scanZone === 1 && (
         <>
-          <ellipse cx="85" cy="290" rx="16" ry="4" fill="none" stroke="#1BA9B6" strokeWidth="2.5" filter="url(#glow)" className="animate-pulse" />
-          <ellipse cx="115" cy="290" rx="16" ry="4" fill="none" stroke="#1BA9B6" strokeWidth="2.5" filter="url(#glow)" className="animate-pulse" />
-          <ellipse cx="85" cy="290" rx="16" ry="4" fill="none" stroke="#A0EDF1" strokeWidth="1" />
-          <ellipse cx="115" cy="290" rx="16" ry="4" fill="none" stroke="#A0EDF1" strokeWidth="1" />
+          <ellipse cx="85" cy="290" rx="16" ry="4" fill="none" stroke="#6366F1" strokeWidth="2.5" filter="url(#glow)" className="animate-pulse" />
+          <ellipse cx="115" cy="290" rx="16" ry="4" fill="none" stroke="#6366F1" strokeWidth="2.5" filter="url(#glow)" className="animate-pulse" />
+          <ellipse cx="85" cy="290" rx="16" ry="4" fill="none" stroke="#A5B4FC" strokeWidth="1" />
+          <ellipse cx="115" cy="290" rx="16" ry="4" fill="none" stroke="#A5B4FC" strokeWidth="1" />
         </>
       )}
 
       {scanZone === 2 && (
         <>
-          <ellipse cx="100" cy="180" rx="36" ry="7" fill="none" stroke="#1BA9B6" strokeWidth="2.5" filter="url(#glow)" className="animate-pulse" />
-          <ellipse cx="100" cy="180" rx="36" ry="7" fill="none" stroke="#A0EDF1" strokeWidth="1" />
+          <ellipse cx="100" cy="180" rx="36" ry="7" fill="none" stroke="#6366F1" strokeWidth="2.5" filter="url(#glow)" className="animate-pulse" />
+          <ellipse cx="100" cy="180" rx="36" ry="7" fill="none" stroke="#A5B4FC" strokeWidth="1" />
         </>
       )}
 
       {scanZone === 3 && (
         <>
-          <ellipse cx="100" cy="110" rx="38" ry="8" fill="none" stroke="#1BA9B6" strokeWidth="2.5" filter="url(#glow)" className="animate-pulse" />
-          <ellipse cx="100" cy="110" rx="38" ry="8" fill="none" stroke="#A0EDF1" strokeWidth="1" />
+          <ellipse cx="100" cy="110" rx="38" ry="8" fill="none" stroke="#6366F1" strokeWidth="2.5" filter="url(#glow)" className="animate-pulse" />
+          <ellipse cx="100" cy="110" rx="38" ry="8" fill="none" stroke="#A5B4FC" strokeWidth="1" />
         </>
       )}
 
       {scanZone === 4 && (
         <>
-          <ellipse cx="100" cy="68" rx="18" ry="4" fill="none" stroke="#1BA9B6" strokeWidth="2.5" filter="url(#glow)" className="animate-pulse" />
-          <ellipse cx="100" cy="68" rx="18" ry="4" fill="none" stroke="#A0EDF1" strokeWidth="1" />
+          <ellipse cx="100" cy="68" rx="18" ry="4" fill="none" stroke="#6366F1" strokeWidth="2.5" filter="url(#glow)" className="animate-pulse" />
+          <ellipse cx="100" cy="68" rx="18" ry="4" fill="none" stroke="#A5B4FC" strokeWidth="1" />
         </>
       )}
     </svg>
   );
 };
 
-export default function ProductDetailsClient({ product, categories, relatedProducts, dbColors = [] }: ProductDetailsClientProps) {
+/**
+ * The type ramp this page is drawn on, ported one-for-one from the reference
+ * storefront so the whole buy box reads as one voice: a 12px uppercase legend
+ * over every control, 13px semibold for anything you read, 18px bold for prices
+ * and accordion headers, 24px for the two headlines. Defined once here because
+ * roughly forty elements below share four sizes between them, and a size that
+ * drifts on one of them is the thing that makes a page look assembled rather
+ * than designed.
+ */
+const AT_TITLE = "text-[12px] font-normal uppercase leading-[14px] tracking-[0.05em]";
+const AT_LABEL = "text-[13px] font-semibold leading-5 tracking-[0.02em]";
+const AT_BASE_LARGE = "text-[18px] font-bold leading-[18px] tracking-[0.02em]";
+const AT_SUBHEAD =
+  "text-[16px] font-semibold leading-[22px] tracking-[0.01em] sm:text-[24px] sm:leading-[28px]";
+/** Admin-written HTML inside the accordions, held to the same 13px body size.
+ *  `product-prose` (app/globals.css) carries the actual p/ul/ol/li/heading/a
+ *  rules — @tailwindcss/typography isn't installed, so `prose-*:` variants
+ *  compile to nothing and were silently no-ops. */
+const AT_PROSE =
+  "product-prose text-[13px] font-normal leading-5 tracking-[0.02em] text-[var(--pk-muted)]";
+
+/**
+ * First column hugs the left edge, last hugs the right, everything between is
+ * centred — the alignment the fixed three-column heights table used, generalised
+ * to whatever width an admin builds. With a single column the left rule wins.
+ */
+function headingCellAlign(index: number, total: number): string {
+  if (index === 0) return "text-left pl-6"
+  if (index === total - 1) return "text-right pr-6"
+  return "text-center"
+}
+
+/**
+ * Column spans for the media wall, over a six-column grid.
+ *
+ * The rhythm is the point: the first shots run two-up at half width, and once
+ * there are enough images the tail drops to three-up. A uniform grid of eight
+ * identical tiles reads as a contact sheet; changing the beat partway down
+ * makes the same photographs read as a laid-out page.
+ *
+ * Every row is filled exactly — a trailing image is widened rather than left
+ * beside a hole, which is the thing that makes an otherwise tidy grid look
+ * broken.
+ */
+function mediaWallSpans(total: number): number[] {
+  if (total <= 0) return [];
+  if (total <= 4) {
+    // A lone trailing shot takes the full width instead of half a row.
+    return Array.from({ length: total }, (_, i) =>
+      total % 2 !== 0 && i === total - 1 ? 6 : 3
+    );
+  }
+
+  const spans: number[] = [];
+  let placed = 0;
+  while (placed < total) {
+    const left = total - placed;
+    let row: number[];
+    if (left === 1) row = [6];
+    else if (left === 2) row = [3, 3];
+    // The opening two rows stay large whatever the total — those are the shots
+    // the visitor actually looks at.
+    else if (placed < 4 && left >= 4) row = [3, 3];
+    else if (left % 3 === 0) row = [2, 2, 2];
+    // 4 and 5 both leave a fillable remainder after one more pair.
+    else if (left === 4 || left === 5) row = [3, 3];
+    else row = [2, 2, 2];
+    spans.push(...row);
+    placed += row.length;
+  }
+  return spans;
+}
+
+/**
+ * The visitor's own recently-viewed list, as the "Recently Viewed" tab needs it.
+ *
+ * Read through useSyncExternalStore rather than an effect so the first paint
+ * matches what the server sent. getSnapshot has to return the *same* array
+ * between calls or React re-renders forever, so the parse is memoised against
+ * the raw string it came from — the list only changes on navigation, never
+ * while this page is open.
+ */
+let recentRaw: string | null = null;
+let recentParsed: any[] = [];
+
+function readRecentlyViewed(): any[] {
+  let raw: string | null = null;
+  try {
+    raw = window.localStorage.getItem("recently_viewed");
+  } catch {
+    return [];
+  }
+  if (raw !== recentRaw) {
+    recentRaw = raw;
+    try {
+      const parsed = raw ? JSON.parse(raw) : [];
+      recentParsed = Array.isArray(parsed) ? parsed : [];
+    } catch {
+      recentParsed = [];
+    }
+  }
+  return recentParsed;
+}
+
+/** Nothing to subscribe to: the list cannot change while this page is open. */
+const noopSubscribe = () => () => {};
+const NO_RECENT: any[] = [];
+
+export default function ProductDetailsClient({ product, categories, relatedProducts, modelWearsProduct = null, dbColors = [] }: ProductDetailsClientProps) {
   const { formatPrice } = useCurrency();
   const { storeName, settings } = useSettings();
+
+  // `shipping_free_threshold` is held in the store's base currency, like every
+  // other amount, so formatPrice converts it the same way the product price is
+  // converted. A blank or non-numeric value means "not configured".
+  const rawFreeShipping = Number(settings.shipping_free_threshold);
+  const freeShippingThreshold =
+    Number.isFinite(rawFreeShipping) && rawFreeShipping > 0 ? rawFreeShipping : null;
   const router = useRouter();
+  // Brand-level, identical on every product — edited in Settings → Branding.
+  const heightsGuide = useMemo(
+    () => parseHeightsGuide(settings[HEIGHTS_GUIDE_SETTING_KEY]),
+    [settings]
+  );
+  // Blank entries are dropped here rather than in parseHeightsGuide, so a
+  // half-filled row an admin left behind never reaches a shopper while still
+  // surviving a round trip through the settings form.
+  const heightsRows = heightsGuide.rows.filter((row) => row.some((cell) => cell.trim()));
+  const heightsModels = heightsGuide.models.filter((m) => m.image.trim());
   // Extract unique variants properties dynamically
   const uniqueColors = Array.from(new Set(product.variants.map(v => v.color))).filter(Boolean);
-  const uniqueSizes = Array.from(new Set(product.variants.map(v => v.size))).filter(Boolean);
-  const uniqueLengths = Array.from(new Set(product.variants.filter(v => v.length).map(v => v.length))) as string[];
+  const uniqueSizes = sortSizes(Array.from(new Set(product.variants.map(v => v.size))).filter(Boolean));
+  const uniqueLengths = sortLengths(Array.from(new Set(product.variants.filter(v => v.length).map(v => v.length))) as string[]);
 
   // Active selections
   const [selectedColor, setSelectedColor] = useState<string>(uniqueColors[0] || "Black");
   const [selectedSize, setSelectedSize] = useState<string>(uniqueSizes[0] || "M");
   const [selectedLength, setSelectedLength] = useState<string>(uniqueLengths[0] || "");
+
+  // ─── Which combinations actually exist ──────────────────────────────────────
+  // The three lists above are every value the product uses anywhere, which is
+  // right for *rendering* the options but wrong for deciding which are
+  // selectable: a shirt stocked in Semi Tall S but not Tall S was letting a
+  // shopper pick Tall + S and add a variant that does not exist.
+  //
+  // Each option is therefore checked against the other two current selections,
+  // and offered as disabled rather than hidden — a size vanishing as the
+  // shopper switches length reads as a glitch, a struck-through one reads as
+  // "not in this length".
+  const isSizeAvailable = (size: string) =>
+    hasVariant(product.variants, selectedColor, size, selectedLength);
+  const isLengthAvailable = (len: string) =>
+    hasVariant(product.variants, selectedColor, selectedSize, len);
+
+  // Changing colour or length can strip the current size out from under the
+  // shopper. Rather than leave an impossible pair selected, fall to the first
+  // size that does exist for what they just picked.
+  useEffect(() => {
+    if (uniqueSizes.length === 0) return;
+    if (hasVariant(product.variants, selectedColor, selectedSize, selectedLength)) return;
+
+    const fallback = firstAvailableSize(product.variants, uniqueSizes, selectedColor, selectedLength);
+    if (fallback) setSelectedSize(fallback);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedColor, selectedLength]);
   const [wishlisted, setWishlisted] = useState<boolean>(false);
   const [customMeasurement, setCustomMeasurement] = useState<CustomMeasurementState>({
     active: false,
@@ -224,6 +455,7 @@ export default function ProductDetailsClient({ product, categories, relatedProdu
     fee: 0,
     values: [],
     error: null,
+    feeBreakdown: [],
   });
   const [addedToBag, setAddedToBag] = useState<boolean>(false);
   const [reviews, setReviews] = useState<any[]>([]);
@@ -307,6 +539,41 @@ export default function ProductDetailsClient({ product, categories, relatedProdu
     return () => window.removeEventListener("wishlist-updated", handleUpdate);
   }, [product.id]);
   const [showSizeChart, setShowSizeChart] = useState<boolean>(false);
+  /** Index into `lightboxImages`, or null when the viewer is closed. */
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+  /** Which shot the scroller is currently sitting on, for the thumbnail rail. */
+  const [lightboxActive, setLightboxActive] = useState<number>(0);
+  const lightboxScrollRef = useRef<HTMLDivElement>(null);
+  const lightboxPaneRefs = useRef<Array<HTMLDivElement | null>>([]);
+
+  // ─── Gallery rail ──────────────────────────────────────────────────────────
+  // The media wall is a two-up grid on a desktop and a swipeable rail below it,
+  // which is one element with two layouts rather than two galleries. The index
+  // is only ever read on the narrow layout — the wide one does not scroll — so
+  // the handler being idle there costs nothing.
+  const galleryRef = useRef<HTMLDivElement>(null);
+  const [activeMedia, setActiveMedia] = useState(0);
+
+  /** Width of one slide plus the 4px gutter, measured rather than assumed. */
+  const gallerySlideStep = (el: HTMLDivElement): number => {
+    const first = el.firstElementChild as HTMLElement | null;
+    return first ? first.offsetWidth + 4 : el.clientWidth;
+  };
+
+  const handleGalleryScroll = () => {
+    const el = galleryRef.current;
+    if (!el) return;
+    setActiveMedia(Math.round(el.scrollLeft / gallerySlideStep(el)));
+  };
+
+  const scrollGalleryTo = (index: number) => {
+    const el = galleryRef.current;
+    if (!el) return;
+    el.scrollTo({ left: index * gallerySlideStep(el), behavior: "smooth" });
+  };
+
+  /** The reviews accordion, so the star rating beside the price can jump to it. */
+  const reviewsRef = useRef<HTMLDivElement>(null);
   const [activeSizeTab, setActiveSizeTab] = useState<"heights" | "size-chart" | "measure">("heights");
   const [sizeUnit, setSizeUnit] = useState<"inches" | "cm">("inches");
   const [wizardStep, setWizardStep] = useState<"heights-list" | "wizard-input" | "wizard-scanning" | "wizard-result">("heights-list");
@@ -322,8 +589,189 @@ export default function ProductDetailsClient({ product, categories, relatedProdu
   const [waistCm, setWaistCm] = useState<string>("86");
   const [age, setAge] = useState<string>("");
 
+  // Which measurements this garment's chart actually compares on — a shirt
+  // chart asks for chest and sleeve, trousers for waist and inseam, a bra for
+  // bust and underbust. Empty when the category has no chart.
+  const wizardPoints = React.useMemo(() => {
+    const table = resolveSizeChart(product).table;
+    // Height drives the length band, not a chart column, so it keeps its own box.
+    return table ? chartPoints(table).filter((p) => p !== "waist") : [];
+  }, [product]);
+
+  // Raw strings keyed by body point, in whichever unit the toggle is showing.
+  const [bodyInputs, setBodyInputs] = useState<Partial<Record<MeasurePoint, string>>>({});
+
+  // Everything the wizard knows about the shopper, in inches — the unit the
+  // chart comparison works in. Derived rather than stored so the imperial /
+  // metric toggle cannot leave the two halves disagreeing.
+  const wizardBody = React.useMemo(() => {
+    const heightInches = isMetric
+      ? (parseFloat(heightCm) || 188) / 2.54
+      : (parseFloat(heightFt) || 6) * 12 + (parseFloat(heightIn) || 2);
+
+    const waistInches = isMetric ? (parseFloat(waistCm) || 86) / 2.54 : parseFloat(waistIn) || 34;
+
+    return { heightInches, waistInches };
+  }, [isMetric, heightCm, heightFt, heightIn, waistCm, waistIn]);
+
+  // The recommendation itself. Falls back to the old weight brackets only when
+  // the category has no chart to compare against.
+  const sizeSuggestion = React.useMemo(() => {
+    const table = resolveSizeChart(product).table;
+
+    // Values entered against this chart's own columns. The waist box predates
+    // the dynamic fields and stays as a default for charts that have one.
+    const body: BodyMeasurements = { waist: wizardBody.waistInches };
+    for (const [point, raw] of Object.entries(bodyInputs)) {
+      const value = parseFloat(raw);
+      if (!Number.isFinite(value) || value <= 0) continue;
+      body[point as MeasurePoint] = isMetric ? value / 2.54 : value;
+    }
+
+    const fromChart = table ? recommendSize(table, body, uniqueSizes) : null;
+    const length = recommendLength(wizardBody.heightInches, uniqueLengths);
+
+    if (fromChart) {
+      return { size: fromChart.size, length, substituted: fromChart.substituted, fromChart: true };
+    }
+
+    const lbs = isMetric ? (parseFloat(weightKg) || 86) * 2.20462 : parseFloat(weightLbs) || 190;
+    const bracket = lbs < 160 ? "S" : lbs < 190 ? "M" : lbs < 220 ? "L" : lbs < 250 ? "XL" : "2XL";
+    const matched = uniqueSizes.find((s) => s.toLowerCase() === bracket.toLowerCase()) || bracket;
+
+    return { size: matched, length, substituted: false, fromChart: false };
+  }, [wizardBody, bodyInputs, product, uniqueSizes, uniqueLengths, isMetric, weightKg, weightLbs]);
+
+  // Hold the page still while the size-chart overlay is up. Without this the
+  // body keeps scrolling behind the modal, so closing it drops you somewhere
+  // else on the page. Escape closes it too — backdrop click was the only way
+  // out before. Mirrors the same handling in components/PromoDrawer.tsx.
+  React.useEffect(() => {
+    if (!showSizeChart) return;
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setShowSizeChart(false);
+    };
+    document.addEventListener("keydown", onKeyDown);
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [showSizeChart]);
+
+  /**
+   * Jumps the scroller to one shot. `instant` is used for the opening jump —
+   * a smooth scroll from the top of a seven-image wall would animate past every
+   * photograph before settling, which reads as a glitch rather than a
+   * transition.
+   */
+  const scrollToLightboxPane = React.useCallback((index: number, instant = false) => {
+    const pane = lightboxPaneRefs.current[index];
+    const scroller = lightboxScrollRef.current;
+    if (!pane || !scroller) return;
+    scroller.scrollTo({
+      top: pane.offsetTop,
+      behavior: instant ? "auto" : "smooth",
+    });
+  }, []);
+
+  // Full-screen image viewer: Escape closes, arrows and Home/End move between
+  // shots, and the page behind is frozen so closing does not drop you elsewhere.
+  // Same handling as the size-chart modal above.
+  React.useEffect(() => {
+    if (lightboxIndex === null) return;
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setLightboxIndex(null);
+      // The viewer is a scroller now, so the arrows move the scroller rather
+      // than swapping the photo — and they stop at the ends instead of wrapping,
+      // because wrapping a scroll position looks like the page jumped.
+      if (e.key === "ArrowRight" || e.key === "ArrowDown") {
+        e.preventDefault();
+        setLightboxActive((i) => {
+          // Counted off the panes rather than `lightboxImages`, which is
+          // declared below this effect — same number, and a ref is readable
+          // from here without reaching forward into the render body.
+          const next = Math.min(i + 1, lightboxPaneRefs.current.length - 1);
+          scrollToLightboxPane(next);
+          return next;
+        });
+      }
+      if (e.key === "ArrowLeft" || e.key === "ArrowUp") {
+        e.preventDefault();
+        setLightboxActive((i) => {
+          const next = Math.max(i - 1, 0);
+          scrollToLightboxPane(next);
+          return next;
+        });
+      }
+    };
+    document.addEventListener("keydown", onKeyDown);
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [lightboxIndex, scrollToLightboxPane]);
+
+  // Open on the shot that was clicked, not at the top of the wall.
+  //
+  // Two frames, not one: the panes have no height until their images have laid
+  // out, so a jump scheduled before that computes every offsetTop as zero and
+  // leaves the viewer at the top whatever was clicked.
+  React.useEffect(() => {
+    if (lightboxIndex === null) return;
+    const frame = requestAnimationFrame(() =>
+      requestAnimationFrame(() => {
+        setLightboxActive(lightboxIndex);
+        scrollToLightboxPane(lightboxIndex, true);
+      })
+    );
+    return () => cancelAnimationFrame(frame);
+  }, [lightboxIndex, scrollToLightboxPane]);
+
+  /**
+   * Keeps the rail in step with the scroller.
+   *
+   * The pane nearest the top of the viewport wins rather than the most-visible
+   * one: these images are taller than the screen, so "most visible" stays on
+   * the same photograph through a whole screen of scrolling and the rail sits
+   * still while the picture changes.
+   */
+  const onLightboxScroll = React.useCallback(() => {
+    const scroller = lightboxScrollRef.current;
+    if (!scroller) return;
+    const marker = scroller.scrollTop + scroller.clientHeight * 0.35;
+
+    let nearest = 0;
+    for (let i = 0; i < lightboxPaneRefs.current.length; i++) {
+      const pane = lightboxPaneRefs.current[i];
+      if (pane && pane.offsetTop <= marker) nearest = i;
+    }
+    setLightboxActive(nearest);
+  }, []);
+
   // Related Products states
   const [activeRelatedTab, setActiveRelatedTab] = useState<"recommended" | "recently">("recommended");
+
+  // The tab's own data. Excludes the product being looked at — offering to
+  // re-visit the page you are on is the one thing it must not do.
+  const allRecentlyViewed = React.useSyncExternalStore(
+    noopSubscribe,
+    readRecentlyViewed,
+    () => NO_RECENT
+  );
+  const recentlyViewed = React.useMemo(
+    () => allRecentlyViewed.filter((r: any) => r?.id !== product.id),
+    [allRecentlyViewed, product.id]
+  );
   const [hoveredRelatedProductId, setHoveredRelatedProductId] = useState<string | null>(null);
   const [selectedRelatedSizes, setSelectedRelatedSizes] = useState<Record<string, string>>({});
   const [selectedRelatedLengths, setSelectedRelatedLengths] = useState<Record<string, string>>({});
@@ -334,9 +782,8 @@ export default function ProductDetailsClient({ product, categories, relatedProdu
     description: true,
     fit: false,
     care: false,
-    reviews: false
+    reviews: false,
   });
-  const [expandedAccordion, setExpandedAccordion] = useState<string | null>(null);
 
   const toggleAccordion = (section: string) => {
     setOpenAccordions(prev => ({
@@ -365,7 +812,10 @@ export default function ProductDetailsClient({ product, categories, relatedProdu
 
         return next;
       });
-    }, 35);
+      // 12ms rather than 35: the comparison is instant, so this is just the
+      // reveal animation and there is no reason to hold the answer back for
+      // three and a half seconds.
+    }, 12);
 
     return () => clearInterval(interval);
   }, [wizardStep]);
@@ -375,9 +825,9 @@ export default function ProductDetailsClient({ product, categories, relatedProdu
   
   const colorSpecificDbImages = dbImages.filter(
     (img) => img.color && img.color.toLowerCase() === selectedColor.toLowerCase()
-  ).map((img) => img.url);
+  ).map((img) => formatImageUrl(img.url));
 
-  const generalDbImages = dbImages.filter((img) => !img.color).map((img) => img.url);
+  const generalDbImages = dbImages.filter((img) => !img.color).map((img) => formatImageUrl(img.url));
 
   // Find variant matching current active color, size, and length selection
   const activeVariant = product.variants.find(
@@ -393,9 +843,17 @@ export default function ProductDetailsClient({ product, categories, relatedProdu
     (v) => v.color.toLowerCase() === selectedColor.toLowerCase()
   );
 
+  // Variant shots, each kept alongside whatever SEO copy the admin wrote for it.
+  const variantImageEntries = colorMatchedVariants.flatMap((v) =>
+    readVariantImages(v.images).map((entry) => ({
+      ...entry,
+      url: formatImageUrl(entry.url),
+    }))
+  );
+
   const variantLevelImages = colorMatchedVariants.flatMap(v => [
-    ...(v.image ? [v.image] : []),
-    ...(v.images || [])
+    ...(v.image ? [formatImageUrl(v.image)] : []),
+    ...readVariantImages(v.images).map((entry) => formatImageUrl(entry.url)),
   ]);
 
   // Specific images based on variant and color selection
@@ -406,10 +864,159 @@ export default function ProductDetailsClient({ product, categories, relatedProdu
   // Main collage shows specific variant images if available, otherwise falls back to general gallery or thumbnail.
   const mainCollageImages = uniqueSpecificImages.length > 0 
     ? uniqueSpecificImages 
-    : (uniqueGeneralImages.length > 0 ? uniqueGeneralImages : (product.thumbnail ? [product.thumbnail] : []));
+    : (uniqueGeneralImages.length > 0 ? uniqueGeneralImages : (product.thumbnail ? [formatImageUrl(product.thumbnail)] : []));
 
-  // Secondary gallery shows the global gallery images ONLY if the main collage is occupied by variant-specific images.
-  const secondaryGalleryImages = uniqueSpecificImages.length > 0 ? uniqueGeneralImages : [];
+  // Untagged gallery shots used to be appended after the colourway's own, on
+  // the theory that an image with no colour on it applies to every colour. In
+  // practice an untagged row is almost always a photograph of one particular
+  // colourway that nobody tagged — so picking Oatmeal showed seven Oatmeal
+  // shots and then, at the end, the Blue-and-Black one. They are the fallback
+  // for a colourway with no photographs of its own (mainCollageImages already
+  // falls back to them), never an addition to one that has them.
+  //
+  // Everything the full-screen viewer can page through, in the order the page
+  // shows it, so the index a tile passes in lands on the shot that was clicked.
+  const lightboxImages = mainCollageImages;
+
+  // The wall renders that same list, so a tile's position in the grid IS its
+  // lightbox index. Every entry is the selected colourway now, so each can name
+  // it in its alt text.
+  const mediaWall: Array<{ url: string; color?: string }> = mainCollageImages.map(
+    (url: string) => ({ url, color: selectedColor })
+  );
+
+  // Alt text and captions live on the ProductImage row, but both galleries above
+  // are flat URL lists — variant-level shots are JSON on the variant and have no
+  // row at all — so the copy is looked up by formatted URL and simply falls back
+  // where there is none.
+  const imageCopyByUrl = new Map<
+    string,
+    { alt?: string | null; caption?: string | null; color?: string | null }
+  >(
+    dbImages.map((img) => [
+      formatImageUrl(img.url),
+      { alt: img.alt, caption: img.caption, color: img.color },
+    ])
+  );
+
+  // Variant shots have no ProductImage row, so their copy is folded in here.
+  // Added after the gallery rows and only when something was written, so a
+  // blank variant field can never blank out a gallery row's alt for the same
+  // photograph — the two lists overlap whenever a shot is used in both.
+  for (const entry of variantImageEntries) {
+    if (!entry.alt && !entry.caption) continue;
+    const existing = imageCopyByUrl.get(entry.url);
+    imageCopyByUrl.set(entry.url, {
+      alt: entry.alt || existing?.alt,
+      caption: entry.caption || existing?.caption,
+      color: existing?.color ?? selectedColor,
+    });
+  }
+
+  // ─── Colour-led Product Details panel ──────────────────────────────────────
+  // Picking a colourway repaints the details block in that colour. Variants
+  // store the colour as a plain name, so the real swatch has to be looked up in
+  // the Color table; COLOR_HEX_MAP is the fallback for names with no row.
+  const activeDbColor = dbColors.find(
+    (c) => c.name.toLowerCase() === selectedColor.toLowerCase()
+  );
+  //
+  // Every swatch type paints, IMAGE included: for a patterned colourway the
+  // Color row's `value` is the flat tint that stands in for the pattern, which
+  // is exactly what a panel needs — the weave itself would be noise at this
+  // size. That does mean an unedited placeholder tint paints the panel too, so
+  // a colourway that looks wrong here is a colour to fix in Admin → Colors
+  // rather than a rule to add here.
+  // A fabric swatch is a photograph, so the colour to paint with is the one the
+  // photograph averages to — sampled from the image itself rather than trusted
+  // from the row, where the flat `value` is only a stand-in and is easy to
+  // leave at whatever the form was seeded with.
+  const swatchImage =
+    activeDbColor?.type === "IMAGE" ? activeDbColor.image?.trim() || null : null;
+  const [imageTints, setImageTints] = useState<Record<string, string>>({});
+
+  React.useEffect(() => {
+    if (!swatchImage) return;
+    let live = true;
+    // Resolves from cache on a repeat visit, so flipping between two colourways
+    // repaints immediately after the first look at each.
+    sampleImageTint(swatchImage).then((tint) => {
+      if (live && tint) setImageTints((prev) => (prev[swatchImage] ? prev : { ...prev, [swatchImage]: tint }));
+    });
+    return () => {
+      live = false;
+    };
+  }, [swatchImage]);
+
+  const sampledTint = swatchImage
+    ? imageTints[swatchImage] ?? getCachedTint(swatchImage) ?? null
+    : null;
+
+  const panelColor: SwatchColor | null = swatchImage
+    // Until the sample lands the panel stays neutral and fades in. Painting the
+    // row's stored `value` in the meantime would flash a colour that is usually
+    // nothing like the fabric.
+    ? (sampledTint ? { value: sampledTint } : null)
+    : activeDbColor ?? (COLOR_HEX_MAP[selectedColor] ? { value: COLOR_HEX_MAP[selectedColor] } : null);
+
+  // White copy vanishes on Ivory and black copy vanishes on Navy, so the whole
+  // foreground — text, rules, stars, inputs, buttons — is derived from the
+  // painted colour instead of fixed. Everything inside the panel reads these
+  // five custom properties, which is one place to change rather than forty
+  // conditioned utilities. With no colour to paint, they resolve to the page's
+  // ordinary palette and the panel stays white.
+  // 0.179 — the point where a colour contrasts equally with black and white —
+  // is the right cut-off for a 14px swatch. This panel carries paragraphs of
+  // 13px copy at reduced opacity, which fails long before that: black on a
+  // mid-tone indigo reads fine as a heading and not at all as body text. So the
+  // panel flips to white type sooner, and falls back to the shared rule for
+  // hand-entered values that are not hex at all.
+  const panelLuminance = panelColor ? relativeLuminance(panelColor.value) : null;
+  const panelIsLight =
+    !panelColor
+      ? true
+      : panelLuminance === null
+        ? isLightColor(panelColor.value)
+        : panelLuminance > 0.42;
+
+  // Only the flat colour is painted, never the swatch's texture: a fabric photo
+  // or a check weave blown up to panel size is noise, and it puts the copy on a
+  // background whose contrast nobody can predict. A gradient survives — it is
+  // two of the garment's own colours and stays smooth at any size.
+  const panelBackground: React.CSSProperties = !panelColor
+    ? { backgroundColor: "#FFFFFF" }
+    : panelColor.type === "GRADIENT" && panelColor.value2?.trim()
+      ? {
+          backgroundColor: panelColor.value,
+          backgroundImage: `linear-gradient(${panelColor.angle ?? DEFAULT_ANGLE}deg, ${panelColor.value} 0%, ${panelColor.value2.trim()} 100%)`,
+        }
+      : { backgroundColor: panelColor.value };
+
+  const panelVars = {
+    ...panelBackground,
+    // The panel's own foreground. Without this the accordion headers (which
+    // carry no colour class of their own) keep the page's dark text and vanish
+    // on a dark colourway like black. The container already transitions `color`.
+    color: "var(--pk)",
+    "--pk": panelIsLight ? "#101010" : "#FFFFFF",
+    "--pk-muted": !panelColor
+      ? "#717171"
+      : panelIsLight
+        ? "rgba(16,16,16,0.72)"
+        : "rgba(255,255,255,0.82)",
+    "--pk-rule": !panelColor
+      ? "rgba(16,16,16,0.10)"
+      : panelIsLight
+        ? "rgba(16,16,16,0.18)"
+        : "rgba(255,255,255,0.28)",
+    "--pk-faint": !panelColor ? "#CBCBCB" : panelIsLight ? "rgba(16,16,16,0.35)" : "rgba(255,255,255,0.45)",
+    "--pk-contrast": panelIsLight ? "#FFFFFF" : "#101010",
+  } as React.CSSProperties;
+
+  // The flat-lay under the copy mirrors the selected colourway. Last image
+  // rather than first, so it is usually a different shot from the one heading
+  // the gallery.
+  const flatLayImage = formatImageUrl(mainCollageImages[mainCollageImages.length - 1] || product.thumbnail);
 
   // Dynamic price is now directly driven by the variant.
   // Fall back to product base/discount if the variant price is missing.
@@ -426,18 +1033,46 @@ export default function ProductDetailsClient({ product, categories, relatedProdu
       ? product.measurementTemplate
       : null;
 
+  // The product's own chart, else the nearest one up its category tree, else
+  // the built-in alpha-sizing table below.
+  const sizeChart = resolveSizeChart(product);
+  // Walked separately from the chart: a category can supply one without the other.
+  const howToMeasure = resolveHowToMeasure(product);
+  // Dots follow the measurement names the guide actually uses, numbered in the
+  // order it lists them.
+  const figureGender = figureGenderFor(product);
+  const howToMeasureImage = resolveHowToMeasureImage(product);
+  const activePoints = howToMeasure.html ? guidePoints(howToMeasure.html) : BUILT_IN_POINTS[figureGender];
+
   const customSurcharge = resolveSurcharge(product, product.measurementTemplate);
   // The price one custom unit is priced against — matches the checkout fallback.
   const customUnitPrice = currentDiscountPrice ?? currentBasePrice;
 
-  // Complete The Look Logic (Cross-selling matching bottom item dynamically from relatedProducts[0])
-  const completeLookItemRaw = relatedProducts && relatedProducts.length > 0 ? relatedProducts[0] : null;
-  const completeLookItem = completeLookItemRaw
+  // Report the product view once per product. Colour and size changes re-render
+  // this component constantly, and GA4 counts every view_item, so the effect is
+  // keyed on the id alone rather than on the selection or the live price.
+  const viewPrice = currentDiscountPrice ?? currentBasePrice;
+  const viewPriceRef = React.useRef(viewPrice);
+  viewPriceRef.current = viewPrice;
+
+  React.useEffect(() => {
+    trackViewItem({
+      item_id: product.id,
+      item_name: product.title,
+      price: viewPriceRef.current,
+      item_brand: product.brand?.name || undefined,
+      item_category: product.category?.name || undefined,
+    });
+  }, [product.id, product.title, product.brand?.name, product.category?.name]);
+
+  // "Model is also wearing" — the curated cross-sell picked in Admin. No pick,
+  // no section: an uncurated guess here was showing menswear on womenswear.
+  const completeLookItem = modelWearsProduct
     ? {
-      title: completeLookItemRaw.title,
-      slug: completeLookItemRaw.slug,
-      price: completeLookItemRaw.basePrice,
-      thumbnail: completeLookItemRaw.thumbnail
+      title: modelWearsProduct.title,
+      slug: modelWearsProduct.slug,
+      price: modelWearsProduct.basePrice,
+      thumbnail: modelWearsProduct.thumbnail
     }
     : null;
 
@@ -470,6 +1105,37 @@ export default function ProductDetailsClient({ product, categories, relatedProdu
   const isOutOfStock = activeStock === 0 && !!activeVariant;
   const isLowStock = activeStock > 0 && activeStock <= 5;
 
+  /**
+   * What the buy button is waiting for.
+   *
+   * The button used to read "Add To Bag" whatever was selected, and told you
+   * only after the click — a popup saying the combination does not exist. Only
+   * the choices this product actually offers count as missing, so a garment
+   * that comes in one length is never blocked on a length nobody was asked for.
+   */
+  const missingChoices = [
+    uniqueSizes.length > 0 && !selectedSize ? "Size" : null,
+    uniqueLengths.length > 0 && !selectedLength ? "Length" : null,
+  ].filter(Boolean) as string[];
+
+  /** The variant the shopper has assembled, if this product is made in it. */
+  const hasVariantForSelection = Boolean(activeVariant);
+  const canAddToBag =
+    missingChoices.length === 0 &&
+    hasVariantForSelection &&
+    !isOutOfStock &&
+    customMeasurement.valid;
+
+  const buyLabel = missingChoices.length > 0
+    ? `Select ${missingChoices.join(" & ")}`
+    : !hasVariantForSelection
+      ? "Combination Unavailable"
+      : isOutOfStock
+        ? "Out of Stock"
+        : !customMeasurement.valid
+          ? "Complete Your Measurements"
+          : "Add To Bag";
+
   const handleAddToBag = (overrideSize?: string, overrideLength?: string) => {
     const sizeToUse = overrideSize || selectedSize;
     const lengthToUse = overrideLength || selectedLength;
@@ -482,7 +1148,52 @@ export default function ProductDetailsClient({ product, categories, relatedProdu
         (v.length ? v.length.toLowerCase() === lengthToUse.toLowerCase() : true)
     );
 
-    const basePrice = variantToUse?.price || product.basePrice;
+    // No matching row means the shopper assembled a combination this product is
+    // not made in. Falling through would add it at `basePrice` and only fail
+    // later at checkout, where the variant lookup is authoritative.
+    if (!variantToUse) {
+      Swal.fire({
+        text: `${product.title} is not available in ${sizeToUse}${lengthToUse ? ` / ${lengthToUse}` : ""}. Please choose another combination.`,
+        icon: "warning",
+        confirmButtonColor: "#18181b",
+      });
+      return;
+    }
+
+    // Stock is checked here rather than only on the button, because the size
+    // wizard's "Apply To Product" calls straight into this function and never
+    // sees the button's disabled state.
+    //
+    // Made-to-order garments are cut on demand, so they are exempt — the same
+    // rule /api/checkout applies when it decrements stock.
+    const wantsCustom = Boolean(measurementTemplate && customMeasurement.active);
+    if (!wantsCustom) {
+      if (variantToUse.stock <= 0) {
+        Swal.fire({
+          text: `${product.title} in ${sizeToUse}${lengthToUse ? ` / ${lengthToUse}` : ""} is out of stock.`,
+          icon: "warning",
+          confirmButtonColor: "#18181b",
+        });
+        return;
+      }
+
+      // addToCart stacks quantity onto an existing line, so the check has to
+      // count what is already in the basket — otherwise pressing the button
+      // repeatedly walks past the stock level and only fails at checkout.
+      const lineId = `${product.id}-${selectedColor}-${sizeToUse}-${lengthToUse}`;
+      const alreadyInCart = getCart().find((c) => c.id === lineId)?.quantity ?? 0;
+
+      if (alreadyInCart + 1 > variantToUse.stock) {
+        Swal.fire({
+          text: `Only ${variantToUse.stock} left in stock, and you already have ${alreadyInCart} in your bag.`,
+          icon: "warning",
+          confirmButtonColor: "#18181b",
+        });
+        return;
+      }
+    }
+
+    const basePrice = variantToUse.price || product.basePrice;
     const finalPrice = product.discountPrice ? product.discountPrice : basePrice;
 
     // Made-to-measure: block on invalid input, then carry the measurements and
@@ -513,6 +1224,7 @@ export default function ProductDetailsClient({ product, categories, relatedProdu
             templateName: measurementTemplate.name,
             values: customMeasurement.values,
             fee: customMeasurement.fee,
+            feeBreakdown: customMeasurement.feeBreakdown,
           },
         }
         : {}),
@@ -523,740 +1235,977 @@ export default function ProductDetailsClient({ product, categories, relatedProdu
     }, 800);
   };
 
+  // Category ancestry, rendered top-down above the title. Prisma hands the
+  // chain back leaf-first (category → parent → parent), so walk it upward and
+  // reverse. The tree is at most three levels deep — see the product query.
+  const categoryPath = [
+    product.category?.parent?.parent?.name,
+    product.category?.parent?.name,
+    product.category?.name,
+  ].filter(Boolean) as string[];
+
   return (
-    <div className="flex flex-col min-h-screen selection:bg-brand-200 selection:text-brand-950">
+    <div className="flex min-h-screen flex-col bg-white font-sans text-[#101010] antialiased selection:bg-[#101010] selection:text-white">
 
-      {/* 3. PRODUCT CORE MAIN PANEL */}
-      <main className="max-w-[1400px] mx-auto px-5 sm:px-7 py-8 lg:py-10 flex-1 w-full">
+      <main className="w-full flex-1">
 
-        {/* Breadcrumb */}
-        <nav className="text-[13px] text-soft mb-6 flex items-center gap-2" aria-label="Breadcrumb">
-          <Link href="/" className="hover:text-brand-700 transition-colors">Home</Link>
-          <span className="text-faint" aria-hidden="true">/</span>
-          <Link href="/shop" className="hover:text-brand-700 transition-colors">Shop</Link>
-          <span className="text-faint" aria-hidden="true">/</span>
-          <span className="text-foreground font-semibold">{product.category?.name || "Apparel"}</span>
-        </nav>
+        {/* ── PRODUCT ────────────────────────────────────────────────────────
+            Two sticky columns split by a hairline: photographs on the left,
+            everything you read or press on the right. The buy column also
+            carries the detail copy, so it always outruns the gallery — that
+            height difference is what lets the gallery stay pinned.
 
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-10 mb-14">
+            Split down the middle, matching the reference's
+            `grid-template-columns: 1fr 1fr`. The buy side does not use the
+            extra width — its contents stay capped below — it becomes margin,
+            which is what stops a 1800px page from running the buy box out to
+            900px of line length. */}
+        <div className="mx-auto grid w-full max-w-[1800px] grid-cols-1 items-start lg:grid-cols-2">
 
-          {/* LEFT COLUMN: Image Galleries */}
-          <div className="lg:col-span-7 flex flex-col gap-10">
-            
-            {/* Main Variant/Default Collage */}
-            <div className={`grid gap-4 ${
-              mainCollageImages.length === 1 
-                ? "grid-cols-1" 
-                : "grid-cols-1 sm:grid-cols-2"
-            }`}>
-              {mainCollageImages.map((imgUrl, index) => {
-                const isLastOdd = mainCollageImages.length > 1 && mainCollageImages.length % 2 !== 0 && index === mainCollageImages.length - 1;
+          {/* LEFT COLUMN: one continuous media wall.
+              A swipeable rail on a phone (one shot at a time, the next one
+              peeking) and a two-up wall on a desktop, which is the same set of
+              photographs laid out as a page rather than a slideshow. */}
+          <div className="relative w-full lg:sticky lg:top-20 lg:self-start lg:border-r lg:border-[#101010]/[0.06]">
+            <div
+              ref={galleryRef}
+              onScroll={handleGalleryScroll}
+              className="flex snap-x snap-mandatory gap-1 overflow-x-auto scroll-smooth [-ms-overflow-style:none] [scrollbar-width:none] lg:grid lg:grid-cols-6 lg:overflow-visible [&::-webkit-scrollbar]:hidden"
+            >
+              {mediaWall.map(({ url, color }, index) => {
+                const copy = imageCopyByUrl.get(url);
+                const caption = productImageCaption(copy?.caption);
+                const span = mediaWallSpans(mediaWall.length)[index] ?? 3;
+
                 return (
-                  <div
-                    key={index}
-                    className={`relative aspect-[4/5] bg-cream overflow-hidden rounded-sg cursor-zoom-in ${
-                      isLastOdd ? "sm:col-span-2" : ""
+                  <figure
+                    key={`media-${index}`}
+                    className={`w-[92%] shrink-0 snap-center lg:w-auto ${
+                      span === 6
+                        ? "lg:col-span-6"
+                        : span === 3
+                          ? "lg:col-span-3"
+                          : "lg:col-span-2"
                     }`}
-                    onMouseMove={(e) => {
-                      const rect = e.currentTarget.getBoundingClientRect();
-                      const x = ((e.clientX - rect.left) / rect.width) * 100;
-                      const y = ((e.clientY - rect.top) / rect.height) * 100;
-                      const img = e.currentTarget.querySelector("img");
-                      if (img) {
-                        img.style.transformOrigin = `${x}% ${y}%`;
-                        img.style.transform = "scale(2)";
-                      }
-                    }}
-                    onMouseLeave={(e) => {
-                      const img = e.currentTarget.querySelector("img");
-                      if (img) {
-                        img.style.transform = "scale(1)";
-                        setTimeout(() => {
-                          if (img.style.transform === "scale(1)") {
-                            img.style.transformOrigin = "center";
-                          }
-                        }, 300);
-                      }
-                    }}
                   >
-                    <Image
-                      src={imgUrl}
-                      alt={`${product.title} view ${index + 1}`}
-                      fill
-                      sizes="(max-width: 768px) 100vw, 50vw"
-                      // The lead shot of the collage is this page's LCP element;
-                      // without this it was lazy-loaded like the rest of the gallery.
-                      priority={index === 0}
-                      className="object-cover select-none"
-                      style={{
-                        transition: "transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94)",
-                        transformOrigin: "center",
+                    <div
+                      className="group relative aspect-[5/7] cursor-zoom-in overflow-hidden bg-[#FBFBFB]"
+                      role="button"
+                      tabIndex={0}
+                      aria-label="Open image full screen"
+                      onClick={() => setLightboxIndex(index)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          setLightboxIndex(index);
+                        }
                       }}
-                    />
-                  </div>
+                      onMouseMove={(e) => {
+                        const rect = e.currentTarget.getBoundingClientRect();
+                        const x = ((e.clientX - rect.left) / rect.width) * 100;
+                        const y = ((e.clientY - rect.top) / rect.height) * 100;
+                        const img = e.currentTarget.querySelector("img");
+                        if (img) {
+                          img.style.transformOrigin = `${x}% ${y}%`;
+                          img.style.transform = "scale(2)";
+                        }
+                      }}
+                      onMouseLeave={(e) => {
+                        const img = e.currentTarget.querySelector("img");
+                        if (img) {
+                          img.style.transform = "scale(1)";
+                          setTimeout(() => {
+                            if (img.style.transform === "scale(1)") {
+                              img.style.transformOrigin = "center";
+                            }
+                          }, 300);
+                        }
+                      }}
+                    >
+                      <Image
+                        src={formatImageUrl(url)}
+                        alt={productImageAlt({
+                          custom: copy?.alt,
+                          title: product.title,
+                          brand: product.brand?.name,
+                          color,
+                          index,
+                          total: mediaWall.length,
+                        })}
+                        fill
+                        sizes="(max-width: 640px) 92vw, (max-width: 1024px) 50vw, 25vw"
+                        // The lead shot is this page's LCP element; without this
+                        // it was lazy-loaded like the rest of the wall.
+                        priority={index === 0}
+                        className="select-none object-cover"
+                        style={{
+                          transition: "transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94)",
+                          transformOrigin: "center",
+                        }}
+                      />
+
+                      {/* Caption sits on the photograph rather than under it.
+                          On a tall store this line is usually "Model is 6'4",
+                          wearing size L Tall" — the single most useful thing on
+                          the page, and useless three inches below the shot it
+                          describes. Frosted white glass, as the reference has it. */}
+                      {caption && (
+                        <figcaption className="pointer-events-none absolute bottom-[15px] left-[15px] right-[15px] line-clamp-2 bg-white/20 px-[15px] py-2.5 text-[13px] font-semibold leading-5 tracking-[0.02em] text-white backdrop-blur-[10px] sm:right-auto sm:max-w-[80%] lg:left-5">
+                          {caption}
+                        </figcaption>
+                      )}
+
+                      {/* Zoom affordance — the cursor already says it, but only
+                          once the pointer is over the tile and never on touch. */}
+                      <span className="pointer-events-none absolute right-4 top-4 hidden h-10 w-10 items-center justify-center rounded-full border border-[#101010]/10 bg-white/70 text-[#101010] opacity-0 backdrop-blur-[12px] transition-opacity duration-200 group-hover:opacity-100 sm:flex">
+                        <Maximize2 className="h-3.5 w-3.5" />
+                      </span>
+                    </div>
+                  </figure>
                 );
               })}
             </div>
 
-            {/* Secondary Global Gallery (Only if main collage is variant-specific) */}
-            {secondaryGalleryImages.length > 0 && (
-              <div className="flex flex-col gap-6">
-                <h3 className="sg-kicker">Product gallery</h3>
-                <div className={`grid gap-4 ${
-                  secondaryGalleryImages.length === 1 
-                    ? "grid-cols-1" 
-                    : "grid-cols-1 sm:grid-cols-2"
-                }`}>
-                  {secondaryGalleryImages.map((imgUrl, index) => {
-                    const isLastOdd = secondaryGalleryImages.length > 1 && secondaryGalleryImages.length % 2 !== 0 && index === secondaryGalleryImages.length - 1;
-                    return (
-                      <div
-                        key={`gallery-${index}`}
-                        className={`relative aspect-[4/5] bg-cream overflow-hidden rounded-sg cursor-zoom-in ${
-                          isLastOdd ? "sm:col-span-2" : ""
-                        }`}
-                        onMouseMove={(e) => {
-                          const rect = e.currentTarget.getBoundingClientRect();
-                          const x = ((e.clientX - rect.left) / rect.width) * 100;
-                          const y = ((e.clientY - rect.top) / rect.height) * 100;
-                          const img = e.currentTarget.querySelector("img");
-                          if (img) {
-                            img.style.transformOrigin = `${x}% ${y}%`;
-                            img.style.transform = "scale(2)";
-                          }
-                        }}
-                        onMouseLeave={(e) => {
-                          const img = e.currentTarget.querySelector("img");
-                          if (img) {
-                            img.style.transform = "scale(1)";
-                            setTimeout(() => {
-                              if (img.style.transform === "scale(1)") {
-                                img.style.transformOrigin = "center";
-                              }
-                            }, 300);
-                          }
-                        }}
-                      >
-                        <Image
-                          src={imgUrl}
-                          alt={`${product.title} gallery view ${index + 1}`}
-                          fill
-                          sizes="(max-width: 768px) 100vw, 50vw"
-                          className="object-cover select-none"
-                          style={{
-                            transition: "transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94)",
-                            transformOrigin: "center",
-                          }}
-                        />
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* RIGHT COLUMN: Buy Box Panel */}
-          <div className="lg:col-span-5 sg-card sg-raise p-7 sm:p-9 flex flex-col justify-start lg:sticky lg:top-[92px] h-fit">
-
-            {/* Category Brand Path & Tags */}
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 mb-2 block">
-              <span className="text-[10.5px] text-aqua-700 font-extrabold uppercase tracking-[0.16em]">
-                {product.category?.name || product.brand?.name || storeName}
-              </span>
-              {product.tags && (
-                <div className="inline-flex flex-wrap gap-1 ml-1.5">
-                  {product.tags.split(",")
-                    .map(t => t.trim())
-                    .filter(Boolean)
-                    .map((tag, idx) => (
-                      <span
-                        key={idx}
-                        className="bg-cream hover:bg-brand-50 text-soft text-[10px] font-bold px-2.5 py-1 rounded-full transition-colors"
-                      >
-                        #{tag}
-                      </span>
-                    ))
-                  }
-                </div>
-              )}
-            </div>
-
-            {/* Title */}
-            <h1 className="text-[26px] sm:text-[32px] font-extrabold text-foreground leading-tight mb-3">
-              {product.title}
-            </h1>
-
-            {/* Pricing Section */}
-            <div className="flex items-center gap-4 mb-1">
-              <div className="flex items-baseline gap-3">
-                {currentDiscountPrice && currentDiscountPrice < currentBasePrice ? (
-                  <div className="flex items-center gap-3">
-                    <span className="text-[30px] font-extrabold text-brand-700 tracking-tight">
-                      {formatPrice(currentDiscountPrice)}
-                    </span>
-                    <span className="text-[18px] text-faint line-through font-medium">
-                      {formatPrice(currentBasePrice)}
-                    </span>
-                  </div>
-                ) : (
-                  <span className="text-[30px] font-extrabold text-foreground tracking-tight">
-                    {formatPrice(currentBasePrice)}
-                  </span>
-                )}
-              </div>
-
-              {/* Flash Sale Timer */}
-              {timeLeft && (
-                <div className="sg-chip bg-brand-50 text-brand-700">
-                  <span className="w-1.5 h-1.5 rounded-full bg-brand-500 animate-pulse"></span>
-                  Ends in {timeLeft}
-                </div>
-              )}
-            </div>
-
-            {/* Stock Alerts */}
-            {(isOutOfStock || isLowStock) && (
-              <div className="mb-4">
-                {isOutOfStock ? (
-                  <div className="space-y-3">
-                    <span className="inline-block bg-cream text-soft text-[10px] font-bold uppercase tracking-wider px-3 py-1.5 rounded-xl">
-                      Out of Stock
-                    </span>
-                    {!notifySuccess ? (
-                      <div className="flex items-center gap-2 max-w-sm mt-2">
-                        <input 
-                          type="email" 
-                          placeholder="Email address for restock alert"
-                          value={notifyEmail}
-                          onChange={(e) => setNotifyEmail(e.target.value)}
-                          className="flex-1 text-xs border border-line px-3 py-2 bg-white focus:outline-none focus:border-aqua-400 focus:ring-0"
-                        />
-                        <button 
-                          disabled={notifyLoading || !notifyEmail}
-                          onClick={async () => {
-                            if (!notifyEmail) return;
-                            setNotifyLoading(true);
-                            try {
-                              const res = await fetch("/api/stock-alert", {
-                                method: "POST",
-                                headers: { "Content-Type": "application/json" },
-                                body: JSON.stringify({ email: notifyEmail, variantId: activeVariant?.id })
-                              });
-                              if (res.ok) {
-                                setNotifySuccess(true);
-                                Swal.fire({ title: "Subscribed!", text: "We'll email you when it's back in stock.", icon: "success", confirmButtonColor: "#09090b" });
-                              } else {
-                                const data = await res.json();
-                                Swal.fire({ title: "Oops!", text: data.error || "Failed to subscribe.", icon: "error", confirmButtonColor: "#09090b" });
-                              }
-                            } finally {
-                              setNotifyLoading(false);
-                            }
-                          }}
-                          className="bg-brand-600 rounded-full text-white text-[12.5px] font-bold uppercase tracking-[0.12em] px-4 py-2 hover:bg-brand-700 disabled:opacity-50 transition-colors"
-                        >
-                          {notifyLoading ? "..." : "Notify Me"}
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="text-xs font-bold text-green-600 flex items-center gap-1.5 mt-2">
-                        <Check className="w-4 h-4" /> You're on the list!
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <span className="inline-block bg-amber-50 text-amber-700 border border-amber-200 text-[10px] font-bold uppercase tracking-wider px-3 py-1.5 rounded-xl">
-                    Only {activeStock} left in stock - order soon!
-                  </span>
-                )}
-              </div>
-            )}
-
-
-
-            {/* COLOR SWATCH SELECTOR */}
-            {uniqueColors.length > 0 && (
-              <div className="mb-6">
-                <span className="text-[13px] font-bold text-foreground block mb-3">
-                  Colour <span className="text-soft font-medium">— {selectedColor}</span>
-                </span>
-                <div className="flex gap-3">
-                  {uniqueColors.map((color) => {
-                    const dbColor = dbColors.find(c => c.name.toLowerCase() === color.toLowerCase());
-                    const style = swatchStyle(dbColor ?? { value: COLOR_HEX_MAP[color] || "#71717a" });
-                    const isSelected = selectedColor === color;
-                    return (
-                      <button
-                        key={color}
-                        onClick={() => setSelectedColor(color)}
-                        className={`h-9 p-[3px] rounded-full border-[1.5px] flex items-center justify-center transition-all duration-200 cursor-pointer ${isSelected ? "w-14 border-brand-600" : "w-9 border-line hover:border-brand-300 hover:scale-105"
-                          }`}
-                        title={color}
-                      >
-                        <span
-                          className="w-full h-full rounded-full border border-line shadow-inner flex items-center justify-center"
-                          style={style}
-                        >
-                          {isSelected && (
-                            <Check className={`w-3.5 h-3.5 stroke-[2.5] ${color === "White" ? "text-foreground" : "text-white"
-                              }`} />
-                          )}
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            {/* SIZE SWATCH SELECTOR */}
-            {uniqueSizes.length > 0 && (
-              <div className="mb-6">
-                <div className="flex justify-between items-center mb-3">
-                  <span className="text-[13px] font-bold text-foreground">Size</span>
-                  <div className="flex items-center gap-3">
-                    <button
-                      onClick={() => {
-                        setActiveSizeTab("size-chart");
-                        setShowSizeChart(true);
-                      }}
-                      className="text-[13px] font-semibold text-soft hover:text-brand-700 underline underline-offset-4 decoration-line cursor-pointer transition-colors"
-                    >
-                      Size Chart
-                    </button>
-                    <button
-                      onClick={() => {
-                        setActiveSizeTab("heights");
-                        setWizardStep("wizard-input");
-                        setShowSizeChart(true);
-                      }}
-                      className="sg-btn sg-btn-sm sg-btn-primary !py-2 !px-4 !text-[12px]"
-                    >
-                      Find My Size
-                    </button>
-                  </div>
-                </div>
-                <div className="flex flex-wrap gap-2.5">
-                  {uniqueSizes.map((size) => {
-                    const isSelected = selectedSize === size;
-                    return (
-                      <button
-                        key={size}
-                        onClick={() => setSelectedSize(size)}
-                        className={`min-w-[54px] px-5 py-2.5 text-[13px] font-bold uppercase transition-all border rounded-full cursor-pointer ${isSelected
-                            ? "bg-brand-600 text-white border-brand-600"
-                            : "bg-white text-soft border-line hover:border-brand-400 hover:text-brand-700"
-                          }`}
-                      >
-                        {size}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            {/* LENGTH SWATCH SELECTOR */}
-            {uniqueLengths.length > 0 && (
-              <div className="mb-8">
-                <span className="text-[13px] font-bold text-foreground block mb-3">Length</span>
-                <div className="flex gap-2.5">
-                  {uniqueLengths.map((len) => {
-                    const isSelected = selectedLength === len;
-                    return (
-                      <button
-                        key={len}
-                        onClick={() => setSelectedLength(len)}
-                        className={`px-6 py-2.5 text-[13px] font-bold transition-all border rounded-full cursor-pointer ${isSelected
-                            ? "bg-brand-600 text-white border-brand-600"
-                            : "bg-white text-soft border-line hover:border-brand-400 hover:text-brand-700"
-                          }`}
-                      >
-                        {len}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            {/* MADE-TO-MEASURE */}
-            {measurementTemplate && (
-              <CustomMeasurementForm
-                template={measurementTemplate}
-                surcharge={customSurcharge}
-                unitPrice={customUnitPrice}
-                onChange={setCustomMeasurement}
-              />
-            )}
-
-            {/* DYNAMIC ACTION BUTTON */}
-            <div className="flex gap-3 mb-6 mt-6">
-              <button
-                onClick={() => handleAddToBag()}
-                disabled={addedToBag || isOutOfStock || !customMeasurement.valid}
-                className={`sg-btn flex-1 !py-[18px] !text-[14px] ${
-                  isOutOfStock || !customMeasurement.valid
-                    ? "bg-cream text-faint border-line cursor-not-allowed"
-                    : addedToBag
-                      ? "bg-emerald-600 text-white scale-[0.99] cursor-pointer"
-                      : "sg-btn-primary cursor-pointer"
-                }`}
-              >
-                {isOutOfStock ? (
-                  <>Out of Stock</>
-                ) : !customMeasurement.valid ? (
-                  <>Complete Your Measurements</>
-                ) : addedToBag ? (
-                  <><Check className="w-4 h-4" /> Added! Going to Cart…</>
-                ) : (
-                  <><ShoppingBag className="w-4 h-4" /> Add To Bag</>
-                )}
-              </button>
-
-              <button
-                onClick={(e) => {
-                  e.preventDefault();
-                  toggleWishlist({
-                    productId: product.id,
-                    slug: product.slug,
-                    title: product.title,
-                    thumbnail: product.thumbnail || "https://placehold.co/600x800/e2e8f0/64748b.png?text=Store+Image",
-                    basePrice: product.basePrice,
-                    discountPrice: product.discountPrice
-                  });
-                }}
-                className={`w-[54px] shrink-0 border rounded-full transition-colors cursor-pointer flex items-center justify-center ${wishlisted
-                    ? "bg-brand-50 border-brand-600 text-brand-700"
-                    : "border-line hover:border-brand-400 text-soft hover:text-brand-700"
-                  }`}
-              >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  viewBox="0 0 24 24"
-                  fill={wishlisted ? "currentColor" : "none"}
-                  stroke="currentColor"
-                  strokeWidth="1.5"
-                  className="w-5 h-5"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    d="M17.593 3.322c1.1.128 1.907 1.077 1.907 2.185V21L12 17.25 4.5 21V5.507c0-1.108.806-2.057 1.907-2.185a48.507 48.507 0 0 1 11.186 0Z"
-                  />
-                </svg>
-              </button>
-            </div>
-
-            {/* Quality assurance shipping lines */}
-            <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-[12.5px] text-soft font-medium pt-5 border-t border-line">
-              <span className="flex items-center gap-1.5"><span className="text-aqua-700 font-extrabold">✓</span> Free shipping over ৳5,000</span>
-              <span className="flex items-center gap-1.5"><span className="text-aqua-700 font-extrabold">↺</span> 30-day returns</span>
-            </div>
-
-          </div>
-
-        </div>
-
-        {/* 4. MID SECTION: DESCRIPTION, ACCORDION & MODEL CROSS-SELL */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 py-6 mb-10">
-
-          {/* LEFT Accordions with Dark Panel Aesthetic */}
-          <div className="lg:col-span-8 bg-brand-ink text-white p-8 sm:p-12 rounded-sg-lg flex flex-col justify-between">
-            <div>
-              <h2 className="text-xl sm:text-2xl font-light tracking-wide uppercase mb-8 max-w-lg leading-relaxed">
-                <span className="font-extrabold text-white">{product.title}</span> - Premium modern apparel.
-              </h2>
-
-              <div className="divide-y divide-brand-ink-line">
-
-                {/* 1. PRODUCT DESCRIPTION ACCORDION */}
-                <div className="py-5">
+            {/* Thumbnail rail. Phone and tablet only — on a desktop every shot
+                is already on screen in the wall above, so a second copy of the
+                same list would be decoration. */}
+            {mediaWall.length > 1 && (
+              <div className="flex gap-2 overflow-x-auto px-1 pt-2 [-ms-overflow-style:none] [scrollbar-width:none] lg:hidden [&::-webkit-scrollbar]:hidden">
+                {mediaWall.map(({ url }, index) => (
                   <button
-                    onClick={() => toggleAccordion("description")}
-                    className="w-full flex justify-between items-center text-[15px] font-bold text-left cursor-pointer focus:outline-none hover:text-brand-200 transition-colors"
+                    key={`thumb-${index}`}
+                    type="button"
+                    onClick={() => scrollGalleryTo(index)}
+                    aria-label={`Go to image ${index + 1}`}
+                    aria-current={activeMedia === index}
+                    className={`relative h-[84px] w-[62px] shrink-0 overflow-hidden bg-[#FBFBFB] transition-opacity ${
+                      activeMedia === index
+                        ? "opacity-100 outline outline-1 outline-[#101010]"
+                        : "opacity-60"
+                    }`}
                   >
-                    <span>Product Description</span>
-                    <Plus className={`w-4 h-4 transition-transform duration-300 ${openAccordions.description ? "rotate-45" : ""
-                      }`} />
-                  </button>
-                  <div className={`transition-all duration-500 overflow-hidden ${openAccordions.description ? "max-h-96 opacity-100 mt-4" : "max-h-0 opacity-0"
-                    }`}>
-                    <div 
-                      className="text-[14px] text-white/70 leading-[1.75] prose prose-sm prose-invert max-w-none"
-                      dangerouslySetInnerHTML={{ __html: product.description ?? "" }}
-                    />
-                  </div>
-                </div>
-
-                {/* 2. SIZE & FIT ACCORDION */}
-                {(product as any).sizeAndFit && (
-                  <div className="py-5">
-                    <button
-                      onClick={() => toggleAccordion("fit")}
-                      className="w-full flex justify-between items-center text-[15px] font-bold text-left cursor-pointer focus:outline-none hover:text-brand-200 transition-colors"
-                    >
-                      <span>Size & Fit</span>
-                      <Plus className={`w-4 h-4 transition-transform duration-300 ${openAccordions.fit ? "rotate-45" : ""
-                        }`} />
-                    </button>
-                    <div className={`transition-all duration-500 overflow-hidden ${openAccordions.fit ? "max-h-96 opacity-100 mt-4" : "max-h-0 opacity-0"
-                      }`}>
-                      <div 
-                        className="text-[14px] text-white/70 leading-[1.75] prose prose-sm prose-invert max-w-none"
-                        dangerouslySetInnerHTML={{ __html: (product as any).sizeAndFit }} 
-                      />
-                    </div>
-                  </div>
-                )}
-
-                {/* 3. FABRIC & CARE ACCORDION */}
-                {(product as any).fabricAndCare && (
-                  <div className="py-5">
-                    <button
-                      onClick={() => toggleAccordion("care")}
-                      className="w-full flex justify-between items-center text-[15px] font-bold text-left cursor-pointer focus:outline-none hover:text-brand-200 transition-colors"
-                    >
-                      <span>Fabric & Care</span>
-                      <Plus className={`w-4 h-4 transition-transform duration-300 ${openAccordions.care ? "rotate-45" : ""
-                        }`} />
-                    </button>
-                    <div className={`transition-all duration-500 overflow-hidden ${openAccordions.care ? "max-h-96 opacity-100 mt-4" : "max-h-0 opacity-0"
-                      }`}>
-                      <div 
-                        className="text-[14px] text-white/70 leading-[1.75] prose prose-sm prose-invert max-w-none"
-                        dangerouslySetInnerHTML={{ __html: (product as any).fabricAndCare }} 
-                      />
-                    </div>
-                  </div>
-                )}
-
-                {/* 4. REVIEWS SUMMARY ACCORDION */}
-                <div className="border-t border-brand-ink-line">
-              <button
-                onClick={() => setExpandedAccordion(expandedAccordion === "reviews" ? null : "reviews")}
-                className="w-full flex items-center justify-between py-5 text-left group cursor-pointer"
-              >
-                <span className="text-[15px] font-bold text-white group-hover:text-brand-200 transition-colors">
-                  Reviews ({reviews.length})
-                </span>
-                <ChevronDown
-                  className={`w-4 h-4 text-faint transition-transform duration-300 ${
-                    expandedAccordion === "reviews" ? "rotate-180" : ""
-                  }`}
-                />
-              </button>
-              <div
-                className={`overflow-hidden transition-all duration-500 ease-in-out ${
-                  expandedAccordion === "reviews" ? "max-h-[800px] opacity-100 pb-5 overflow-y-auto" : "max-h-0 opacity-0"
-                }`}
-              >
-                <div className="text-white/70 text-[14px] leading-[1.75] space-y-6">
-                  {reviewsLoading ? (
-                    <p>Loading reviews...</p>
-                  ) : reviews.length === 0 ? (
-                    <p>No reviews available for this product yet. Be the first to review!</p>
-                  ) : (
-                    <div className="space-y-4">
-                      {reviews.map(r => (
-                        <div key={r.id} className="border-b border-brand-ink-line pb-4">
-                          <div className="flex items-center gap-2 mb-1">
-                            <div className="flex text-white">
-                              {[1, 2, 3, 4, 5].map((star) => (
-                                <Star key={star} className={`w-3 h-3 ${star <= r.rating ? "fill-white" : "fill-transparent"}`} />
-                              ))}
-                            </div>
-                            <span className="text-[10px] font-bold uppercase tracking-wider text-white/80">{r.user?.name || "Guest"}</span>
-                          </div>
-                          <p className="text-xs text-faint mt-2">{r.comment}</p>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  <div className="mt-8 pt-6 border-t border-brand-ink-line">
-                    <h4 className="text-[12px] font-bold uppercase tracking-[0.14em] text-white mb-4">Write a Review</h4>
-                    <form onSubmit={handleReviewSubmit} className="space-y-4">
-                      <div>
-                        <input type="text" placeholder="Your Name (Optional)" value={newReview.name} onChange={e => setNewReview({...newReview, name: e.target.value})} className="w-full text-xs p-3 bg-transparent text-white placeholder:text-soft border border-brand-ink-line focus:outline-none focus:border-white" />
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <label className="text-[11px] font-bold uppercase tracking-[0.14em] text-faint">Rating:</label>
-                        <select value={newReview.rating} onChange={e => setNewReview({...newReview, rating: Number(e.target.value)})} className="text-xs p-2 bg-brand-ink text-white border border-brand-ink-line focus:outline-none focus:border-brand-400">
-                          <option value="5">5 Stars</option>
-                          <option value="4">4 Stars</option>
-                          <option value="3">3 Stars</option>
-                          <option value="2">2 Stars</option>
-                          <option value="1">1 Star</option>
-                        </select>
-                      </div>
-                      <div>
-                        <textarea required placeholder="Your Review" value={newReview.comment} onChange={e => setNewReview({...newReview, comment: e.target.value})} className="w-full text-xs p-3 bg-transparent text-white placeholder:text-soft border border-brand-ink-line focus:outline-none focus:border-white min-h-[80px]" />
-                      </div>
-                      <button type="submit" disabled={submittingReview} className="bg-white text-foreground text-[11px] font-bold uppercase tracking-[0.14em] px-6 py-3 hover:bg-line transition-colors cursor-pointer disabled:opacity-50">
-                        {submittingReview ? "Submitting..." : "Submit Review"}
-                      </button>
-                    </form>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* 5. PRODUCT Q&A ACCORDION */}
-            <div className="border-t border-b border-brand-ink-line">
-              <button
-                onClick={() => setExpandedAccordion(expandedAccordion === "qa" ? null : "qa")}
-                className="w-full flex items-center justify-between py-5 text-left group cursor-pointer"
-              >
-                <span className="text-[15px] font-bold text-white group-hover:text-brand-200 transition-colors">
-                  Product Q&A
-                </span>
-                <ChevronDown
-                  className={`w-4 h-4 text-faint transition-transform duration-300 ${
-                    expandedAccordion === "qa" ? "rotate-180" : ""
-                  }`}
-                />
-              </button>
-              <div
-                className={`overflow-hidden transition-all duration-500 ease-in-out ${
-                  expandedAccordion === "qa" ? "max-h-[1200px] opacity-100 pb-5 overflow-y-auto" : "max-h-0 opacity-0"
-                }`}
-              >
-                <ProductQA productId={product.id} />
-              </div>
-            </div>
-
-              </div>
-            </div>
-
-            {/* Model completes the look cross-sell placement */}
-            {completeLookItem && (
-              <div className="mt-12 pt-8 border-t border-brand-ink-line">
-                <span className="text-[10px] text-soft font-extrabold tracking-[0.14em] uppercase block mb-4">
-                  Model is also wearing
-                </span>
-                <Link
-                  href={`/product/${completeLookItem.slug}`}
-                  className="flex items-center gap-4 bg-brand-ink-soft hover:bg-brand-ink transition-colors p-4 rounded-xl border border-brand-ink-line group"
-                >
-                  <div className="relative w-12 h-16 bg-brand-ink-soft rounded-xl overflow-hidden shrink-0">
                     <Image
-                      src={completeLookItem.thumbnail}
-                      alt={completeLookItem.title}
+                      src={formatImageUrl(url)}
+                      alt=""
+                      aria-hidden="true"
                       fill
+                      sizes="62px"
                       className="object-cover"
                     />
-                  </div>
-                  <div className="flex flex-col">
-                    <span className="text-[11px] text-faint font-bold group-hover:text-white transition-colors uppercase tracking-wide">
-                      {completeLookItem.title}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* RIGHT COLUMN: buy box, product copy, cross-sell. Capped at the
+              reference's 500-ish px and centred, so the column can be wide
+              without the line length going with it. */}
+          <div className="w-full lg:sticky lg:top-20">
+
+            <div className="mx-auto w-full max-w-[520px] px-5 pt-6 lg:pt-10">
+
+              {/* Breadcrumb — the trail the shopper came down, last crumb greyed
+                  because it names the page they are already on. */}
+              <nav aria-label="Breadcrumb" className={`flex flex-wrap items-center gap-x-2 gap-y-1 ${AT_TITLE}`}>
+                <Link href="/" className="hover:underline hover:underline-offset-4">
+                  Home
+                </Link>
+                {categoryPath.map((crumb, i) => (
+                  <React.Fragment key={crumb}>
+                    <span aria-hidden="true" className="text-[#CBCBCB]">/</span>
+                    <span className={i === categoryPath.length - 1 ? "text-[#717171]" : ""}>
+                      {crumb}
                     </span>
-                    <span className="text-[10px] text-soft font-medium mt-1">
-                      {formatPrice(completeLookItem.price)}
+                  </React.Fragment>
+                ))}
+              </nav>
+
+              {/* Title */}
+              <h1 className={`mt-3 ${AT_SUBHEAD}`}>{product.title}</h1>
+
+              {/* Price, rating and the sale clock share one line — each of them
+                  changes what the number beside it means. */}
+              <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2">
+                <div className={`flex items-baseline gap-2 ${AT_BASE_LARGE}`}>
+                  {currentDiscountPrice && currentDiscountPrice < currentBasePrice ? (
+                    <>
+                      <span className="text-[#B40C00]">{formatPrice(currentDiscountPrice)}</span>
+                      <span className="line-through">{formatPrice(currentBasePrice)}</span>
+                    </>
+                  ) : (
+                    <span>{formatPrice(currentBasePrice)}</span>
+                  )}
+                </div>
+
+                {/* Reviews arrive from a client fetch, so this is absent on
+                    first paint by design — rendering an empty five-star row
+                    would misreport an unrated product as zero-rated. */}
+                {reviews.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOpenAccordions((prev) => ({ ...prev, reviews: true }));
+                      reviewsRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+                    }}
+                    className="flex cursor-pointer items-center gap-1.5"
+                    aria-label={`Rated ${avgRating} out of 5 from ${reviews.length} review${reviews.length === 1 ? "" : "s"}`}
+                  >
+                    <span className="flex items-center gap-0.5">
+                      {[1, 2, 3, 4, 5].map((star) => (
+                        <Star
+                          key={star}
+                          className={`h-3.5 w-3.5 ${
+                            star <= Math.round(Number(avgRating))
+                              ? "fill-[#101010] text-[#101010]"
+                              : "fill-transparent text-[#CBCBCB]"
+                          }`}
+                        />
+                      ))}
                     </span>
+                    <span className={`${AT_LABEL} text-[#717171]`}>({reviews.length})</span>
+                  </button>
+                )}
+
+                {timeLeft && (
+                  <span className={`flex items-center gap-2 bg-[#F0F0F0] px-2 py-1 text-[#B40C00] ${AT_TITLE}`}>
+                    <span className="h-1.5 w-1.5 rounded-full bg-[#B40C00]" />
+                    Ends in {timeLeft}
+                  </span>
+                )}
+              </div>
+
+              {/* Read from Settings → Shipping rather than hardcoded: the number is a
+                  promise, and a stale one is worse than none. Hidden entirely when
+                  no threshold is configured — there is nothing honest to say. */}
+              {freeShippingThreshold !== null && (
+                <p className={`mt-2 ${AT_LABEL} font-normal text-[#717171]`}>
+                  Free shipping on orders over {formatPrice(freeShippingThreshold)}
+                </p>
+              )}
+
+              {product.tags && (
+                <div className="mt-2 flex flex-wrap gap-1">
+                  {product.tags
+                    .split(",")
+                    .map((t) => t.trim())
+                    .filter(Boolean)
+                    .map((tag) => (
+                      <span
+                        key={tag}
+                        className="bg-[#F0F0F0] px-1.5 py-0.5 text-[10px] font-normal uppercase leading-[14px] tracking-[0.05em] text-[#717171]"
+                      >
+                        {tag}
+                      </span>
+                    ))}
+                </div>
+              )}
+
+              {/* COLOUR — 14px dots that stretch into a pill when chosen, which
+                  is how the reference marks the active colourway. */}
+              {uniqueColors.length > 0 && (
+                <div className="mt-7">
+                  <div className={`${AT_TITLE} text-[#717171]`}>
+                    Color<span className="text-[#101010]"> {selectedColor}</span>
                   </div>
+                  <div className="mt-3 flex flex-wrap items-center gap-3">
+                    {uniqueColors.map((color) => {
+                      const dbColor = dbColors.find((c) => c.name.toLowerCase() === color.toLowerCase());
+                      const style = swatchStyle(dbColor ?? { value: COLOR_HEX_MAP[color] || "#71717a" });
+                      const isSelected = selectedColor === color;
+                      return (
+                        <button
+                          key={color}
+                          type="button"
+                          onClick={() => setSelectedColor(color)}
+                          title={color}
+                          aria-label={color}
+                          aria-pressed={isSelected}
+                          className={`h-[14px] cursor-pointer bg-cover bg-center ring-1 ring-inset ring-[#101010]/15 transition-[width,border-radius] duration-300 ${
+                            isSelected ? "w-[26px] rounded-[14px]" : "w-[14px] rounded-full hover:opacity-80"
+                          }`}
+                          style={style}
+                        />
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* SIZE — square-cornered label swatches, with the two size aids
+                  sat on the same line as the legend. */}
+              {uniqueSizes.length > 0 && (
+                <div className="mt-6">
+                  <div className="flex w-full flex-row flex-wrap items-center justify-between gap-2">
+                    <div className={`${AT_TITLE} text-[#717171]`}>
+                      Size{selectedSize && <span className="text-[#101010]"> {selectedSize}</span>}
+                    </div>
+                    <div className="flex items-center gap-4">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setActiveSizeTab("size-chart");
+                          setShowSizeChart(true);
+                        }}
+                        className={`${AT_LABEL} cursor-pointer underline decoration-[1.5px] underline-offset-[3px] hover:text-[#717171]`}
+                      >
+                        Size Chart
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setActiveSizeTab("heights");
+                          setWizardStep("wizard-input");
+                          setShowSizeChart(true);
+                        }}
+                        className={`${AT_LABEL} cursor-pointer underline decoration-[1.5px] underline-offset-[3px] hover:text-[#717171]`}
+                      >
+                        Find My Size
+                      </button>
+                    </div>
+                  </div>
+                  <ul className="mt-3 flex flex-wrap items-start gap-2">
+                    {uniqueSizes.map((size) => {
+                      const isSelected = selectedSize === size;
+                      const available = isSizeAvailable(size);
+                      return (
+                        <li key={size}>
+                          <button
+                            type="button"
+                            onClick={() => setSelectedSize(size)}
+                            disabled={!available}
+                            title={available ? undefined : `Not available in ${selectedLength || selectedColor}`}
+                            className={`min-w-[52px] rounded-[2px] border px-5 py-4 text-center ${AT_LABEL} transition-all ${
+                              !available
+                                ? "cursor-not-allowed border-[#E8E8E8] text-[#CBCBCB] line-through"
+                                : isSelected
+                                  ? "cursor-pointer border-[#101010] text-[#101010] shadow-[0_0_0_1px_#101010]"
+                                  : "cursor-pointer border-[#CBCBCB] text-[#717171] hover:border-[#101010] hover:text-[#101010]"
+                            }`}
+                          >
+                            {size}
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              )}
+
+              {/* LENGTH */}
+              {uniqueLengths.length > 0 && (
+                <div className="mt-6">
+                  <div className={`${AT_TITLE} text-[#717171]`}>
+                    Length{selectedLength && <span className="text-[#101010]"> {selectedLength}</span>}
+                  </div>
+                  <ul className="mt-3 flex flex-wrap items-start gap-2">
+                    {uniqueLengths.map((len) => {
+                      const isSelected = selectedLength === len;
+                      // Lengths stay clickable even when the current size is not
+                      // made in them: the effect above moves the shopper to a
+                      // size that is, which beats dead-ending the control they
+                      // came to the page to use.
+                      const available = isLengthAvailable(len);
+                      return (
+                        <li key={len}>
+                          <button
+                            type="button"
+                            onClick={() => setSelectedLength(len)}
+                            className={`cursor-pointer rounded-[2px] border px-5 py-4 text-center ${AT_LABEL} transition-all ${
+                              isSelected
+                                ? "border-[#101010] text-[#101010] shadow-[0_0_0_1px_#101010]"
+                                : available
+                                  ? "border-[#CBCBCB] text-[#717171] hover:border-[#101010] hover:text-[#101010]"
+                                  : "border-[#E8E8E8] text-[#CBCBCB]"
+                            }`}
+                          >
+                            {len}
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              )}
+
+              {/* MADE-TO-MEASURE */}
+              {measurementTemplate && (
+                <div className="mt-6">
+                  <CustomMeasurementForm
+                    template={measurementTemplate}
+                    surcharge={customSurcharge}
+                    unitPrice={customUnitPrice}
+                    onChange={setCustomMeasurement}
+                  />
+                </div>
+              )}
+
+              {/* DYNAMIC ACTION BUTTON.
+                  The label names what is still missing rather than always
+                  reading "Add To Bag" and explaining itself in a popup after
+                  the click. */}
+              <div className="mt-6 flex gap-2">
+                <button
+                  onClick={() => handleAddToBag()}
+                  disabled={addedToBag || !canAddToBag}
+                  className={`flex h-[54px] flex-1 items-center justify-center gap-2 rounded-[2px] px-4 text-[14px] font-semibold leading-[14px] tracking-[0.02em] transition-colors ${
+                    !canAddToBag
+                      ? "cursor-not-allowed bg-[#CBCBCB] text-white"
+                      : addedToBag
+                        ? "cursor-pointer bg-[#101010] text-white"
+                        : "cursor-pointer bg-[#101010] text-white hover:bg-[#2B2B2B]"
+                  }`}
+                >
+                  {addedToBag ? (
+                    <><Check className="h-4 w-4" /> Added! Going to Cart…</>
+                  ) : canAddToBag ? (
+                    <><ShoppingBag className="h-4 w-4" /> {buyLabel}</>
+                  ) : (
+                    <>{buyLabel}</>
+                  )}
+                </button>
+
+                <button
+                  onClick={(e) => {
+                    e.preventDefault();
+                    toggleWishlist({
+                      productId: product.id,
+                      slug: product.slug,
+                      title: product.title,
+                      thumbnail: product.thumbnail || "https://placehold.co/600x800/e2e8f0/64748b.png?text=Store+Image",
+                      basePrice: product.basePrice,
+                      discountPrice: product.discountPrice
+                    });
+                  }}
+                  aria-label={wishlisted ? "Remove from wishlist" : "Save to wishlist"}
+                  className={`flex h-[54px] w-[54px] shrink-0 cursor-pointer items-center justify-center rounded-[2px] border transition-colors ${
+                    wishlisted
+                      ? "border-[#101010] text-[#101010]"
+                      : "border-[#CBCBCB] text-[#717171] hover:border-[#101010] hover:text-[#101010]"
+                  }`}
+                >
+                  <Heart className="h-5 w-5" strokeWidth={1.5} fill={wishlisted ? "currentColor" : "none"} />
+                </button>
+              </div>
+
+              {/* Stock. Sat under the button rather than above the swatches: it
+                  is a fact about the combination the shopper just assembled,
+                  and about the button it disables. */}
+              {(isOutOfStock || isLowStock) && (
+                <div className="mt-4">
+                  {isOutOfStock ? (
+                    <div>
+                      <span className={`${AT_TITLE} bg-[#F0F0F0] px-2 py-1 text-[#717171]`}>Out of Stock</span>
+                      {!notifySuccess ? (
+                        <div className="mt-3 flex items-center gap-2">
+                          <input
+                            type="email"
+                            placeholder="Email address for restock alert"
+                            value={notifyEmail}
+                            onChange={(e) => setNotifyEmail(e.target.value)}
+                            className="h-10 flex-1 rounded-[2px] border border-[#CBCBCB] px-3 text-[13px] placeholder:text-[#717171] focus:border-[#101010] focus:outline-none"
+                          />
+                          <button
+                            disabled={notifyLoading || !notifyEmail}
+                            onClick={async () => {
+                              if (!notifyEmail) return;
+                              setNotifyLoading(true);
+                              try {
+                                const res = await fetch("/api/stock-alert", {
+                                  method: "POST",
+                                  headers: { "Content-Type": "application/json" },
+                                  body: JSON.stringify({ email: notifyEmail, variantId: activeVariant?.id })
+                                });
+                                if (res.ok) {
+                                  setNotifySuccess(true);
+                                  Swal.fire({ title: "Subscribed!", text: "We'll email you when it's back in stock.", icon: "success", confirmButtonColor: "#101010" });
+                                } else {
+                                  const data = await res.json();
+                                  Swal.fire({ title: "Oops!", text: data.error || "Failed to subscribe.", icon: "error", confirmButtonColor: "#101010" });
+                                }
+                              } finally {
+                                setNotifyLoading(false);
+                              }
+                            }}
+                            className={`h-10 shrink-0 cursor-pointer rounded-[2px] bg-[#101010] px-4 ${AT_LABEL} text-white transition-colors hover:bg-[#2B2B2B] disabled:cursor-not-allowed disabled:bg-[#CBCBCB]`}
+                          >
+                            {notifyLoading ? "…" : "Notify Me"}
+                          </button>
+                        </div>
+                      ) : (
+                        <p className={`mt-3 flex items-center gap-1.5 ${AT_LABEL}`}>
+                          <Check className="h-4 w-4" /> You&rsquo;re on the list!
+                        </p>
+                      )}
+                    </div>
+                  ) : (
+                    <p className={`${AT_LABEL} text-[#B40C00]`}>
+                      Only {activeStock} left — order soon
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {/* Brand promises. Two claims on one grey band, each a link to the
+                  policy that backs it — the reference opens a drawer, we send
+                  them to the page that already holds the same copy rather than
+                  duplicating it somewhere that can fall out of date. */}
+              <div className={`mt-5 flex flex-wrap items-center gap-x-6 gap-y-2 bg-[#F0F0F0] p-2.5 ${AT_LABEL} text-[#717171]`}>
+                <Link href="/pages/shipping-policy" className="group flex items-center gap-3 transition-colors hover:text-[#101010]">
+                  <Truck className="h-5 w-5" strokeWidth={1.25} />
+                  <span className="underline-offset-4 group-hover:underline">Free Delivery</span>
+                </Link>
+                <Link href="/pages/returns-exchanges" className="group flex items-center gap-3 transition-colors hover:text-[#101010]">
+                  <RotateCcw className="h-5 w-5" strokeWidth={1.25} />
+                  <span className="underline-offset-4 group-hover:underline">30-Day Returns</span>
+                </Link>
+              </div>
+            </div>
+
+            {/* ── PRODUCT DETAILS ──────────────────────────────────────────
+                A one-line summary of the garment, then everything else folded
+                away behind it. The summary is the meta description, which is
+                already written to be exactly that sentence — no second field to
+                keep in step. */}
+            {/* Not capped at the buy form's 520px. On the reference this block
+                is a *sibling* of the form, not a child, so it keeps the whole
+                half-page while the controls above stay narrow — which is what
+                leaves room for the panel and the photograph to sit side by side. */}
+            <div className="mt-[50px] w-full px-5">
+              <div className="flex flex-col md:flex-row md:items-stretch">
+              {/* Painted in the shopper's colourway — the block is the one place
+                  on the page big enough to show a colour at any size, and it
+                  changes with the swatch above. */}
+              <div
+                data-color-panel={panelColor ? (panelIsLight ? "light" : "dark") : undefined}
+                style={panelVars}
+                className="w-full px-6 py-8 transition-[background-color,color] duration-500 md:w-1/2 md:px-8"
+              >
+              <div className={`flex flex-col items-center gap-2 ${AT_LABEL} text-[var(--pk-muted)]`}>
+                <ChevronDown className="h-4 w-4" />
+                <span>Product Details</span>
+              </div>
+
+              <div className="mt-6">
+                <div className="w-full">
+                  {product.metaDescription && (
+                    <h2 className={AT_SUBHEAD}>{product.metaDescription}</h2>
+                  )}
+
+                  <div className="mt-6 divide-y divide-[var(--pk-rule)] border-y border-[var(--pk-rule)]">
+
+                    {/* 1. PRODUCT DESCRIPTION */}
+                    <div>
+                      <button
+                        onClick={() => toggleAccordion("description")}
+                        aria-expanded={!!openAccordions.description}
+                        className={`flex w-full cursor-pointer items-center justify-between gap-2 py-4 text-left ${AT_BASE_LARGE}`}
+                      >
+                        <span>Product Description</span>
+                        <Plus className={`h-4 w-4 shrink-0 transition-transform duration-500 ${openAccordions.description ? "rotate-45" : ""}`} />
+                      </button>
+                      <div className={`overflow-hidden transition-all duration-500 ${openAccordions.description ? "max-h-[40rem] opacity-100" : "max-h-0 opacity-0"}`}>
+                        <div
+                          className={`max-w-none pb-5 ${AT_PROSE}`}
+                          dangerouslySetInnerHTML={{ __html: stripScriptTags(product.description ?? "") }}
+                        />
+                      </div>
+                    </div>
+
+                    {/* 2. SIZE & FIT */}
+                    {(product as any).sizeAndFit && (
+                      <div>
+                        <button
+                          onClick={() => toggleAccordion("fit")}
+                          aria-expanded={!!openAccordions.fit}
+                          className={`flex w-full cursor-pointer items-center justify-between gap-2 py-4 text-left ${AT_BASE_LARGE}`}
+                        >
+                          <span>Size &amp; Fit</span>
+                          <Plus className={`h-4 w-4 shrink-0 transition-transform duration-500 ${openAccordions.fit ? "rotate-45" : ""}`} />
+                        </button>
+                        <div className={`overflow-hidden transition-all duration-500 ${openAccordions.fit ? "max-h-[40rem] opacity-100" : "max-h-0 opacity-0"}`}>
+                          <div
+                            className={`max-w-none pb-5 ${AT_PROSE}`}
+                            dangerouslySetInnerHTML={{ __html: stripScriptTags((product as any).sizeAndFit) }}
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    {/* 3. FABRIC & CARE. "Material", not "Fabric": the same
+                        field carries care notes for footwear and accessories,
+                        where fabric reads wrong. */}
+                    {(product as any).fabricAndCare && (
+                      <div>
+                        <button
+                          onClick={() => toggleAccordion("care")}
+                          aria-expanded={!!openAccordions.care}
+                          className={`flex w-full cursor-pointer items-center justify-between gap-2 py-4 text-left ${AT_BASE_LARGE}`}
+                        >
+                          <span>Material &amp; Care</span>
+                          <Plus className={`h-4 w-4 shrink-0 transition-transform duration-500 ${openAccordions.care ? "rotate-45" : ""}`} />
+                        </button>
+                        <div className={`overflow-hidden transition-all duration-500 ${openAccordions.care ? "max-h-[40rem] opacity-100" : "max-h-0 opacity-0"}`}>
+                          <div
+                            className={`max-w-none pb-5 ${AT_PROSE}`}
+                            dangerouslySetInnerHTML={{ __html: stripScriptTags((product as any).fabricAndCare) }}
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    {/* 4. REVIEWS */}
+                    <div ref={reviewsRef}>
+                      <button
+                        onClick={() => toggleAccordion("reviews")}
+                        aria-expanded={!!openAccordions.reviews}
+                        className={`flex w-full cursor-pointer items-center justify-between gap-2 py-4 text-left ${AT_BASE_LARGE}`}
+                      >
+                        {/* Score, stars and count beside the label behind a rule,
+                            the way the reference stacks them — the number is the
+                            reason to open this row, so it earns the space. */}
+                        <span className="flex items-center gap-3">
+                          Reviews
+                          {reviews.length > 0 && (
+                            <span className="flex flex-col gap-0.5 border-l border-[var(--pk-rule)] pl-3">
+                              <span className="flex items-center gap-1.5">
+                                <span className={AT_LABEL}>{avgRating}</span>
+                                <span className="flex items-center gap-px" aria-hidden="true">
+                                  {[1, 2, 3, 4, 5].map((star) => (
+                                    <Star
+                                      key={star}
+                                      className={`h-3 w-3 ${
+                                        star <= Math.round(Number(avgRating))
+                                          ? "fill-current text-[var(--pk)]"
+                                          : "fill-transparent text-[var(--pk-faint)]"
+                                      }`}
+                                    />
+                                  ))}
+                                </span>
+                              </span>
+                              <span className={`${AT_LABEL} font-normal text-[var(--pk-muted)]`}>
+                                Based on {reviews.length} review{reviews.length === 1 ? "" : "s"}
+                              </span>
+                            </span>
+                          )}
+                        </span>
+                        <Plus className={`h-4 w-4 shrink-0 transition-transform duration-500 ${openAccordions.reviews ? "rotate-45" : ""}`} />
+                      </button>
+                      <div className={`overflow-hidden transition-all duration-500 ${openAccordions.reviews ? "max-h-[1400px] opacity-100" : "max-h-0 opacity-0"}`}>
+                        <div className={`pb-6 ${AT_LABEL} font-normal text-[var(--pk-muted)]`}>
+                          {reviewsLoading ? (
+                            <p>Loading reviews…</p>
+                          ) : reviews.length === 0 ? (
+                            <p>No reviews yet. Be the first to review this piece.</p>
+                          ) : (
+                            <ul className="divide-y divide-[var(--pk-rule)]">
+                              {reviews.map((r) => (
+                                <li key={r.id} className="py-4 first:pt-0">
+                                  <div className="flex items-center gap-2">
+                                    <span className="flex items-center gap-0.5">
+                                      {[1, 2, 3, 4, 5].map((star) => (
+                                        <Star
+                                          key={star}
+                                          className={`h-3 w-3 ${star <= r.rating ? "fill-[var(--pk)] text-[var(--pk)]" : "fill-transparent text-[var(--pk-faint)]"}`}
+                                        />
+                                      ))}
+                                    </span>
+                                    <span className={`${AT_TITLE} text-[var(--pk)]`}>{r.user?.name || "Guest"}</span>
+                                  </div>
+                                  <p className="mt-2">{r.comment}</p>
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+
+                          <div className="mt-6 border-t border-[var(--pk-rule)] pt-5">
+                            <h4 className={`${AT_TITLE} text-[var(--pk)]`}>Write a Review</h4>
+                            <form onSubmit={handleReviewSubmit} className="mt-3 space-y-3">
+                              <input
+                                type="text"
+                                placeholder="Your name (optional)"
+                                value={newReview.name}
+                                onChange={(e) => setNewReview({ ...newReview, name: e.target.value })}
+                                className="h-10 w-full rounded-[2px] border border-[var(--pk-faint)] bg-transparent px-3 text-[13px] text-[var(--pk)] placeholder:text-[var(--pk-muted)] focus:border-[var(--pk)] focus:outline-none"
+                              />
+                              <div className="flex items-center gap-3">
+                                <label htmlFor="review-rating" className={`${AT_TITLE} text-[var(--pk-muted)]`}>Rating</label>
+                                <select
+                                  id="review-rating"
+                                  value={newReview.rating}
+                                  onChange={(e) => setNewReview({ ...newReview, rating: Number(e.target.value) })}
+                                  // A native select cannot be trusted to render its own value legibly on a
+                                  // painted background, so it keeps a white surface whatever the panel does.
+                                  className="h-10 rounded-[2px] border border-[var(--pk-faint)] bg-white px-3 text-[13px] text-[#101010] focus:border-[var(--pk)] focus:outline-none"
+                                >
+                                  <option value="5">5 Stars</option>
+                                  <option value="4">4 Stars</option>
+                                  <option value="3">3 Stars</option>
+                                  <option value="2">2 Stars</option>
+                                  <option value="1">1 Star</option>
+                                </select>
+                              </div>
+                              <textarea
+                                required
+                                placeholder="Your review"
+                                value={newReview.comment}
+                                onChange={(e) => setNewReview({ ...newReview, comment: e.target.value })}
+                                className="min-h-[90px] w-full rounded-[2px] border border-[var(--pk-faint)] bg-transparent p-3 text-[13px] text-[var(--pk)] placeholder:text-[var(--pk-muted)] focus:border-[var(--pk)] focus:outline-none"
+                              />
+                              <button
+                                type="submit"
+                                disabled={submittingReview}
+                                className={`h-10 cursor-pointer rounded-[2px] border border-[var(--pk)] px-5 ${AT_LABEL} text-[var(--pk)] transition-colors hover:bg-[var(--pk)] hover:text-[var(--pk-contrast)] disabled:cursor-not-allowed disabled:opacity-50`}
+                              >
+                                {submittingReview ? "Submitting…" : "Submit Review"}
+                              </button>
+                            </form>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                  </div>
+                </div>
+
+              </div>
+              </div>
+
+              {/* Flat-lay of the selected colourway, beside the panel and the
+                  same height as it — the panel decides how tall the pair is,
+                  which is why this is a stretched flex item with an absolutely
+                  positioned photograph rather than a fixed aspect box.
+                  `object-contain`: the reference floats the whole garment on a
+                  pale ground, and cropping a flat-lay to fill would cut the
+                  hem off. Dropped below md, where two halves would leave the
+                  copy about 160px wide. */}
+              <div className="relative hidden w-1/2 bg-[#E8E8E8] md:block">
+                <Image
+                  key={flatLayImage}
+                  src={formatImageUrl(flatLayImage)}
+                  alt={`${product.title} in ${selectedColor}`}
+                  fill
+                  sizes="(max-width: 1280px) 25vw, 22vw"
+                  className="select-none object-contain p-6"
+                />
+              </div>
+              </div>
+            </div>
+
+            {/* Model cross-sell — what the model has on with it. */}
+            {completeLookItem && (
+              <div className="mx-auto mt-12 w-full max-w-[520px] px-5 pb-12">
+                <div className={`${AT_LABEL} text-[#717171] md:text-[24px] md:leading-[33px]`}>
+                  Model is also wearing
+                </div>
+                <Link href={`/product/${completeLookItem.slug}`} className="group mt-4 block w-[62%] max-w-[240px]">
+                  <div className="relative aspect-[5/7] overflow-hidden bg-[#FBFBFB]">
+                    <Image
+                      src={formatImageUrl(completeLookItem.thumbnail)}
+                      alt={completeLookItem.title}
+                      fill
+                      sizes="240px"
+                      className="object-cover transition-transform duration-500 group-hover:scale-[1.03]"
+                    />
+                  </div>
+                  <p className={`mt-3 ${AT_LABEL} text-[#717171] group-hover:text-[#101010]`}>
+                    {completeLookItem.title}
+                  </p>
+                  <p className={`mt-1 ${AT_LABEL}`}>{formatPrice(completeLookItem.price)}</p>
                 </Link>
               </div>
             )}
 
           </div>
-
-          {/* RIGHT Flat-Lay Product Banner on Grey Card */}
-          <div className="lg:col-span-4 sg-card bg-cream flex items-center justify-center p-8 sm:p-12 relative aspect-[4/5] sm:aspect-auto overflow-hidden">
-            <div className="relative w-full h-full min-h-[300px]">
-              <Image
-                src={product.thumbnail}
-                alt={product.title}
-                fill
-                className="object-contain hover:scale-102 transition-transform duration-500 select-none drop-shadow-md"
-              />
-            </div>
-          </div>
-
         </div>
 
-        {/* 5. "YOU MAY ALSO LIKE" RELATED PRODUCTS CAROUSEL */}
-        <section className="w-full py-8 overflow-hidden mb-10">
-          <div className="flex justify-between items-center mb-8">
-            <h2 className="text-xl sm:text-2xl font-light tracking-tight text-foreground uppercase">
-              You <span className="font-extrabold text-foreground">May Also Like</span>
+        {/* ── YOU MAY ALSO LIKE ──────────────────────────────────────────── */}
+        <section className="mx-auto mt-16 w-full max-w-[1800px] overflow-hidden border-t border-[#101010]/10 px-5 py-12">
+          <div className="flex flex-wrap items-end justify-between gap-4">
+            <h2 className="text-[24px] font-semibold leading-[28px] tracking-[0.01em] sm:text-[35px] sm:leading-[42px] sm:tracking-[-0.01em]">
+              You may also like
             </h2>
-            <div className="flex border border-line rounded-xl overflow-hidden shadow-sm">
+            <div className="flex items-center gap-6">
               <button
                 onClick={() => setActiveRelatedTab("recommended")}
-                className={`px-6 py-2.5 text-[10px] font-bold tracking-[0.14em] uppercase cursor-pointer transition-all duration-300 ${activeRelatedTab === "recommended"
-                    ? "bg-brand-600 rounded-full text-white"
-                    : "bg-white text-faint hover:text-brand-700"
-                  }`}
+                className={`${AT_LABEL} cursor-pointer pb-1 transition-colors ${
+                  activeRelatedTab === "recommended"
+                    ? "border-b border-[#101010] text-[#101010]"
+                    : "border-b border-transparent text-[#717171] hover:text-[#101010]"
+                }`}
               >
                 Recommended
               </button>
               <button
                 onClick={() => setActiveRelatedTab("recently")}
-                className={`px-6 py-2.5 text-[10px] font-bold tracking-[0.14em] uppercase cursor-pointer transition-all duration-300 border-l border-line ${activeRelatedTab === "recently"
-                    ? "bg-brand-600 rounded-full text-white"
-                    : "bg-white text-faint hover:text-brand-700"
-                  }`}
+                className={`${AT_LABEL} cursor-pointer pb-1 transition-colors ${
+                  activeRelatedTab === "recently"
+                    ? "border-b border-[#101010] text-[#101010]"
+                    : "border-b border-transparent text-[#717171] hover:text-[#101010]"
+                }`}
               >
                 Recently Viewed
               </button>
             </div>
           </div>
 
-          {/* Scroller Row */}
-          <div className="flex gap-6 overflow-x-auto w-full py-2 no-scrollbar" style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}>
-            {(activeRelatedTab === "recommended" ? relatedProducts : [...relatedProducts].reverse()).slice(0, 5).map((prod) => {
-              return (
-                <div key={prod.id} className="min-w-[290px] sm:min-w-[320px] max-w-[320px] flex-shrink-0">
+          {activeRelatedTab === "recently" && recentlyViewed.length === 0 ? (
+            <p className={`mt-8 ${AT_LABEL} font-normal text-[#717171]`}>
+              Nothing here yet — the pieces you open will collect on this tab.
+            </p>
+          ) : (
+          <div
+            className="no-scrollbar mt-8 flex w-full gap-5 overflow-x-auto pb-2"
+            style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
+          >
+            {(activeRelatedTab === "recommended" ? relatedProducts : recentlyViewed)
+              .slice(0, 5)
+              .map((prod) => (
+                <div key={prod.id} className="w-[260px] min-w-[260px] flex-shrink-0 sm:w-[300px] sm:min-w-[300px]">
                   <ProductCard product={prod} idPrefix="related" />
                 </div>
-              );
-            })}
+              ))}
           </div>
+          )}
         </section>
 
-
-
-        {/* 7. NEWSLETTER EMAIL SIGN UP */}
-        <section className="w-full sg-card sg-card-lg sg-raise py-12 px-8 sm:px-12 flex flex-col md:flex-row justify-between items-center gap-8 mb-12">
-          <div className="max-w-md">
-            <h3 className="text-lg font-extrabold uppercase tracking-wider text-foreground mb-1">
-              Sign up for our emails
-            </h3>
-            <p className="text-xs text-soft font-light leading-relaxed">
-              Subscribe to unlock early access, seasonal catalog launches, and get 15% off your first luxury apparel order.
-            </p>
-          </div>
-          <div className="flex w-full md:w-auto max-w-sm flex-col gap-2">
-            <div className="flex border border-line rounded-xl overflow-hidden bg-white shadow-sm">
-              <input
-                type="email"
-                placeholder="Enter your email address"
-                className="px-4 py-3 text-xs w-full outline-none text-foreground placeholder-faint"
-              />
-              <button className="bg-brand-600 rounded-full hover:bg-brand-700 text-white px-6 text-[12.5px] font-extrabold uppercase tracking-[0.12em] transition-colors cursor-pointer">
-                Subscribe
-              </button>
-            </div>
-            <span className="text-[8px] text-faint text-center md:text-left leading-normal font-medium block">
-              By subscribing, you agree to our Privacy Policy. You can unsubscribe at any time.
-            </span>
-          </div>
-        </section>
+        {/* The footer already carries the newsletter, with a form that is
+            actually wired to /api/subscribe. The copy of it that used to sit
+            here had a bare <input> and a <button> with no handler — a sign-up
+            box that silently did nothing, printed directly above a working one. */}
 
       </main>
 
 
 
-      {/* Size chart modal — height→length table, fit models and measurements */}
+      {/* Premium Tabbed Size Chart Modal Overlay (Matches Zar Tall Layout perfectly) */}
+      {/* ─── Full-screen image viewer ─────────────────────────────────────────
+          Only the current shot is mounted, so opening the viewer fetches one
+          image and each arrow fetches the next — a product with twenty photos
+          does not pay for nineteen it may never show. */}
+      {/* FULL-SCREEN IMAGE VIEWER
+          A scrolling wall rather than one photo at a time: every shot is laid
+          out at the full width of the frame and you scroll through them, with a
+          thumbnail rail down the left to jump. Rendering at full width is what
+          replaces the old click-to-zoom — the photograph is already larger than
+          the screen, so there is nothing left to magnify into. */}
+      {lightboxIndex !== null && lightboxImages.length > 0 && (
+        <div
+          className="fixed inset-0 z-[110] flex bg-white animate-in fade-in duration-200"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Product image viewer"
+        >
+          {/* Thumbnail rail. Hidden on a phone, where it would take a third of
+              the width to save a scroll the visitor is already doing. */}
+          {lightboxImages.length > 1 && (
+            <div className="hidden w-[104px] shrink-0 overflow-y-auto overscroll-contain border-r border-zinc-200 bg-white p-3 sm:block">
+              <div className="flex flex-col gap-2">
+                {lightboxImages.map((thumbUrl, i) => (
+                  <button
+                    key={`thumb-${i}`}
+                    type="button"
+                    onClick={() => {
+                      setLightboxActive(i);
+                      scrollToLightboxPane(i);
+                    }}
+                    aria-label={`Go to image ${i + 1}`}
+                    aria-current={i === lightboxActive}
+                    className={`relative aspect-[3/4] w-full overflow-hidden bg-zinc-100 transition-opacity ${
+                      i === lightboxActive
+                        ? "outline outline-2 outline-offset-[-2px] outline-zinc-900"
+                        : "opacity-60 hover:opacity-100"
+                    }`}
+                  >
+                    <Image
+                      src={formatImageUrl(thumbUrl)}
+                      alt=""
+                      aria-hidden="true"
+                      fill
+                      sizes="104px"
+                      className="object-cover"
+                    />
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* The wall itself. */}
+          <div
+            ref={lightboxScrollRef}
+            onScroll={onLightboxScroll}
+            className="relative flex-1 overflow-y-auto overscroll-contain bg-zinc-100"
+          >
+            {lightboxImages.map((imgUrl, i) => {
+              const copy = imageCopyByUrl.get(imgUrl);
+              const caption = productImageCaption(copy?.caption);
+              return (
+                <div
+                  key={`pane-${i}`}
+                  ref={(node) => {
+                    lightboxPaneRefs.current[i] = node;
+                  }}
+                  className="relative w-full"
+                >
+                  {/* width/height are the intrinsic ratio only — `w-full h-auto`
+                      is what actually sizes it. Given to next/image so the space
+                      is reserved before the file arrives and the wall does not
+                      reflow under the scroll position. */}
+                  <Image
+                    src={formatImageUrl(imgUrl)}
+                    alt={productImageAlt({
+                      custom: copy?.alt,
+                      title: product.title,
+                      brand: product.brand?.name,
+                      color: copy?.color || selectedColor,
+                      index: i,
+                      total: lightboxImages.length,
+                    })}
+                    width={1500}
+                    height={2000}
+                    sizes="(max-width: 640px) 100vw, calc(100vw - 104px)"
+                    // Only the shot being opened is worth blocking on; the rest
+                    // load as the visitor reaches them.
+                    priority={i === lightboxIndex}
+                    className="h-auto w-full select-none"
+                  />
+
+                  {caption && (
+                    <p className="pointer-events-none absolute bottom-4 left-4 right-4 line-clamp-2 rounded-sm bg-black/45 px-3 py-2 text-[11px] font-medium leading-snug text-white backdrop-blur-md sm:right-auto sm:max-w-[60%]">
+                      {caption}
+                    </p>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Counter and close float over the wall. Solid white rather than a
+              translucent pill: they sit over photography of unknown brightness
+              and have to stay findable through the whole scroll. */}
+          <span className="pointer-events-none absolute left-1/2 top-5 z-20 -translate-x-1/2 bg-white px-3 py-1.5 text-[11px] font-bold uppercase tracking-widest text-zinc-900 shadow-sm sm:left-auto sm:right-24 sm:translate-x-0">
+            {lightboxActive + 1} / {lightboxImages.length}
+          </span>
+
+          <button
+            type="button"
+            onClick={() => setLightboxIndex(null)}
+            aria-label="Close"
+            className="absolute right-4 top-4 z-20 flex h-12 w-12 cursor-pointer items-center justify-center bg-white text-zinc-900 shadow-sm transition-colors hover:bg-zinc-100 sm:right-6 sm:top-6"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+      )}
+
       {showSizeChart && (
         <div
-          className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-brand-ink/80 backdrop-blur-sm transition-all duration-300"
+          className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-zinc-950/80 backdrop-blur-sm transition-all duration-300"
           onClick={() => setShowSizeChart(false)}
         >
           <div
-            className={`relative w-full bg-white border border-line rounded-sg shadow-2xl p-6 sm:p-8 flex flex-col max-h-[95vh] overflow-y-auto transition-all duration-300 animate-in fade-in zoom-in-95 ${
+            className={`relative w-full bg-white border border-zinc-200 rounded-sm shadow-2xl p-6 sm:p-8 flex flex-col max-h-[95vh] overflow-y-auto overscroll-contain transition-all duration-300 animate-in fade-in zoom-in-95 ${
               activeSizeTab === "heights" && wizardStep === "wizard-input" ? "max-w-[480px]" : "max-w-2xl"
             }`}
             onClick={(e) => e.stopPropagation()}
@@ -1274,7 +2223,7 @@ export default function ProductDetailsClient({ product, categories, relatedProdu
                       className="h-8 w-auto max-w-[140px] object-contain object-left"
                     />
                   ) : (
-                    <span className="text-sm font-extrabold uppercase tracking-[0.14em] text-foreground">
+                    <span className="text-sm font-black uppercase tracking-widest text-zinc-950">
                       {storeName}
                     </span>
                   )}
@@ -1282,47 +2231,47 @@ export default function ProductDetailsClient({ product, categories, relatedProdu
                 {/* Close Button */}
                 <button
                   onClick={() => setShowSizeChart(false)}
-                  className="p-1 text-foreground hover:text-soft transition-colors cursor-pointer focus:outline-none"
+                  className="p-1 text-zinc-955 hover:text-zinc-600 transition-colors cursor-pointer focus:outline-none"
                   aria-label="Close"
                 >
                   <X className="w-6 h-6" />
                 </button>
               </div>
             ) : (
-              <div className="flex items-stretch border-b border-line -mx-6 -mt-6 sm:-mx-8 sm:-mt-8 mb-8 bg-cream">
+              <div className="flex items-stretch border-b border-zinc-150 -mx-6 -mt-6 sm:-mx-8 sm:-mt-8 mb-8 bg-zinc-50">
                 <button
                   onClick={() => {
                     setActiveSizeTab("heights");
                     setWizardStep("heights-list");
                   }}
-                  className={`flex-1 py-4 text-center text-[10px] sm:text-xs font-bold tracking-[0.14em] uppercase transition-all cursor-pointer border-r border-b border-line ${activeSizeTab === "heights"
-                      ? "bg-white text-foreground border-b-transparent"
-                      : "text-faint hover:text-soft bg-cream/60"
+                  className={`flex-1 py-4 text-center text-[10px] sm:text-xs font-bold tracking-widest uppercase transition-all cursor-pointer border-r border-b border-zinc-150 ${activeSizeTab === "heights"
+                      ? "bg-white text-zinc-955 border-b-transparent"
+                      : "text-zinc-400 hover:text-zinc-700 bg-zinc-50/50"
                     }`}
                 >
                   Our Heights & Fit
                 </button>
                 <button
                   onClick={() => setActiveSizeTab("size-chart")}
-                  className={`flex-1 py-4 text-center text-[10px] sm:text-xs font-bold tracking-[0.14em] uppercase transition-all cursor-pointer border-r border-b border-line ${activeSizeTab === "size-chart"
-                      ? "bg-white text-foreground border-b-transparent"
-                      : "text-faint hover:text-soft bg-cream/60"
+                  className={`flex-1 py-4 text-center text-[10px] sm:text-xs font-bold tracking-widest uppercase transition-all cursor-pointer border-r border-b border-zinc-150 ${activeSizeTab === "size-chart"
+                      ? "bg-white text-zinc-955 border-b-transparent"
+                      : "text-zinc-400 hover:text-zinc-700 bg-zinc-50/50"
                     }`}
                 >
                   Size Chart
                 </button>
                 <button
                   onClick={() => setActiveSizeTab("measure")}
-                  className={`flex-1 py-4 text-center text-[10px] sm:text-xs font-bold tracking-[0.14em] uppercase transition-all cursor-pointer border-b border-line ${activeSizeTab === "measure"
-                      ? "bg-white text-foreground border-b-transparent"
-                      : "text-faint hover:text-soft bg-cream/60"
+                  className={`flex-1 py-4 text-center text-[10px] sm:text-xs font-bold tracking-widest uppercase transition-all cursor-pointer border-b border-zinc-150 ${activeSizeTab === "measure"
+                      ? "bg-white text-zinc-955 border-b-transparent"
+                      : "text-zinc-400 hover:text-zinc-700 bg-zinc-50/50"
                     }`}
                 >
                   How To Measure
                 </button>
                 <button
                   onClick={() => setShowSizeChart(false)}
-                  className="px-5 border-l border-b border-line text-faint hover:text-foreground transition-colors bg-cream/60 hover:bg-cream flex items-center justify-center cursor-pointer"
+                  className="px-5 border-l border-b border-zinc-150 text-zinc-400 hover:text-zinc-800 transition-colors bg-zinc-50/50 hover:bg-zinc-100 flex items-center justify-center cursor-pointer"
                   aria-label="Close"
                 >
                   <X className="w-4 h-4" />
@@ -1334,121 +2283,89 @@ export default function ProductDetailsClient({ product, categories, relatedProdu
             {activeSizeTab === "heights" && wizardStep === "heights-list" && (
               <div className="flex flex-col animate-in fade-in duration-250">
                 <div className="text-center mb-8">
-                  <h2 className="text-2xl font-extrabold uppercase tracking-wider text-foreground mb-2">
-                    Our Heights
+                  <h2 className="text-2xl font-black uppercase tracking-wider text-zinc-900 mb-2">
+                    {heightsGuide.heading}
                   </h2>
-                  <p className="text-[10px] sm:text-xs text-soft font-bold uppercase tracking-[0.14em] leading-relaxed max-w-md mx-auto">
-                    Most of our customers use their height as a starting point when selecting a length.
+                  <p className="text-[10px] sm:text-xs text-zinc-500 font-bold uppercase tracking-widest leading-relaxed max-w-md mx-auto">
+                    {heightsGuide.subtitle}
                   </p>
                 </div>
 
-                <div className="border border-line rounded-xl overflow-hidden mb-8 shadow-sm">
-                  <table className="w-full text-center border-collapse text-xs">
-                    <thead>
-                      <tr className="bg-cream border-b border-line text-[10px] uppercase tracking-wider font-extrabold text-soft">
-                        <th className="p-3.5 text-left pl-6">Your Height</th>
-                        <th className="p-3.5">Recommended Length</th>
-                        <th className="p-3.5 text-right pr-6">Equivalent Inseam</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-line text-soft font-bold">
-                      <tr className="hover:bg-cream/60 transition-colors">
-                        <td className="p-4 text-left pl-6 text-foreground font-extrabold">5&apos;4&quot; - 5&apos;7&quot;</td>
-                        <td className="p-4">Short</td>
-                        <td className="p-4 text-right pr-6">30&quot;</td>
-                      </tr>
-                      <tr className="hover:bg-cream/60 transition-colors">
-                        <td className="p-4 text-left pl-6 text-foreground font-extrabold">5&apos;8&quot; - 6&apos;0&quot;</td>
-                        <td className="p-4">Regular</td>
-                        <td className="p-4 text-right pr-6">32&quot;</td>
-                      </tr>
-                      <tr className="hover:bg-cream/60 transition-colors">
-                        <td className="p-4 text-left pl-6 text-foreground font-extrabold">6&apos;1&quot; - 6&apos;5&quot;</td>
-                        <td className="p-4">Long</td>
-                        <td className="p-4 text-right pr-6">34&quot;</td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
+                {heightsRows.length > 0 && heightsGuide.columns.length > 0 && (
+                  <div className="border border-zinc-150 rounded-sm overflow-x-auto mb-8 shadow-sm">
+                    <table className="w-full text-center border-collapse text-xs">
+                      <thead>
+                        <tr className="bg-zinc-50 border-b border-zinc-150 text-[10px] uppercase tracking-wider font-extrabold text-zinc-700">
+                          {heightsGuide.columns.map((column, idx) => (
+                            <th key={idx} className={`p-3.5 ${headingCellAlign(idx, heightsGuide.columns.length)}`}>
+                              {column}
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-zinc-100 text-zinc-600 font-bold">
+                        {heightsRows.map((row, rowIdx) => (
+                          <tr key={rowIdx} className="hover:bg-zinc-50/50 transition-colors">
+                            {heightsGuide.columns.map((_, colIdx) => (
+                              <td
+                                key={colIdx}
+                                className={`p-4 ${headingCellAlign(colIdx, heightsGuide.columns.length)} ${
+                                  colIdx === 0 ? "text-zinc-950 font-black" : ""
+                                }`}
+                              >
+                                {row[colIdx] ?? ""}
+                              </td>
+                            ))}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
 
-                {/* Model Heights Collage */}
-                <div className="bg-cream p-6 rounded-xl border border-line">
-                  <div className="grid grid-cols-3 gap-4">
-                    {/* Short Model */}
-                    <div className="flex flex-col">
-                      <div className="relative overflow-hidden aspect-[3/4] bg-line border border-line rounded-lg shadow-xs group">
-                        <Image
-                          src="https://placehold.co/600x800/e2e8f0/64748b.png?text=Store+Image"
-                          alt="Short fit, 5ft 4in to 5ft 7in"
-                          fill
-                          className="object-cover grayscale contrast-[1.05] brightness-95 group-hover:scale-105 transition-transform duration-300"
-                        />
-                      </div>
-                      <div className="mt-3 text-center">
-                        <span className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-foreground block">
-                          Short
-                        </span>
-                        <span className="text-[9px] font-bold text-faint mt-0.5 block">
-                          6&apos;0&quot; - 6&apos;3&quot;
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Regular Model */}
-                    <div className="flex flex-col">
-                      <div className="relative overflow-hidden aspect-[3/4] bg-line border border-line rounded-lg shadow-xs group">
-                        <Image
-                          src="https://placehold.co/600x800/e2e8f0/64748b.png?text=Store+Image"
-                          alt="Regular fit, 5ft 8in to 6ft"
-                          fill
-                          className="object-cover grayscale contrast-[1.05] brightness-95 group-hover:scale-105 transition-transform duration-300"
-                        />
-                      </div>
-                      <div className="mt-3 text-center">
-                        <span className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-foreground block">
-                          Regular
-                        </span>
-                        <span className="text-[9px] font-bold text-faint mt-0.5 block">
-                          6&apos;3&quot; - 6&apos;7&quot;
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Long Model */}
-                    <div className="flex flex-col">
-                      <div className="relative overflow-hidden aspect-[3/4] bg-line border border-line rounded-lg shadow-xs group">
-                        <Image
-                          src="https://placehold.co/600x800/e2e8f0/64748b.png?text=Store+Image"
-                          alt="Long fit, 6ft 1in to 6ft 5in"
-                          fill
-                          className="object-cover grayscale contrast-[1.05] brightness-95 group-hover:scale-105 transition-transform duration-300"
-                        />
-                      </div>
-                      <div className="mt-3 text-center">
-                        <span className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-foreground block">
-                          Long
-                        </span>
-                        <span className="text-[9px] font-bold text-faint mt-0.5 block">
-                          6&apos;8&quot; - 7&apos;1&quot;
-                        </span>
-                      </div>
+                {/* Model Heights Collage. Hidden until at least one photo is
+                    set in Settings → Branding: three empty tiles read as a
+                    broken page to a shopper, and the heading and table above
+                    already stand on their own without them. */}
+                {heightsModels.length > 0 && (
+                  <div className="bg-zinc-50 p-6 rounded-sm border border-zinc-100">
+                    <div
+                      className="grid gap-4"
+                      style={{ gridTemplateColumns: `repeat(${heightsModels.length}, minmax(0, 1fr))` }}
+                    >
+                      {heightsModels.map((model, idx) => (
+                        <div
+                          key={idx}
+                          className="relative overflow-hidden aspect-[3/4] bg-zinc-200 border border-zinc-200 rounded-xs shadow-xs group"
+                        >
+                          {/* Decorative: the table above carries the actual
+                              height-to-length mapping, so an invented alt here
+                              would only repeat it to a screen reader. */}
+                          <Image
+                            src={model.image.trim()}
+                            alt=""
+                            fill
+                            className="object-cover grayscale contrast-[1.05] brightness-95 group-hover:scale-105 transition-transform duration-300"
+                          />
+                        </div>
+                      ))}
                     </div>
                   </div>
-                </div>
+                )}
 
                 {/* Footer Controls with Interactive Wizard Button */}
-                <div className="flex items-center justify-between mt-8 pt-6 border-t border-line">
+                <div className="flex items-center justify-between mt-8 pt-6 border-t border-zinc-150">
                   <div className="w-10 h-10" />
 
                   <div className="flex items-center justify-center">
-                    <svg className="w-5 h-5 text-aqua-600 fill-aqua-600" viewBox="0 0 24 24">
+                    <svg className="w-5 h-5 text-indigo-600 fill-indigo-600" viewBox="0 0 24 24">
                       <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z" />
                     </svg>
                   </div>
 
                   <button
                     onClick={() => setWizardStep("wizard-input")}
-                    className="bg-brand-600 hover:bg-brand-700 text-white px-8 py-3 text-[11px] font-extrabold uppercase tracking-[0.14em] transition-colors rounded-full cursor-pointer shadow-md"
+                    className="bg-zinc-950 hover:bg-zinc-800 text-white px-8 py-3 text-[10px] font-black uppercase tracking-widest transition-colors rounded-sm cursor-pointer shadow-md"
                   >
                     Input Measurements
                   </button>
@@ -1458,30 +2375,40 @@ export default function ProductDetailsClient({ product, categories, relatedProdu
 
             {/* TAB 1: OUR HEIGHTS & FIT - INTERACTIVE WIZARD INPUT (Matches Screenshots exactly) */}
             {activeSizeTab === "heights" && wizardStep === "wizard-input" && (() => {
-              const isFormValid = !isMetric
-                ? (heightFt && heightIn && weightLbs && age && waistIn)
-                : (heightCm && weightKg && age && waistIn);
+              // Every chart-driven box counts too — a blank one is a measurement
+              // the comparison silently loses, which is how you get a confident
+              // answer built on one number.
+              const chartBoxesFilled = wizardPoints.every((p) => {
+                const v = parseFloat(bodyInputs[p] ?? "");
+                return Number.isFinite(v) && v > 0;
+              });
+
+              const isFormValid = Boolean(
+                (!isMetric
+                  ? heightFt && heightIn && weightLbs && age && waistIn
+                  : heightCm && weightKg && age && waistIn) && chartBoxesFilled
+              );
               
               return (
                 <div className="flex flex-col animate-in fade-in duration-250">
                   {/* Title Header */}
-                  <h2 className="text-xl sm:text-2xl font-light text-foreground text-center mb-2 font-sans">
-                    Input your <span className="font-extrabold text-foreground">measurements.</span>
+                  <h2 className="text-xl sm:text-2xl font-light text-zinc-900 text-center mb-2 font-sans">
+                    Input your <span className="font-extrabold text-zinc-950">measurements.</span>
                   </h2>
 
                   {/* Imperial / Metric Toggle switch control */}
                   <div className="flex items-center justify-center gap-3 mb-8">
-                    <span className={`text-[10px] sm:text-xs uppercase tracking-wider font-semibold transition-colors ${!isMetric ? 'text-foreground' : 'text-faint'}`}>
+                    <span className={`text-[10px] sm:text-xs uppercase tracking-wider font-semibold transition-colors ${!isMetric ? 'text-zinc-955' : 'text-zinc-400'}`}>
                       imperial
                     </span>
                     <button
                       onClick={() => setIsMetric(!isMetric)}
-                      className="relative w-11 h-6 rounded-full bg-line transition-colors p-0.5 flex items-center cursor-pointer focus:outline-none"
+                      className="relative w-11 h-6 rounded-full bg-zinc-200 transition-colors p-0.5 flex items-center cursor-pointer focus:outline-none"
                       aria-label="Toggle imperial or metric units"
                     >
-                      <div className={`w-5 h-5 rounded-full bg-brand-ink-line shadow-sm transform transition-transform duration-200 ${isMetric ? 'translate-x-5' : 'translate-x-0'}`} />
+                      <div className={`w-5 h-5 rounded-full bg-zinc-700 shadow-sm transform transition-transform duration-200 ${isMetric ? 'translate-x-5' : 'translate-x-0'}`} />
                     </button>
-                    <span className={`text-[10px] sm:text-xs uppercase tracking-wider font-semibold transition-colors ${isMetric ? 'text-foreground' : 'text-faint'}`}>
+                    <span className={`text-[10px] sm:text-xs uppercase tracking-wider font-semibold transition-colors ${isMetric ? 'text-zinc-955' : 'text-zinc-400'}`}>
                       metric
                     </span>
                   </div>
@@ -1489,9 +2416,9 @@ export default function ProductDetailsClient({ product, categories, relatedProdu
                   {/* Input Swatch Boxes */}
                   <div className="space-y-4 max-w-md w-full mx-auto">
                     {/* Height Box */}
-                    <div className="border border-line p-5 rounded-lg flex items-center justify-between bg-white shadow-sm transition-all">
-                      <span className="text-sm font-semibold text-foreground">Height</span>
-                      <div className="flex items-center gap-3 font-semibold text-foreground">
+                    <div className="border border-zinc-150 p-5 rounded-xs flex items-center justify-between bg-white shadow-sm transition-all">
+                      <span className="text-sm font-semibold text-zinc-800">Height</span>
+                      <div className="flex items-center gap-3 font-semibold text-zinc-800">
                         {!isMetric ? (
                           <>
                             <div className="flex items-center gap-1.5">
@@ -1499,20 +2426,20 @@ export default function ProductDetailsClient({ product, categories, relatedProdu
                                 type="number"
                                 value={heightFt}
                                 onChange={(e) => setHeightFt(e.target.value)}
-                                className="w-12 text-center border-b border-line py-0.5 text-sm font-bold focus:border-aqua-400 focus:outline-none placeholder-faint"
+                                className="w-12 text-center border-b border-zinc-200 py-0.5 text-sm font-bold focus:border-zinc-955 focus:outline-none placeholder-zinc-350"
                                 placeholder="-"
                               />
-                              <span className="text-xs text-faint font-bold uppercase">ft</span>
+                              <span className="text-xs text-zinc-400 font-bold uppercase">ft</span>
                             </div>
                             <div className="flex items-center gap-1.5">
                               <input
                                 type="number"
                                 value={heightIn}
                                 onChange={(e) => setHeightIn(e.target.value)}
-                                className="w-12 text-center border-b border-line py-0.5 text-sm font-bold focus:border-aqua-400 focus:outline-none placeholder-faint"
+                                className="w-12 text-center border-b border-zinc-200 py-0.5 text-sm font-bold focus:border-zinc-955 focus:outline-none placeholder-zinc-350"
                                 placeholder="-"
                               />
-                              <span className="text-xs text-faint font-bold uppercase">in</span>
+                              <span className="text-xs text-zinc-400 font-bold uppercase">in</span>
                             </div>
                           </>
                         ) : (
@@ -1521,29 +2448,29 @@ export default function ProductDetailsClient({ product, categories, relatedProdu
                               type="number"
                               value={heightCm}
                               onChange={(e) => setHeightCm(e.target.value)}
-                              className="w-16 text-center border-b border-line py-0.5 text-sm font-bold focus:border-aqua-400 focus:outline-none placeholder-faint"
+                              className="w-16 text-center border-b border-zinc-200 py-0.5 text-sm font-bold focus:border-zinc-955 focus:outline-none placeholder-zinc-350"
                               placeholder="cm"
                             />
-                            <span className="text-xs text-faint font-bold uppercase">cm</span>
+                            <span className="text-xs text-zinc-400 font-bold uppercase">cm</span>
                           </div>
                         )}
                       </div>
                     </div>
 
                     {/* Weight Box */}
-                    <div className="border border-line p-5 rounded-lg flex items-center justify-between bg-white shadow-sm transition-all">
-                      <span className="text-sm font-semibold text-foreground">Weight</span>
-                      <div className="flex items-center gap-2 font-semibold text-foreground">
+                    <div className="border border-zinc-150 p-5 rounded-xs flex items-center justify-between bg-white shadow-sm transition-all">
+                      <span className="text-sm font-semibold text-zinc-800">Weight</span>
+                      <div className="flex items-center gap-2 font-semibold text-zinc-800">
                         {!isMetric ? (
                           <div className="flex items-center gap-1.5">
                             <input
                               type="number"
                               value={weightLbs}
                               onChange={(e) => setWeightLbs(e.target.value)}
-                              className="w-16 text-center border-b border-line py-0.5 text-sm font-bold focus:border-aqua-400 focus:outline-none placeholder-faint"
+                              className="w-16 text-center border-b border-zinc-200 py-0.5 text-sm font-bold focus:border-zinc-955 focus:outline-none placeholder-zinc-350"
                               placeholder="lbs"
                             />
-                            <span className="text-xs text-faint font-bold uppercase">lbs</span>
+                            <span className="text-xs text-zinc-400 font-bold uppercase">lbs</span>
                           </div>
                         ) : (
                           <div className="flex items-center gap-1.5">
@@ -1551,10 +2478,10 @@ export default function ProductDetailsClient({ product, categories, relatedProdu
                               type="number"
                               value={weightKg}
                               onChange={(e) => setWeightKg(e.target.value)}
-                              className="w-16 text-center border-b border-line py-0.5 text-sm font-bold focus:border-aqua-400 focus:outline-none placeholder-faint"
+                              className="w-16 text-center border-b border-zinc-200 py-0.5 text-sm font-bold focus:border-zinc-955 focus:outline-none placeholder-zinc-350"
                               placeholder="kg"
                             />
-                            <span className="text-xs text-faint font-bold uppercase">kg</span>
+                            <span className="text-xs text-zinc-400 font-bold uppercase">kg</span>
                           </div>
                         )}
                       </div>
@@ -1565,7 +2492,7 @@ export default function ProductDetailsClient({ product, categories, relatedProdu
                       {/* Circle Info Tooltip above input box */}
                       <button 
                         type="button"
-                        className="absolute -top-3.5 right-1 text-faint hover:text-soft focus:outline-none" 
+                        className="absolute -top-3.5 right-1 text-zinc-400 hover:text-zinc-600 focus:outline-none" 
                         title="Age helps refine body mass distribution calculations"
                       >
                         <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
@@ -1575,18 +2502,18 @@ export default function ProductDetailsClient({ product, categories, relatedProdu
                         </svg>
                       </button>
                       
-                      <div className="border border-line p-5 rounded-lg flex items-center justify-between bg-white shadow-sm transition-all">
-                        <span className="text-sm font-semibold text-foreground">Age</span>
-                        <div className="flex items-center gap-2 font-semibold text-foreground">
+                      <div className="border border-zinc-150 p-5 rounded-xs flex items-center justify-between bg-white shadow-sm transition-all">
+                        <span className="text-sm font-semibold text-zinc-800">Age</span>
+                        <div className="flex items-center gap-2 font-semibold text-zinc-800">
                           <div className="flex items-center gap-1.5">
                             <input
                               type="number"
                               value={age}
                               onChange={(e) => setAge(e.target.value)}
-                              className="w-16 text-center border-b border-line py-0.5 text-sm font-bold focus:border-aqua-400 focus:outline-none placeholder-faint"
+                              className="w-16 text-center border-b border-zinc-200 py-0.5 text-sm font-bold focus:border-zinc-955 focus:outline-none placeholder-zinc-350"
                               placeholder="years"
                             />
-                            <span className="text-xs text-faint font-bold uppercase">years</span>
+                            <span className="text-xs text-zinc-400 font-bold uppercase">years</span>
                           </div>
                         </div>
                       </div>
@@ -1597,7 +2524,7 @@ export default function ProductDetailsClient({ product, categories, relatedProdu
                       {/* Circle Info Tooltip above input box */}
                       <button 
                         type="button"
-                        className="absolute -top-3.5 right-1 text-faint hover:text-soft focus:outline-none" 
+                        className="absolute -top-3.5 right-1 text-zinc-400 hover:text-zinc-600 focus:outline-none" 
                         title="Standard waist size of your pants"
                       >
                         <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
@@ -1607,26 +2534,55 @@ export default function ProductDetailsClient({ product, categories, relatedProdu
                         </svg>
                       </button>
                       
-                      <div className="border border-line p-5 rounded-lg flex items-center justify-between bg-white shadow-sm transition-all">
-                        <span className="text-sm font-semibold text-foreground">Pant Waist</span>
-                        <div className="flex items-center gap-2 font-semibold text-foreground">
+                      <div className="border border-zinc-150 p-5 rounded-xs flex items-center justify-between bg-white shadow-sm transition-all">
+                        <span className="text-sm font-semibold text-zinc-800">Pant Waist</span>
+                        <div className="flex items-center gap-2 font-semibold text-zinc-800">
                           <div className="flex items-center gap-1.5">
                             <input
                               type="number"
                               value={waistIn}
                               onChange={(e) => setWaistIn(e.target.value)}
-                              className="w-16 text-center border-b border-line py-0.5 text-sm font-bold focus:border-aqua-400 focus:outline-none placeholder-faint"
+                              className="w-16 text-center border-b border-zinc-200 py-0.5 text-sm font-bold focus:border-zinc-955 focus:outline-none placeholder-zinc-350"
                               placeholder="inches"
                             />
-                            <span className="text-xs text-faint font-bold uppercase">inches</span>
+                            <span className="text-xs text-zinc-400 font-bold uppercase">inches</span>
                           </div>
                         </div>
                       </div>
                     </div>
+
+                    {/* Whatever else this garment's size chart compares on —
+                        chest and sleeve for a shirt, inseam for trousers, bust
+                        and underbust for a bra. Driven by the chart's columns,
+                        so adding a column to the chart adds the box here. */}
+                    {wizardPoints.map((point) => (
+                      <div
+                        key={point}
+                        className="border border-zinc-150 p-5 rounded-xs flex items-center justify-between bg-white shadow-sm transition-all"
+                      >
+                        <span className="text-sm font-semibold text-zinc-800" title={POINT_LABELS[point].hint}>
+                          {POINT_LABELS[point].label}
+                        </span>
+                        <div className="flex items-center gap-1.5 font-semibold text-zinc-800">
+                          <input
+                            type="number"
+                            value={bodyInputs[point] ?? ""}
+                            onChange={(e) =>
+                              setBodyInputs((prev) => ({ ...prev, [point]: e.target.value }))
+                            }
+                            className="w-16 text-center border-b border-zinc-200 py-0.5 text-sm font-bold focus:border-zinc-955 focus:outline-none placeholder-zinc-350"
+                            placeholder="-"
+                          />
+                          <span className="text-xs text-zinc-400 font-bold uppercase">
+                            {isMetric ? "cm" : "in"}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
                   </div>
 
                   {/* Footer Controls */}
-                  <div className="max-w-md w-full mx-auto flex items-center justify-end mt-10 pt-4 border-t border-line">
+                  <div className="max-w-md w-full mx-auto flex items-center justify-end mt-10 pt-4 border-t border-zinc-100">
                     {/* Right CONTINUE button */}
                     <button
                       onClick={() => {
@@ -1636,10 +2592,10 @@ export default function ProductDetailsClient({ product, categories, relatedProdu
                         setWizardStep("wizard-scanning");
                       }}
                       disabled={!isFormValid}
-                      className={`px-8 py-3 text-[11px] font-extrabold uppercase tracking-[0.14em] transition-all rounded-lg border shadow-xs cursor-pointer ${
+                      className={`px-8 py-3 text-[10px] font-black uppercase tracking-widest transition-all rounded-xs border shadow-xs cursor-pointer ${
                         isFormValid
-                          ? "bg-brand-600 rounded-full text-white border-brand-600 hover:bg-brand-700"
-                          : "bg-cream text-faint border-line cursor-not-allowed"
+                          ? "bg-zinc-950 text-white border-zinc-950 hover:bg-zinc-800"
+                          : "bg-zinc-100 text-zinc-400 border-zinc-200 cursor-not-allowed"
                       }`}
                       title={isFormValid ? undefined : "Fill in every measurement to continue"}
                     >
@@ -1654,9 +2610,12 @@ export default function ProductDetailsClient({ product, categories, relatedProdu
             {activeSizeTab === "heights" && wizardStep === "wizard-scanning" && (
               <div className="flex flex-col animate-in fade-in duration-250 items-center justify-center text-center py-4">
 
-                {/* Machine Learning / AI heading matching screenshort */}
-                <h2 className="text-sm sm:text-base font-medium text-foreground max-w-md mx-auto leading-relaxed mb-6 font-sans">
-                  Using <span className="font-extrabold text-foreground">Machine Learning</span> and <span className="font-extrabold text-foreground">Artificial Intelligence</span> to find your best fit.
+                {/* Claimed "Machine Learning and Artificial Intelligence" while
+                    a timer counted to 100. The work is a size-chart comparison,
+                    so it says that instead. */}
+                <h2 className="text-sm sm:text-base font-medium text-zinc-800 max-w-md mx-auto leading-relaxed mb-6 font-sans">
+                  Matching your measurements against our{" "}
+                  <span className="font-extrabold text-zinc-950">size chart</span>.
                 </h2>
 
                 {/* 3D Mannequin Body scanning visualization */}
@@ -1664,23 +2623,23 @@ export default function ProductDetailsClient({ product, categories, relatedProdu
                   <MannequinSVG scanZone={scanZone} />
 
                   {/* Scanning info panel overlay */}
-                  <div className="absolute bottom-4 left-0 right-0 text-center bg-white/85 backdrop-blur-xs py-1.5 px-4 rounded-full border border-line shadow-md max-w-[200px] mx-auto transition-all">
-                    <span className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-aqua-600 block animate-pulse">
-                      {scanZone === 1 && "Scanning Legs..."}
-                      {scanZone === 2 && "Measuring Hips..."}
-                      {scanZone === 3 && "Analyzing Torso..."}
-                      {scanZone === 4 && "Finalizing Fit..."}
+                  <div className="absolute bottom-4 left-0 right-0 text-center bg-white/85 backdrop-blur-xs py-1.5 px-4 rounded-full border border-zinc-150 shadow-md max-w-[200px] mx-auto transition-all">
+                    <span className="text-[9px] font-black uppercase tracking-widest text-indigo-600 block animate-pulse">
+                      {scanZone === 1 && "Reading measurements..."}
+                      {scanZone === 2 && "Loading size chart..."}
+                      {scanZone === 3 && "Comparing fit..."}
+                      {scanZone === 4 && "Finalizing fit..."}
                     </span>
-                    <span className="text-[10px] font-bold text-soft mt-0.5 block">
+                    <span className="text-[10px] font-bold text-zinc-600 mt-0.5 block">
                       {scanProgress}% Completed
                     </span>
                   </div>
                 </div>
 
                 {/* Subtle progress progress-bar */}
-                <div className="w-full max-w-[240px] bg-cream h-1.5 rounded-full overflow-hidden mb-6 shadow-inner">
+                <div className="w-full max-w-[240px] bg-zinc-100 h-1.5 rounded-full overflow-hidden mb-6 shadow-inner">
                   <div
-                    className="bg-aqua-600 h-full rounded-full transition-all duration-75"
+                    className="bg-indigo-600 h-full rounded-full transition-all duration-75"
                     style={{ width: `${scanProgress}%` }}
                   />
                 </div>
@@ -1690,52 +2649,38 @@ export default function ProductDetailsClient({ product, categories, relatedProdu
             {/* TAB 1: OUR HEIGHTS & FIT - WIZARD RESULT */}
             {activeSizeTab === "heights" && wizardStep === "wizard-result" && (
               <div className="flex flex-col animate-in fade-in duration-250 items-center text-center">
-                <h2 className="text-3xl font-extrabold uppercase tracking-wider text-foreground mb-2">
+                <h2 className="text-3xl font-black uppercase tracking-wider text-zinc-900 mb-2">
                   Your Recommended Fit
                 </h2>
-                <p className="text-xs text-soft font-light mb-8 max-w-sm">
-                  Based on your custom body metrics, we have calculated your optimal tailored fit for this garment:
+                <p className="text-xs text-zinc-500 font-light mb-8 max-w-sm">
+                  {sizeSuggestion.fromChart
+                    ? "Matched against this garment's size chart, from the sizes we have in stock:"
+                    : "This garment has no size chart yet, so this is a general estimate from your height and weight:"}
                 </p>
 
                 {/* Recommendation Shield */}
-                <div className="bg-brand-ink text-white px-10 py-8 rounded-xl shadow-xl max-w-sm w-full mb-8 relative overflow-hidden">
+                <div className="bg-zinc-950 text-white px-10 py-8 rounded-sm shadow-xl max-w-sm w-full mb-8 relative overflow-hidden">
                   <div className="absolute top-0 right-0 w-24 h-24 bg-white/5 rounded-full blur-xl transform translate-x-8 -translate-y-8" />
-                  <span className="text-brand-300 block mb-1">Recommended Size</span>
-                  <div className="text-4xl font-extrabold uppercase tracking-wide mb-4">
-                    {/* Dynamic calculation logic */}
-                    {(() => {
-                      let length = "Regular";
-                      if (isMetric) {
-                        const cm = parseFloat(heightCm) || 175;
-                        if (cm >= 185) length = "Long";
-                        else if (cm < 170) length = "Short";
-                      } else {
-                        const ft = parseFloat(heightFt) || 5;
-                        const inch = parseFloat(heightIn) || 9;
-                        const totalInches = ft * 12 + inch;
-                        if (totalInches >= 73) length = "Long";
-                        else if (totalInches < 67) length = "Short";
-                      }
-
-                      let size = "L";
-                      const lbs = !isMetric ? (parseFloat(weightLbs) || 190) : ((parseFloat(weightKg) || 86) * 2.20462);
-                      if (lbs < 160) size = "S";
-                      else if (lbs < 190) size = "M";
-                      else if (lbs < 220) size = "L";
-                      else if (lbs < 250) size = "XL";
-                      else size = "2XL";
-
-                      return `${size} - ${length}`;
-                    })()}
+                  <span className="text-zinc-400 block mb-1">Recommended Size</span>
+                  <div className="text-4xl font-black uppercase tracking-wide mb-4">
+                    {sizeSuggestion.length
+                      ? `${sizeSuggestion.size} - ${sizeSuggestion.length}`
+                      : sizeSuggestion.size}
                   </div>
                   <div className="border-t border-white/10 pt-4 text-left">
-                    <div className="flex justify-between text-xs font-light text-faint">
+                    <div className="flex justify-between text-xs font-light text-zinc-300">
                       <span>Height:</span>
                       <span className="font-bold text-white">
                         {!isMetric ? `${heightFt}' ${heightIn}"` : `${heightCm} cm`}
                       </span>
                     </div>
-                    <div className="flex justify-between text-xs font-light text-faint mt-2">
+                    <div className="flex justify-between text-xs font-light text-zinc-300 mt-2">
+                      <span>Waist:</span>
+                      <span className="font-bold text-white">
+                        {!isMetric ? `${waistIn} in` : `${waistCm} cm`}
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-xs font-light text-zinc-300 mt-2">
                       <span>Weight:</span>
                       <span className="font-bold text-white">
                         {!isMetric ? `${weightLbs} lbs` : `${weightKg} kg`}
@@ -1744,33 +2689,27 @@ export default function ProductDetailsClient({ product, categories, relatedProdu
                   </div>
                 </div>
 
+                {/* The chart's closest row was a size this product does not
+                    stock, so the shopper is told rather than quietly handed a
+                    different one. */}
+                {sizeSuggestion.substituted && (
+                  <p className="-mt-5 mb-6 max-w-sm text-[11px] text-amber-600">
+                    Your exact match is out of stock — this is the closest size we have.
+                  </p>
+                )}
+
                 {/* Apply recommendation button */}
                 <button
                   onClick={() => {
-                    let length = "Regular";
-                    if (isMetric) {
-                      const cm = parseFloat(heightCm) || 175;
-                      if (cm >= 185) length = "Long";
-                      else if (cm < 170) length = "Short";
-                    } else {
-                      const ft = parseFloat(heightFt) || 5;
-                      const inch = parseFloat(heightIn) || 9;
-                      const totalInches = ft * 12 + inch;
-                      if (totalInches >= 73) length = "Long";
-                      else if (totalInches < 67) length = "Short";
-                    }
+                    // Same figures the panel above shows — one source, so what
+                    // gets added to the bag can never differ from what was read.
+                    const { size, length } = sizeSuggestion;
 
-                    let size = "L";
-                    const lbs = !isMetric ? (parseFloat(weightLbs) || 190) : ((parseFloat(weightKg) || 86) * 2.20462);
-                    if (lbs < 160) size = "S";
-                    else if (lbs < 190) size = "M";
-                    else if (lbs < 220) size = "L";
-                    else if (lbs < 250) size = "XL";
-                    else size = "2XL";
-
-                    // Normalize comparison so a hyphenated variant name still matches
+                    // Normalize comparison (e.g. "Semi-Tall" -> "Semi Tall")
                     const matchedSize = uniqueSizes.find(s => s.toLowerCase() === size.toLowerCase()) || size;
-                    const matchedLength = uniqueLengths.find(l => l.toLowerCase().replace("-", " ") === length.toLowerCase().replace("-", " ")) || length;
+                    const matchedLength = length
+                      ? uniqueLengths.find(l => l.toLowerCase().replace("-", " ") === length.toLowerCase().replace("-", " ")) || length
+                      : selectedLength;
 
                     // Update UI state
                     setSelectedSize(matchedSize);
@@ -1780,7 +2719,7 @@ export default function ProductDetailsClient({ product, categories, relatedProdu
                     // Add to cart directly
                     handleAddToBag(matchedSize, matchedLength);
                   }}
-                  className="bg-brand-600 hover:bg-brand-700 text-white px-8 py-3 text-[11px] font-extrabold uppercase tracking-[0.14em] transition-colors rounded-full cursor-pointer shadow-md mb-4"
+                  className="bg-zinc-950 hover:bg-zinc-800 text-white px-8 py-3 text-[10px] font-black uppercase tracking-widest transition-colors rounded-sm cursor-pointer shadow-md mb-4"
                 >
                   Apply To Product
                 </button>
@@ -1788,7 +2727,7 @@ export default function ProductDetailsClient({ product, categories, relatedProdu
                 {/* Re-calculate */}
                 <button
                   onClick={() => setWizardStep("wizard-input")}
-                  className="text-xs text-soft hover:text-brand-700 underline font-semibold tracking-wider uppercase cursor-pointer"
+                  className="text-xs text-zinc-500 hover:text-zinc-955 underline font-semibold tracking-wider uppercase cursor-pointer"
                 >
                   Re-enter measurements
                 </button>
@@ -1798,38 +2737,30 @@ export default function ProductDetailsClient({ product, categories, relatedProdu
             {/* TAB 2: SIZE CHART */}
             {activeSizeTab === "size-chart" && (
               <div className="flex flex-col animate-in fade-in duration-200">
-                <h2 className="text-3xl font-extrabold uppercase tracking-wider text-center text-foreground mb-6">
+                <h2 className="text-3xl font-black uppercase tracking-wider text-center text-zinc-900 mb-6">
                   Size Chart
                 </h2>
 
-                {product.sizeChart ? (
-                  <div className="relative w-full min-h-[500px] overflow-hidden bg-cream border border-line rounded-xl flex items-center justify-center p-2">
-                    <Image
-                      src={product.sizeChart}
-                      alt="Size Chart Guide"
-                      fill
-                      className="object-contain"
-                    />
-                  </div>
-                ) : (
+                {sizeChart.table ? (
                   <div>
-                    {/* Measurements Table Header Selector */}
+                    {/* The chart this product names, with the unit toggle
+                        converting from whatever unit it was typed in. */}
                     <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 mb-4">
-                      <span className="text-[10px] sm:text-xs font-extrabold tracking-[0.14em] uppercase text-foreground">
-                        Tops: Your Body Measurements (Alpha Sizing)
+                      <span className="text-[10px] sm:text-xs font-black tracking-widest uppercase text-zinc-905">
+                        {sizeChart.table.title}
                       </span>
-                      <div className="flex items-center gap-1.5 border border-line p-0.5 rounded-xl bg-cream self-start sm:self-auto">
+                      <div className="flex items-center gap-1.5 border border-zinc-200 p-0.5 rounded-sm bg-zinc-50 self-start sm:self-auto">
                         <button
                           onClick={() => setSizeUnit("inches")}
-                          className={`px-3 py-1 text-[10px] font-extrabold uppercase tracking-[0.14em] transition-all rounded-xl cursor-pointer ${sizeUnit === "inches" ? "bg-white text-foreground shadow-sm font-extrabold" : "text-faint hover:text-soft"
+                          className={`px-3 py-1 text-[9px] font-black uppercase tracking-widest transition-all rounded-sm cursor-pointer ${sizeUnit === "inches" ? "bg-white text-zinc-950 shadow-sm font-black" : "text-zinc-400 hover:text-zinc-700"
                             }`}
                         >
                           Inches
                         </button>
-                        <span className="text-[9px] text-faint font-light">/</span>
+                        <span className="text-[9px] text-zinc-300 font-light">/</span>
                         <button
                           onClick={() => setSizeUnit("cm")}
-                          className={`px-3 py-1 text-[10px] font-extrabold uppercase tracking-[0.14em] transition-all rounded-xl cursor-pointer ${sizeUnit === "cm" ? "bg-white text-foreground shadow-sm font-extrabold" : "text-faint hover:text-soft"
+                          className={`px-3 py-1 text-[9px] font-black uppercase tracking-widest transition-all rounded-sm cursor-pointer ${sizeUnit === "cm" ? "bg-white text-zinc-955 shadow-sm font-black" : "text-zinc-400 hover:text-zinc-700"
                             }`}
                         >
                           Centimeters
@@ -1837,47 +2768,50 @@ export default function ProductDetailsClient({ product, categories, relatedProdu
                       </div>
                     </div>
 
-                    {/* Sizing measurements Table */}
-                    <div className="overflow-x-auto border border-line rounded-xl shadow-sm">
+                    <div className="overflow-x-auto border border-zinc-150 rounded-sm shadow-sm">
                       <table className="w-full text-center border-collapse text-xs">
                         <thead>
-                          <tr className="bg-cream border-b border-line text-[10px] uppercase tracking-wider font-extrabold text-soft">
-                            <th className="p-3 text-left pl-6">Size</th>
-                            <th className="p-3">Your Chest</th>
-                            <th className="p-3">Your Neck</th>
-                            <th className="p-3">Your Sleeve Length</th>
-                            <th className="p-3 text-right pr-6">Your Waist</th>
+                          <tr className="bg-zinc-50 border-b border-zinc-150 text-[10px] uppercase tracking-wider font-extrabold text-zinc-700">
+                            {sizeChart.table.columns.map((col, i) => (
+                              <th
+                                key={i}
+                                className={`p-3 ${i === 0 ? "text-left pl-6" : ""} ${i === sizeChart.table!.columns.length - 1 ? "text-right pr-6" : ""}`}
+                              >
+                                {col}
+                              </th>
+                            ))}
                           </tr>
                         </thead>
-                        <tbody className="divide-y divide-line text-soft font-medium">
-                          {(sizeUnit === "inches"
-                            ? [
-                              { size: "S", chest: "35-37", neck: "14-14.5", sleeve: "35", waist: "29-31" },
-                              { size: "M", chest: "38-40", neck: "15-15.5", sleeve: "35.5", waist: "32-34" },
-                              { size: "L", chest: "42-44", neck: "16-16.5", sleeve: "36", waist: "35-37" },
-                              { size: "XL", chest: "46-48", neck: "17-17.5", sleeve: "36.5", waist: "38-40" },
-                              { size: "2XL", chest: "50-52", neck: "18-18.5", sleeve: "37", waist: "41-43" },
-                            ]
-                            : [
-                              { size: "S", chest: "89-94", neck: "35.5-37", sleeve: "89", waist: "74-79" },
-                              { size: "M", chest: "96-101", neck: "38-39", sleeve: "90", waist: "81-86" },
-                              { size: "L", chest: "106-112", neck: "40.5-42", sleeve: "91.5", waist: "89-94" },
-                              { size: "XL", chest: "117-122", neck: "43-44.5", sleeve: "93", waist: "96-101" },
-                              { size: "2XL", chest: "127-132", neck: "45.5-47", sleeve: "94", waist: "104-109" },
-                            ]
-                          ).map((row, idx) => (
-                            <tr key={idx} className="hover:bg-cream/60 transition-colors">
-                              <td className="p-3 text-left pl-6 font-bold text-foreground">{row.size}</td>
-                              <td className="p-3">{row.chest}</td>
-                              <td className="p-3">{row.neck}</td>
-                              <td className="p-3">{row.sleeve}</td>
-                              <td className="p-3 text-right pr-6">{row.waist}</td>
+                        <tbody className="divide-y divide-zinc-100 text-zinc-600 font-medium">
+                          {tableInUnit(sizeChart.table, sizeUnit === "cm" ? "cm" : "in").map((row, rowIdx) => (
+                            <tr key={rowIdx} className="hover:bg-zinc-50/50 transition-colors">
+                              {row.map((cell, i) => (
+                                <td
+                                  key={i}
+                                  className={`p-3 ${i === 0 ? "text-left pl-6 font-bold text-zinc-950" : ""} ${i === row.length - 1 ? "text-right pr-6" : ""}`}
+                                >
+                                  {cell}
+                                </td>
+                              ))}
                             </tr>
                           ))}
                         </tbody>
                       </table>
                     </div>
+
+                    {sizeChart.chartName && (
+                      <p className="mt-3 text-right text-[10px] font-bold uppercase tracking-widest text-zinc-400">
+                        {sizeChart.chartName} sizing
+                      </p>
+                    )}
                   </div>
+                ) : (
+                  /* No chart is picked on this product. Saying so beats
+                     showing someone else's measurements, which is what the
+                     hardcoded fallback table used to do. */
+                  <p className="py-12 text-center text-xs font-medium uppercase tracking-widest text-zinc-400">
+                    No size chart available for this product.
+                  </p>
                 )}
               </div>
             )}
@@ -1885,94 +2819,56 @@ export default function ProductDetailsClient({ product, categories, relatedProdu
             {/* TAB 3: HOW TO MEASURE */}
             {activeSizeTab === "measure" && (
               <div className="flex flex-col animate-in fade-in duration-200">
-                <h2 className="text-3xl font-extrabold uppercase tracking-wider text-center text-foreground mb-8">
+                <h2 className="text-3xl font-black uppercase tracking-wider text-center text-zinc-900 mb-8">
                   How To Measure
                 </h2>
 
                 <div className="grid grid-cols-1 md:grid-cols-12 gap-8 items-start">
-                  {/* Graphic Outline SVG */}
-                  <div className="md:col-span-5 bg-cream/60 p-6 border border-line rounded-xl flex items-center justify-center">
-                    <svg className="w-full max-w-[180px] h-[320px] text-faint" viewBox="0 0 200 350" fill="none" stroke="currentColor" strokeWidth="1.5">
-                      {/* Head */}
-                      <circle cx="100" cy="45" r="22" className="text-white/80" />
-                      {/* Neck */}
-                      <path d="M92 67v10h16V67" className="text-white/80" />
-                      {/* Shoulders & Torso */}
-                      <path d="M70 85h60c10 0 15 15 15 25v90c0 10-5 15-15 15H70c-10 0-15-5-15-15v-90c0-10 5-25 15-25z" className="text-white/80" />
-                      {/* Arms */}
-                      <path d="M55 85C45 95 38 120 38 150v60c0 10 5 15 10 15s10-5 10-15v-50" className="text-white/80" />
-                      <path d="M145 85c10 0 17 25 17 55v60c0 10-5 15-10 15s-10-5-10-15v-50" className="text-white/80" />
-                      {/* Legs */}
-                      <path d="M75 215v100c0 10 5 15 10 15s10-5 10-15v-100" className="text-white/80" />
-                      <path d="M125 215v100c0 10-5 15-10 15s-10-5-10-15v-100" className="text-white/80" />
-
-                      {/* Annotation Dot 1 */}
-                      <circle cx="100" cy="72" r="8" className="fill-brand-500 stroke-brand-500" />
-                      <text x="100" y="75" textAnchor="middle" className="fill-white text-[8px] font-extrabold font-sans stroke-none">1</text>
-
-                      {/* Annotation Dot 2 */}
-                      <circle cx="100" cy="115" r="8" className="fill-brand-500 stroke-brand-500" />
-                      <text x="100" y="118" textAnchor="middle" className="fill-white text-[8px] font-extrabold font-sans stroke-none">2</text>
-
-                      {/* Annotation Dot 3 */}
-                      <circle cx="100" cy="90" r="8" className="fill-brand-500 stroke-brand-500" />
-                      <text x="100" y="93" textAnchor="middle" className="fill-white text-[8px] font-extrabold font-sans stroke-none">3</text>
-
-                      {/* Annotation Dot 4 */}
-                      <circle cx="100" cy="155" r="8" className="fill-brand-500 stroke-brand-500" />
-                      <text x="100" y="158" textAnchor="middle" className="fill-white text-[8px] font-extrabold font-sans stroke-none">4</text>
-
-                      {/* Annotation Dot 5 */}
-                      <circle cx="100" cy="205" r="8" className="fill-brand-500 stroke-brand-500" />
-                      <text x="100" y="208" textAnchor="middle" className="fill-white text-[8px] font-extrabold font-sans stroke-none">5</text>
-
-                      {/* Annotation Dot 6 */}
-                      <circle cx="85" cy="265" r="8" className="fill-brand-500 stroke-brand-500" />
-                      <text x="85" y="268" textAnchor="middle" className="fill-white text-[8px] font-extrabold font-sans stroke-none">6</text>
-                    </svg>
+                  {/* Body outline with numbered measurement points */}
+                  <div className="md:col-span-5 bg-zinc-50/50 p-6 border border-zinc-150 rounded-sm flex items-center justify-center">
+                    <MeasureFigure
+                      gender={figureGender}
+                      points={activePoints}
+                      imageSrc={howToMeasureImage ? formatImageUrl(howToMeasureImage) : null}
+                      className="w-full max-w-[260px] h-auto"
+                    />
                   </div>
 
                   {/* Measuring Descriptions */}
                   <div className="md:col-span-7 space-y-5">
-                    <span className="text-[11px] font-extrabold uppercase tracking-wider text-foreground block border-b border-line pb-2">
-                      Men&apos;s Measurement Guide:
+                    <span className="text-[11px] font-black uppercase tracking-wider text-zinc-900 block border-b border-zinc-100 pb-2">
+                      {howToMeasure.html && howToMeasure.categoryName
+                        ? `${howToMeasure.categoryName} Measurement Guide:`
+                        : `${figureGender === "women" ? "Women's" : "Men's"} Measurement Guide:`}
                     </span>
-                    <ol className="space-y-4 text-xs text-soft font-light leading-relaxed">
-                      <li>
-                        <strong className="text-foreground font-bold block mb-0.5">1. Neck</strong>
-                        Measure around your neck at Adam&apos;s apple height, keeping some slack in the tape for comfortable breathing.
-                      </li>
-                      <li>
-                        <strong className="text-foreground font-bold block mb-0.5">2. Chest</strong>
-                        Measure around the fullest part of your chest, keeping the tape horizontal under your arms and flat across the back.
-                      </li>
-                      <li>
-                        <strong className="text-foreground font-bold block mb-0.5">3. Sleeve Length</strong>
-                        Measure from the center back of the neck at your collar seam, along the top of your shoulder, and down to your wrist.
-                      </li>
-                      <li>
-                        <strong className="text-foreground font-bold block mb-0.5">4. Waist</strong>
-                        Measure around your natural waistline (where you normally wear your pants), keeping some slack in the measuring tape.
-                      </li>
-                      <li>
-                        <strong className="text-foreground font-bold block mb-0.5">5. Hips</strong>
-                        Measure around the fullest part of your hips/seat, keeping the tape horizontal all the way around.
-                      </li>
-                      <li>
-                        <strong className="text-foreground font-bold block mb-0.5">6. Inseam</strong>
-                        Measure from the inner crotch seam straight down along the inside of your leg to the bottom of the ankle bone.
-                      </li>
-                    </ol>
+
+                    {howToMeasure.html ? (
+                      // .custom-html is the project's own admin-HTML stylesheet
+                      // (app/globals.css) — the `prose` plugin is not installed.
+                      <div
+                        className="custom-html size-guide-html"
+                        dangerouslySetInnerHTML={{ __html: stripScriptTags(howToMeasure.html) }}
+                      />
+                    ) : (
+                      <ol className="space-y-4 text-xs text-zinc-600 font-light leading-relaxed">
+                        {BUILT_IN_GUIDE[figureGender].map((step, i) => (
+                          <li key={step.title}>
+                            <strong className="text-zinc-955 font-bold block mb-0.5">{i + 1}. {step.title}</strong>
+                            {step.text}
+                          </li>
+                        ))}
+                      </ol>
+                    )}
                   </div>
                 </div>
               </div>
             )}
 
             {/* Modal Footer */}
-            <div className="mt-8 pt-4 border-t border-line flex justify-end">
+            <div className="mt-8 pt-4 border-t border-zinc-100 flex justify-end">
               <button
                 onClick={() => setShowSizeChart(false)}
-                className="bg-brand-600 hover:bg-brand-700 text-white px-8 py-3 text-[11px] font-extrabold uppercase tracking-[0.14em] transition-colors rounded-full cursor-pointer shadow-md"
+                className="bg-zinc-950 hover:bg-zinc-800 text-white px-8 py-3 text-[10px] font-black uppercase tracking-widest transition-colors rounded-sm cursor-pointer shadow-md"
               >
                 Close Size Guide
               </button>
@@ -1981,7 +2877,8 @@ export default function ProductDetailsClient({ product, categories, relatedProdu
         </div>
       )}
 
-      <RecentlyViewed currentProductId={product.id} />
+      {/* The "Recently Viewed" tab above is fed from the same localStorage
+          list, so a second section of it here was the same row printed twice. */}
       <Footer categories={categories} />
 
     </div>

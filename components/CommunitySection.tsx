@@ -59,10 +59,10 @@ export default function CommunitySection({ initialTabs }: CommunitySectionProps)
   };
 
   return (
-    <section className="max-w-[1440px] mx-auto py-24 px-6 lg:px-12 grid md:grid-cols-2 gap-20 items-center bg-white border-t border-line">
+    <section className="max-w-[1440px] mx-auto py-24 px-6 lg:px-12 grid md:grid-cols-2 gap-20 items-center bg-white border-t border-zinc-100">
       <div className="max-w-xl">
         {/* Toggle tabs */}
-        <div className="flex gap-8 mb-10 text-[10px] font-bold uppercase tracking-[0.2em] text-faint border-b border-line pb-3">
+        <div className="flex gap-8 mb-10 text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-400 border-b border-zinc-100 pb-3">
           {(["heights", "fit", "purpose"] as TabKey[]).map((key) => (
             <button
               key={key}
@@ -80,10 +80,10 @@ export default function CommunitySection({ initialTabs }: CommunitySectionProps)
 
         {/* Dynamic content area */}
         <div key={`text-${activeTab}`} className="animate-fade-up">
-          <h2 className="text-5xl font-bold mb-8 tracking-tighter leading-tight text-foreground">
+          <h2 className="text-5xl font-bold mb-8 tracking-tighter leading-tight text-zinc-900">
             {tabContents[activeTab].heading}
           </h2>
-          <p className="text-soft text-lg leading-relaxed mb-12 min-h-[120px]">
+          <p className="text-zinc-500 text-lg leading-relaxed mb-12 min-h-[120px]">
             {tabContents[activeTab].description}
           </p>
           <Link 
@@ -96,7 +96,7 @@ export default function CommunitySection({ initialTabs }: CommunitySectionProps)
       </div>
 
       {/* Image container with transition */}
-      <div key={`img-${activeTab}`} className="aspect-square bg-cream overflow-hidden relative border border-line rounded-xl animate-fade-in">
+      <div key={`img-${activeTab}`} className="aspect-square bg-zinc-100 overflow-hidden relative border border-zinc-150 rounded-sm animate-fade-in">
         <img 
           src={tabContents[activeTab].image} 
           className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 ease-out hover:scale-105" 

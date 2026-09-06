@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react"
 import ProductCard from "@/components/ProductCard"
+import { trackViewItemList, type AnalyticsItem } from "@/lib/analytics"
 
 interface ShopProductListProps {
   initialProducts: any[]
@@ -20,6 +21,22 @@ export default function ShopProductList({ initialProducts }: ShopProductListProp
   useEffect(() => {
     setVisibleCount(BATCH_SIZE)
   }, [initialProducts])
+
+  // GA4 view_item_list. Reports the whole result set rather than the first
+  // batch: the rest is already in memory and scrolling reveals it without any
+  // further server round trip, so batching would under-report the listing.
+  const listKey = initialProducts.map((p) => p.id).join(",")
+  useEffect(() => {
+    const items: AnalyticsItem[] = initialProducts.map((p) => ({
+      item_id: p.id,
+      item_name: p.title,
+      price: p.discountPrice ?? p.basePrice,
+      item_brand: p.brand?.name,
+      item_category: p.category?.name,
+    }))
+    trackViewItemList("shop", "Shop", items)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [listKey])
 
   // Load next batch function. The batch is already in memory — it came down with
   // the RSC payload — so this is pure state, no fetch and no reason to stall.
@@ -77,7 +94,7 @@ export default function ShopProductList({ initialProducts }: ShopProductListProp
               }
             >
               {/* First row only — opts these out of `loading="lazy"`. */}
-              <ProductCard product={product} idPrefix="shop" priority={idx < 4} />
+              <ProductCard product={product} idPrefix="shop" listId="shop" listName="Shop" priority={idx < 4} />
             </div>
           )
         })}
@@ -90,11 +107,11 @@ export default function ShopProductList({ initialProducts }: ShopProductListProp
 
       {/* Trigger Area */}
       {hasMore && (
-        <div ref={observerRef} className="flex flex-col items-center justify-center py-10 border-t border-line mt-12">
+        <div ref={observerRef} className="flex flex-col items-center justify-center py-10 border-t border-zinc-100 mt-12">
           <button
             type="button"
             onClick={loadNextBatch}
-            className="px-10 py-4 bg-brand-600 text-white text-[10px] font-extrabold uppercase tracking-[0.14em] hover:bg-brand-700 transition-all shadow-sm rounded-full cursor-pointer"
+            className="px-10 py-4 bg-zinc-950 text-white text-[10px] font-black uppercase tracking-widest hover:bg-zinc-800 transition-all shadow-sm rounded-sm cursor-pointer"
           >
             Load More
           </button>

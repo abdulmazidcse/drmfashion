@@ -3,6 +3,7 @@ import { revalidatePath } from "next/cache"
 import { prisma } from "@/lib/prisma"
 import { getAdminPayload } from "@/lib/auth"
 import { slugify } from "@/lib/journal"
+import { parseTiersInput } from "@/lib/measurement"
 
 export const dynamic = "force-dynamic"
 
@@ -46,6 +47,11 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
 
     const step = parseNumber(body.step)
 
+    const tiers = parseTiersInput(body.tiers, { minValue, maxValue })
+    if (!tiers.ok) {
+      return NextResponse.json({ message: tiers.error }, { status: 400 })
+    }
+
     const field = await prisma.measurementField.create({
       data: {
         templateId,
@@ -59,7 +65,9 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
         step: step && step > 0 ? step : 0.5,
         required: body.required !== false,
         position: Number.isFinite(Number(body.position)) ? Number(body.position) : 0,
+        tiers: { create: tiers.tiers },
       },
+      include: { tiers: { orderBy: [{ position: "asc" }, { minValue: "asc" }] } },
     })
 
     revalidatePath("/product/[slug]", "page")

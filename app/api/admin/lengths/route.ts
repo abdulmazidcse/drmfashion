@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
+import { compareLengths } from "@/lib/variants"
 
 export async function GET() {
   try {
-    const lengths = await prisma.length.findMany({
-      orderBy: {
-        createdAt: "desc",
-      },
-    })
+    const lengths = await prisma.length.findMany()
+    // Ascending by the length itself (30 < 32 < 34, Semi Tall < Tall), not by
+    // when the row was added — every picker that lists these shows them as-is.
+    lengths.sort((a, b) => compareLengths(a.value, b.value))
     return NextResponse.json(lengths)
   } catch (error) {
     console.log("[LENGTHS_GET]", error)

@@ -10,6 +10,15 @@ import { slugify } from "@/lib/journal"
 import { Card } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 
+type MeasurementTier = {
+  id: string
+  minValue: number
+  maxValue: number
+  surchargeType: "FLAT" | "PERCENT"
+  surchargeValue: number
+  position: number
+}
+
 type MeasurementField = {
   id: string
   label: string
@@ -22,6 +31,7 @@ type MeasurementField = {
   step: number
   required: boolean
   position: number
+  tiers?: MeasurementTier[]
 }
 
 type MeasurementTemplate = {
@@ -49,6 +59,13 @@ type TemplateForm = {
   position: number
 }
 
+type TierForm = {
+  minValue: string
+  maxValue: string
+  surchargeType: "FLAT" | "PERCENT"
+  surchargeValue: string
+}
+
 type FieldForm = {
   label: string
   key: string
@@ -60,6 +77,7 @@ type FieldForm = {
   step: string
   required: boolean
   position: number
+  tiers: TierForm[]
 }
 
 const emptyTemplate: TemplateForm = {
@@ -73,6 +91,8 @@ const emptyTemplate: TemplateForm = {
   position: 0,
 }
 
+const emptyTier: TierForm = { minValue: "", maxValue: "", surchargeType: "FLAT", surchargeValue: "" }
+
 const emptyField: FieldForm = {
   label: "",
   key: "",
@@ -84,6 +104,7 @@ const emptyField: FieldForm = {
   step: "0.5",
   required: true,
   position: 0,
+  tiers: [],
 }
 
 const labelClass = "text-[10px] font-bold uppercase tracking-widest text-zinc-500 block"
@@ -211,7 +232,37 @@ export default function AdminMeasurementsPage() {
       step: field.step?.toString() ?? "0.5",
       required: field.required,
       position: field.position,
+      tiers: (field.tiers ?? []).map((tier) => ({
+        minValue: tier.minValue.toString(),
+        maxValue: tier.maxValue.toString(),
+        surchargeType: tier.surchargeType,
+        surchargeValue: tier.surchargeValue.toString(),
+      })),
     })
+  }
+
+  function addTier() {
+    setFieldForm((prev) => {
+      // Start the new bracket where the last one ended, which is what admins
+      // building a 39-40 / 41-42 / 43-44 ladder almost always want next.
+      const last = prev.tiers[prev.tiers.length - 1]
+      const nextMin = last && Number.isFinite(Number(last.maxValue)) ? String(Number(last.maxValue) + 1) : ""
+      return {
+        ...prev,
+        tiers: [...prev.tiers, { ...emptyTier, minValue: nextMin, surchargeType: last?.surchargeType ?? "FLAT" }],
+      }
+    })
+  }
+
+  function updateTier(index: number, patch: Partial<TierForm>) {
+    setFieldForm((prev) => ({
+      ...prev,
+      tiers: prev.tiers.map((tier, i) => (i === index ? { ...tier, ...patch } : tier)),
+    }))
+  }
+
+  function removeTier(index: number) {
+    setFieldForm((prev) => ({ ...prev, tiers: prev.tiers.filter((_, i) => i !== index) }))
   }
 
   async function submitField(e: React.FormEvent) {
@@ -540,7 +591,7 @@ export default function AdminMeasurementsPage() {
 
                   <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
                     <div className="space-y-1.5">
-                      <label className={labelClass}>Min</label>
+                      <label className={labelClass}>Allowed Min</label>
                       <input
                         type="number"
                         step="0.1"
@@ -549,9 +600,10 @@ export default function AdminMeasurementsPage() {
                         placeholder="14"
                         className={inputClass}
                       />
+                      <p className="text-[10px] text-zinc-400">Smallest value a customer may enter</p>
                     </div>
                     <div className="space-y-1.5">
-                      <label className={labelClass}>Max</label>
+                      <label className={labelClass}>Allowed Max</label>
                       <input
                         type="number"
                         step="0.1"
@@ -560,6 +612,7 @@ export default function AdminMeasurementsPage() {
                         placeholder="26"
                         className={inputClass}
                       />
+                      <p className="text-[10px] text-zinc-400">Largest value a customer may enter</p>
                     </div>
                     <div className="space-y-1.5">
                       <label className={labelClass}>Step</label>
@@ -570,6 +623,7 @@ export default function AdminMeasurementsPage() {
                         onChange={(e) => setFieldForm((prev) => ({ ...prev, step: e.target.value }))}
                         className={inputClass}
                       />
+                      <p className="text-[10px] text-zinc-400">How much the input&apos;s arrows move, e.g. 18 → 18.5</p>
                     </div>
                     <div className="space-y-1.5">
                       <label className={labelClass}>Position</label>
@@ -579,6 +633,7 @@ export default function AdminMeasurementsPage() {
                         onChange={(e) => setFieldForm((prev) => ({ ...prev, position: Number(e.target.value) }))}
                         className={inputClass}
                       />
+                      <p className="text-[10px] text-zinc-400">Order on the customer&apos;s form, lowest first</p>
                     </div>
                   </div>
 
@@ -591,6 +646,95 @@ export default function AdminMeasurementsPage() {
                       placeholder="Measure across the back, seam to seam"
                       className={inputClass}
                     />
+                  </div>
+
+                  {/* ─── Size-based upcharge brackets ───────────────────── */}
+                  <div className="rounded-lg border border-zinc-200 bg-zinc-50/60 p-4">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500">
+                          Price Upcharge By Size
+                        </p>
+                        <p className="mt-1 text-[11px] leading-relaxed text-zinc-500">
+                          Charged on top of the garment type&apos;s tailoring fee when the customer&apos;s{" "}
+                          {fieldForm.label.trim() ? fieldForm.label.trim().toLowerCase() : "measurement"} falls in a
+                          bracket. Both ends are inclusive, brackets must not overlap or fall outside the allowed range
+                          above, and a value in no bracket costs nothing extra.
+                        </p>
+                        {Number(fieldForm.step) > 0 && Number(fieldForm.step) < 1 && (
+                          <p className="mt-1.5 text-[11px] leading-relaxed text-amber-700">
+                            This field steps by {fieldForm.step}, so 39–40 leaves 40.5 unpriced. Either end each bracket
+                            just below the next one (39–40.5) or set the step to 1.
+                          </p>
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={addTier}
+                        className="flex shrink-0 cursor-pointer items-center gap-1.5 rounded-lg border border-zinc-300 bg-white px-3 py-2 text-[10px] font-bold uppercase tracking-widest text-zinc-700 transition-colors hover:bg-zinc-100"
+                      >
+                        <Plus className="h-3.5 w-3.5" /> Add Tier
+                      </button>
+                    </div>
+
+                    {fieldForm.tiers.length > 0 && (
+                      <div className="mt-4 space-y-2">
+                        <div className="grid grid-cols-[1fr_1fr_1.2fr_1fr_auto] gap-2 px-1">
+                          <span className={labelClass}>From</span>
+                          <span className={labelClass}>To</span>
+                          <span className={labelClass}>Type</span>
+                          <span className={labelClass}>Upcharge</span>
+                          <span className="w-8" />
+                        </div>
+                        {fieldForm.tiers.map((tier, index) => (
+                          <div key={index} className="grid grid-cols-[1fr_1fr_1.2fr_1fr_auto] items-center gap-2">
+                            <input
+                              type="number"
+                              step="0.1"
+                              value={tier.minValue}
+                              onChange={(e) => updateTier(index, { minValue: e.target.value })}
+                              placeholder="39"
+                              className={`${inputClass} bg-white px-3 py-2`}
+                            />
+                            <input
+                              type="number"
+                              step="0.1"
+                              value={tier.maxValue}
+                              onChange={(e) => updateTier(index, { maxValue: e.target.value })}
+                              placeholder="40"
+                              className={`${inputClass} bg-white px-3 py-2`}
+                            />
+                            <select
+                              value={tier.surchargeType}
+                              onChange={(e) =>
+                                updateTier(index, { surchargeType: e.target.value as "FLAT" | "PERCENT" })
+                              }
+                              className={`${inputClass} bg-white px-3 py-2`}
+                            >
+                              <option value="FLAT">{baseCurrency.symbol} Flat</option>
+                              <option value="PERCENT">% of price</option>
+                            </select>
+                            <input
+                              type="number"
+                              min={0}
+                              step="0.01"
+                              value={tier.surchargeValue}
+                              onChange={(e) => updateTier(index, { surchargeValue: e.target.value })}
+                              placeholder="45"
+                              className={`${inputClass} bg-white px-3 py-2`}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => removeTier(index)}
+                              aria-label="Remove tier"
+                              className="cursor-pointer rounded-md p-1.5 text-zinc-400 transition-colors hover:bg-white hover:text-destructive"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
 
                   <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
@@ -640,6 +784,7 @@ export default function AdminMeasurementsPage() {
                       <TableHead>Measurement</TableHead>
                       <TableHead>Key</TableHead>
                       <TableHead>Range</TableHead>
+                      <TableHead>Size Upcharge</TableHead>
                       <TableHead>Required</TableHead>
                       <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
@@ -647,7 +792,7 @@ export default function AdminMeasurementsPage() {
                   <TableBody>
                     {active.fields.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={5} className="h-28 text-center text-muted-foreground">
+                        <TableCell colSpan={6} className="h-28 text-center text-muted-foreground">
                           No measurements defined for {active.name} yet.
                         </TableCell>
                       </TableRow>
@@ -665,6 +810,27 @@ export default function AdminMeasurementsPage() {
                             {field.minValue != null || field.maxValue != null
                               ? `${field.minValue ?? "—"} – ${field.maxValue ?? "—"} ${field.unit}`
                               : `Any (${field.unit})`}
+                          </TableCell>
+                          <TableCell>
+                            {field.tiers && field.tiers.length > 0 ? (
+                              <div className="space-y-0.5">
+                                {field.tiers.map((tier) => (
+                                  <div key={tier.id} className="flex items-center gap-2 text-xs">
+                                    <span className="text-muted-foreground">
+                                      {tier.minValue}–{tier.maxValue} {field.unit}
+                                    </span>
+                                    <span className="font-semibold text-foreground">
+                                      +
+                                      {tier.surchargeType === "PERCENT"
+                                        ? `${tier.surchargeValue}%`
+                                        : `${baseCurrency.symbol}${tier.surchargeValue}`}
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">—</span>
+                            )}
                           </TableCell>
                           <TableCell className="text-muted-foreground">{field.required ? "Yes" : "Optional"}</TableCell>
                           <TableCell className="text-right">

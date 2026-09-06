@@ -12,21 +12,21 @@ export default function JournalToc({ headings }: { headings: JournalHeading[] })
   }))
 
   return (
-    <nav aria-label="In this article" className="my-10 border border-line bg-[#fafafa] px-6 py-7 md:px-8">
-      <p className="text-[10px] font-bold uppercase tracking-[0.25em] text-soft">In This Article</p>
+    <nav aria-label="In this article" className="my-10 border border-zinc-200 bg-[#fafafa] px-6 py-7 md:px-8">
+      <p className="text-[10px] font-bold uppercase tracking-[0.25em] text-zinc-500">In This Article</p>
       <ol className="mt-5 space-y-3">
         {numbered.map((heading) => (
           <li key={heading.id} className={heading.level === 3 ? "pl-6" : ""}>
             <a
               href={`#${heading.id}`}
-              className="group flex gap-3 text-sm leading-snug text-soft transition-colors hover:text-brand-700"
+              className="group flex gap-3 text-sm leading-snug text-zinc-700 transition-colors hover:text-zinc-950"
             >
               {heading.number !== null && (
-                <span className="w-5 shrink-0 font-bold tabular-nums text-faint group-hover:text-brand-700">
+                <span className="w-5 shrink-0 font-bold tabular-nums text-zinc-400 group-hover:text-zinc-950">
                   {String(heading.number).padStart(2, "0")}
                 </span>
               )}
-              <span className="border-b border-transparent group-hover:border-brand-600">{heading.text}</span>
+              <span className="border-b border-transparent group-hover:border-zinc-950">{heading.text}</span>
             </a>
           </li>
         ))}

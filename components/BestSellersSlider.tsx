@@ -104,29 +104,29 @@ export default function BestSellersSlider({ products }: BestSellersSliderProps) 
       {/* 1. Header with dynamic tabs */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
         <div>
-          <h2 className="text-2xl sm:text-3xl font-light tracking-tight text-foreground uppercase">
-            This Month's <span className="font-extrabold text-foreground">Best Sellers</span>
+          <h2 className="text-2xl sm:text-3xl font-light tracking-tight text-zinc-900 uppercase">
+            This Month's <span className="font-extrabold text-zinc-800">Best Sellers</span>
           </h2>
         </div>
         
         {/* Custom Segmented Tabs */}
-        <div className="flex border border-line rounded-xl overflow-hidden shadow-sm">
+        <div className="flex border border-zinc-300 rounded-sm overflow-hidden shadow-sm">
           <button
             onClick={() => setActiveTab("men")}
-            className={`px-8 py-2.5 text-xs font-bold tracking-[0.14em] uppercase cursor-pointer transition-all duration-300 ${
+            className={`px-8 py-2.5 text-xs font-bold tracking-widest uppercase cursor-pointer transition-all duration-300 ${
               activeTab === "men"
-                ? "bg-brand-ink text-white"
-                : "bg-white text-faint hover:text-foreground"
+                ? "bg-zinc-950 text-white"
+                : "bg-white text-zinc-400 hover:text-zinc-800"
             }`}
           >
             Men
           </button>
           <button
             onClick={() => setActiveTab("women")}
-            className={`px-8 py-2.5 text-xs font-bold tracking-[0.14em] uppercase cursor-pointer transition-all duration-300 border-l border-line ${
+            className={`px-8 py-2.5 text-xs font-bold tracking-widest uppercase cursor-pointer transition-all duration-300 border-l border-zinc-200 ${
               activeTab === "women"
-                ? "bg-brand-ink text-white"
-                : "bg-white text-faint hover:text-foreground"
+                ? "bg-zinc-950 text-white"
+                : "bg-white text-zinc-400 hover:text-zinc-800"
             }`}
           >
             Women
@@ -140,7 +140,7 @@ export default function BestSellersSlider({ products }: BestSellersSliderProps) 
         {/* Left Arrow Button */}
         <button
           onClick={() => handleScroll("left")}
-          className="absolute left-[-20px] top-1/2 -translate-y-1/2 z-30 w-12 h-12 rounded-full bg-white border border-line shadow-md flex items-center justify-center text-soft hover:bg-cream hover:scale-105 active:scale-95 transition-all opacity-0 group-hover/carousel:opacity-100 duration-300 cursor-pointer"
+          className="absolute left-[-20px] top-1/2 -translate-y-1/2 z-30 w-12 h-12 rounded-full bg-white border border-zinc-200 shadow-md flex items-center justify-center text-zinc-700 hover:bg-zinc-50 hover:scale-105 active:scale-95 transition-all opacity-0 group-hover/carousel:opacity-100 duration-300 cursor-pointer"
           aria-label="Scroll left"
         >
           <ChevronLeft className="w-6 h-6 stroke-[1.5]" />
@@ -149,7 +149,7 @@ export default function BestSellersSlider({ products }: BestSellersSliderProps) 
         {/* Right Arrow Button */}
         <button
           onClick={() => handleScroll("right")}
-          className="absolute right-[-20px] top-1/2 -translate-y-1/2 z-30 w-12 h-12 rounded-full bg-white border border-line shadow-md flex items-center justify-center text-soft hover:bg-cream hover:scale-105 active:scale-95 transition-all opacity-0 group-hover/carousel:opacity-100 duration-300 cursor-pointer"
+          className="absolute right-[-20px] top-1/2 -translate-y-1/2 z-30 w-12 h-12 rounded-full bg-white border border-zinc-200 shadow-md flex items-center justify-center text-zinc-700 hover:bg-zinc-50 hover:scale-105 active:scale-95 transition-all opacity-0 group-hover/carousel:opacity-100 duration-300 cursor-pointer"
           aria-label="Scroll right"
         >
           <ChevronRight className="w-6 h-6 stroke-[1.5]" />
@@ -164,7 +164,9 @@ export default function BestSellersSlider({ products }: BestSellersSliderProps) 
           {filteredProducts.map((prod) => {
             return (
               <div key={prod.id} className="min-w-[290px] sm:min-w-[320px] max-w-[320px] flex-shrink-0">
-                <ProductCard product={prod} idPrefix="bestseller" />
+                {/* Fixed-width carousel slot, so the card's viewport-relative
+                    default would over- or under-fetch depending on the screen. */}
+                <ProductCard product={prod} idPrefix="bestseller" sizes="320px" />
               </div>
             );
           })}

@@ -6,8 +6,10 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   try {
     const { id } = await params
 
-    const product = await prisma.product.findUnique({
-      where: { id },
+    // findFirst, not findUnique: a deleted product keeps its row, so the
+    // deletedAt filter is what makes this 404 instead of serving it.
+    const product = await prisma.product.findFirst({
+      where: { id, deletedAt: null },
       include: {
         images: true,
         variants: true,

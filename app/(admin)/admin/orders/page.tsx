@@ -18,9 +18,11 @@ import {
   CheckCircle2,
   AlertCircle,
   Printer,
-  Clock
+  Clock,
+  ExternalLink
 } from "lucide-react"
 import api from "@/lib/axios"
+import type { DeliveryCarrier } from "@/lib/delivery"
 import { useCurrency } from "@/providers/CurrencyProvider"
 import Swal from "sweetalert2";
 import { confirmDelete } from "@/lib/confirmDelete"
@@ -62,6 +64,7 @@ type OrderItem = {
   customMeasurements?: {
     templateName: string
     values: { key: string; label: string; value: number; unit: string }[]
+    feeBreakdown?: { label: string; amount: number }[]
   } | null
 }
 
@@ -81,6 +84,21 @@ type User = {
   phone: string | null
 }
 
+type DeliveryForm = { carrier: string; trackingNumber: string; estimatedDeliveryAt: string }
+
+/** ISO → local `YYYY-MM-DD` for a `<input type="date">`. */
+function toDateInput(value: string | null | undefined) {
+  if (!value) return ""
+  const d = new Date(value)
+  if (Number.isNaN(d.getTime())) return ""
+  const pad = (n: number) => String(n).padStart(2, "0")
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+}
+
+function formatDeliveryDate(value: string | null | undefined) {
+  return value ? new Date(value).toLocaleDateString("en-US", { dateStyle: "medium" }) : "—"
+}
+
 type Order = {
   id: string
   userId: string
@@ -90,6 +108,14 @@ type Order = {
   paymentStatus: "PENDING" | "PAID" | "FAILED" | "REFUNDED"
   shippingAddress: string
   shippingPhone: string
+  shippingCarrier?: string | null
+  shippingMethod?: string | null
+  trackingNumber?: string | null
+  trackingUrl?: string | null
+  estimatedDeliveryAt?: string | null
+  shippedAt?: string | null
+  deliveredAt?: string | null
+  deliveryNote?: string | null
   currencyCode?: string
   currencySymbol?: string
   exchangeRate?: number
@@ -129,6 +155,33 @@ export default function AdminOrdersPage() {
   const [page, setPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
   const [totalRecords, setTotalRecords] = useState(0)
+
+  // Delivery mini-form in the drawer
+  const [carriers, setCarriers] = useState<DeliveryCarrier[]>([])
+  // Captured once so the "overdue" check keeps the render pure.
+  const [now] = useState(() => Date.now())
+  // The admin's unsaved edits, tagged with the order they belong to. When a
+  // different order is opened the draft no longer matches and the form falls
+  // back to that order's stored values — no effect needed to reset it.
+  const [deliveryDraft, setDeliveryDraft] = useState<(DeliveryForm & { orderId: string }) | null>(null)
+  const deliveryForm: DeliveryForm =
+    selectedOrder && deliveryDraft?.orderId === selectedOrder.id
+      ? deliveryDraft
+      : {
+          carrier: selectedOrder?.shippingCarrier || "",
+          trackingNumber: selectedOrder?.trackingNumber || "",
+          estimatedDeliveryAt: toDateInput(selectedOrder?.estimatedDeliveryAt),
+        }
+  const patchDeliveryForm = (patch: Partial<DeliveryForm>) => {
+    if (!selectedOrder) return
+    setDeliveryDraft({ ...deliveryForm, ...patch, orderId: selectedOrder.id })
+  }
+
+  useEffect(() => {
+    api.get("/admin/deliveries/carriers")
+      .then((res) => setCarriers(Array.isArray(res.data) ? res.data : []))
+      .catch((error) => console.error("Failed to fetch carriers:", error))
+  }, [])
 
   async function fetchOrders() {
     try {
@@ -170,7 +223,16 @@ export default function AdminOrdersPage() {
     }
   }, [orders])
 
-  async function handleUpdateStatus(orderId: string, payload: { status?: string; paymentStatus?: string }) {
+  async function handleUpdateStatus(
+    orderId: string,
+    payload: {
+      status?: string
+      paymentStatus?: string
+      shippingCarrier?: string | null
+      trackingNumber?: string | null
+      estimatedDeliveryAt?: string | null
+    }
+  ) {
     try {
       setUpdatingId(orderId)
       await api.patch(`/admin/orders/${orderId}`, payload)
@@ -303,6 +365,115 @@ export default function AdminOrdersPage() {
                 </div>
               </div>
 
+              {/* DELIVERY */}
+              <div className="bg-muted/50 rounded-xl p-4.5 border border-border space-y-4">
+                <div className="flex justify-between items-center">
+                  <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground flex items-center gap-1.5">
+                    <Truck className="w-3.5 h-3.5" /> Delivery
+                  </span>
+                  {selectedOrder.status === "SHIPPED" && selectedOrder.estimatedDeliveryAt && new Date(selectedOrder.estimatedDeliveryAt).getTime() < now && (
+                    <span className="text-[8px] font-extrabold uppercase tracking-widest text-rose-600 flex items-center gap-1">
+                      <AlertCircle className="w-3 h-3" /> Overdue
+                    </span>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-xs">
+                  <div>
+                    <span className="block text-[8px] font-extrabold text-muted-foreground uppercase tracking-widest">Carrier</span>
+                    <span className="font-semibold text-foreground">{selectedOrder.shippingCarrier || "—"}</span>
+                    {selectedOrder.shippingMethod && (
+                      <span className="block text-[10px] text-muted-foreground">{selectedOrder.shippingMethod}</span>
+                    )}
+                  </div>
+                  <div>
+                    <span className="block text-[8px] font-extrabold text-muted-foreground uppercase tracking-widest">Tracking</span>
+                    {selectedOrder.trackingNumber ? (
+                      selectedOrder.trackingUrl ? (
+                        <a
+                          href={selectedOrder.trackingUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 font-mono font-semibold text-foreground underline underline-offset-2 break-all"
+                        >
+                          {selectedOrder.trackingNumber} <ExternalLink className="w-3 h-3 shrink-0" />
+                        </a>
+                      ) : (
+                        <span className="font-mono font-semibold text-foreground break-all">{selectedOrder.trackingNumber}</span>
+                      )
+                    ) : (
+                      <span className="text-muted-foreground">—</span>
+                    )}
+                  </div>
+                  <div>
+                    <span className="block text-[8px] font-extrabold text-muted-foreground uppercase tracking-widest">Est. Delivery</span>
+                    <span className="font-mono text-muted-foreground">{formatDeliveryDate(selectedOrder.estimatedDeliveryAt)}</span>
+                  </div>
+                  <div>
+                    <span className="block text-[8px] font-extrabold text-muted-foreground uppercase tracking-widest">Shipped / Delivered</span>
+                    <span className="font-mono text-muted-foreground">
+                      {formatDeliveryDate(selectedOrder.shippedAt)} / {formatDeliveryDate(selectedOrder.deliveredAt)}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3.5 pt-3 border-t border-border">
+                  <div>
+                    <label className="block text-[8px] font-extrabold uppercase tracking-widest text-muted-foreground mb-1">Carrier</label>
+                    <select
+                      value={deliveryForm.carrier}
+                      onChange={(e) => patchDeliveryForm({ carrier: e.target.value })}
+                      disabled={updatingId !== null}
+                      className="w-full h-9 rounded-md border border-input bg-transparent px-3 text-sm shadow-xs focus-visible:ring-2 focus-visible:ring-ring/50 outline-none"
+                    >
+                      <option value="">— None —</option>
+                      {carriers.filter((c) => c.active).map((c) => (
+                        <option key={c.id} value={c.name}>{c.name}</option>
+                      ))}
+                      {deliveryForm.carrier && !carriers.some((c) => c.active && c.name === deliveryForm.carrier) && (
+                        <option value={deliveryForm.carrier}>{deliveryForm.carrier}</option>
+                      )}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[8px] font-extrabold uppercase tracking-widest text-muted-foreground mb-1">Tracking Number</label>
+                    <Input
+                      value={deliveryForm.trackingNumber}
+                      onChange={(e) => patchDeliveryForm({ trackingNumber: e.target.value })}
+                      disabled={updatingId !== null}
+                      placeholder="Tracking #"
+                      className="h-9 font-mono"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[8px] font-extrabold uppercase tracking-widest text-muted-foreground mb-1">Est. Delivery</label>
+                    <Input
+                      type="date"
+                      value={deliveryForm.estimatedDeliveryAt}
+                      onChange={(e) => patchDeliveryForm({ estimatedDeliveryAt: e.target.value })}
+                      disabled={updatingId !== null}
+                      className="h-9"
+                    />
+                  </div>
+                  <div className="flex items-end">
+                    <Button
+                      size="sm"
+                      className="w-full h-9"
+                      disabled={updatingId !== null}
+                      onClick={() => handleUpdateStatus(selectedOrder.id, {
+                        shippingCarrier: deliveryForm.carrier || null,
+                        trackingNumber: deliveryForm.trackingNumber.trim() || null,
+                        estimatedDeliveryAt: deliveryForm.estimatedDeliveryAt
+                          ? new Date(`${deliveryForm.estimatedDeliveryAt}T00:00:00`).toISOString()
+                          : null,
+                      })}
+                    >
+                      <Truck size={14} /> Save delivery
+                    </Button>
+                  </div>
+                </div>
+              </div>
+
               {/* CUSTOMER & SHIPPING SUMMARY */}
               <div className="space-y-3.5">
                 <h4 className="text-[10px] font-semibold uppercase tracking-widest text-foreground border-b border-border pb-1.5 flex items-center gap-1.5">
@@ -369,6 +540,13 @@ export default function AdminOrdersPage() {
                                 </span>
                               )}
                             </p>
+                            {(item.customMeasurements.feeBreakdown?.length ?? 0) > 1 && (
+                              <p className="text-[9px] text-muted-foreground">
+                                {item.customMeasurements.feeBreakdown!
+                                  .map((line) => `${line.label} +${formatOrderPrice(selectedOrder, line.amount)}`)
+                                  .join(" · ")}
+                              </p>
+                            )}
                             <div className="mt-1 grid grid-cols-2 gap-x-3 gap-y-0.5">
                               {item.customMeasurements.values.map((v) => (
                                 <p key={v.key} className="text-[9px] text-muted-foreground">

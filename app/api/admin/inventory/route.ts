@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { Prisma } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
 import { getAdminPayload } from "@/lib/auth"
+import { getLowStockThreshold } from "@/lib/inventory"
 
 /**
  * Inventory is a variant-level view, so it paginates variants rather than
@@ -28,6 +29,9 @@ export async function GET(req: NextRequest) {
     const search = (searchParams.get("search") || "").trim()
     const stock = searchParams.get("stock") || "all"
 
+    // "Low" is tunable from Admin → Reports → Low Stock; see lib/inventory.ts.
+    const threshold = await getLowStockThreshold()
+
     // Mirrors the product list: soft-deleted rows and gift cards are not stock.
     const baseWhere: Prisma.ProductVariantWhereInput = {
       deletedAt: null,
@@ -47,9 +51,9 @@ export async function GET(req: NextRequest) {
       ]
     }
 
-    if (stock === "low") where.stock = { gt: 0, lte: 5 }
+    if (stock === "low") where.stock = { gt: 0, lte: threshold }
     else if (stock === "out") where.stock = 0
-    else if (stock === "in") where.stock = { gt: 5 }
+    else if (stock === "in") where.stock = { gt: threshold }
 
     const [rows, total, agg, lowStockCount, valueRows] = await Promise.all([
       prisma.productVariant.findMany({
@@ -79,7 +83,7 @@ export async function GET(req: NextRequest) {
 
       // Summary cards ignore the filters — they describe the whole inventory.
       prisma.productVariant.aggregate({ where: baseWhere, _sum: { stock: true } }),
-      prisma.productVariant.count({ where: { ...baseWhere, stock: { lte: 5 } } }),
+      prisma.productVariant.count({ where: { ...baseWhere, stock: { lte: threshold } } }),
 
       // SUM(stock * basePrice) crosses a relation, which Prisma's aggregate API
       // cannot express — so this one total is a raw query.
@@ -119,6 +123,7 @@ export async function GET(req: NextRequest) {
       stats: {
         totalUnits: agg._sum.stock || 0,
         lowStockCount,
+        threshold,
         totalValue: valueRows[0]?.total || 0,
       },
     })

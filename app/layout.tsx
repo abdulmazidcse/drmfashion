@@ -1,20 +1,26 @@
 import type { Metadata } from "next";
-import { Plus_Jakarta_Sans } from "next/font/google";
+import { Outfit, Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
 import "./css/design-system.css";
 
-// One family for the whole site now: the Signature storefront and the admin both
-// set Plus Jakarta Sans, so the second face Outfit used to supply is gone and
-// with it one render-blocking font request on every storefront page.
-//
-// No `weight` list on purpose: it's a variable font, so omitting it fetches one
-// woff2 covering 100–900 rather than a static file per weight. Every
-// `font-light`…`font-extrabold` utility still resolves.
+// No `weight` list on purpose: both are variable fonts, so omitting it makes
+// next/font fetch one variable woff2 covering the whole 100–900 range instead of
+// a separate static file per weight. Every `font-light`…`font-black` utility
+// still resolves — it just stops costing an extra render-blocking request each.
+const outfit = Outfit({
+  subsets: ["latin"],
+  variable: "--font-outfit",
+});
+
+// Admin dashboard only (see --font-admin in app/globals.css) — preload disabled
+// so storefront pages, which never apply this font, don't fetch it.
 const plusJakartaSans = Plus_Jakarta_Sans({
   subsets: ["latin"],
   variable: "--font-plus-jakarta-sans",
+  preload: false,
 });
-import { getStoreName, getSettings, getPublicSettings } from "@/lib/settings";
+import { getStoreName, getSettings, getPublicSettings, baseCurrencyCode } from "@/lib/settings";
+import { siteUrl } from "@/lib/siteUrl";
 import { getExchangeRates } from "@/lib/exchangeRates";
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -23,9 +29,25 @@ export async function generateMetadata(): Promise<Metadata> {
   const favicon = settings.brand_favicon_url || "/favicon.ico";
   const googleVerify = settings.google_site_verification;
   const fbVerify = settings.facebook_domain_verification;
+  // Editable from Settings → SEO. The old hardcoded "<store> | Modern Apparel"
+  // came to 26 characters, below the ~30 search engines show in full.
+  const title =
+    settings.seo_meta_title?.trim() ||
+    `${storeName} | Tall Men's & Women's Clothing`;
+  const description =
+    settings.seo_meta_description?.trim() ||
+    `High-end contemporary fashion tailored for modern individuals. Shop the latest collections of premium apparel at ${storeName}.`;
+
   return {
-    title: `${storeName} | Modern Apparel`,
-    description: `High-end contemporary fashion tailored for modern individuals. Shop the latest collections of premium apparel at ${storeName}.`,
+    // Required for Next to resolve the relative canonical/OG URLs each page
+    // sets; without it no canonical tag is emitted at all.
+    //
+    // Baked in at build time for statically rendered routes, so a build that
+    // runs without NEXT_PUBLIC_APP_URL ships whatever this resolves to — which
+    // is why production never falls back to localhost.
+    metadataBase: new URL(siteUrl()),
+    title,
+    description,
     icons: {
       icon: favicon,
     },
@@ -40,7 +62,16 @@ export async function generateMetadata(): Promise<Metadata> {
 
 import { CurrencyProvider } from "@/providers/CurrencyProvider";
 import { SettingsProvider } from "@/providers/SettingsProvider";
+import AnnouncementBar from "@/components/AnnouncementBar";
+import { ANNOUNCEMENT_BAR_SETTING_KEY, parseAnnouncementBar } from "@/lib/announcementBar";
+import { ColorsProvider } from "@/providers/ColorsProvider";
+import { organizationSchema, webSiteSchema } from "@/lib/structuredData";
+import JsonLd from "@/components/JsonLd";
+import { getStoreColors } from "@/lib/colors";
 import PromoDrawer from "@/components/PromoDrawer";
+import TawkChat from "@/components/TawkChat";
+import PageViewTracker from "@/components/PageViewTracker";
+import { Suspense } from "react";
 import Script from "next/script";
 
 export default async function RootLayout({
@@ -54,14 +85,66 @@ export default async function RootLayout({
   // Rates come along for the ride: CurrencyProvider used to fetch them from a
   // third-party API in the browser before it could resolve any price. Redis-cached
   // for an hour and fail-soft, so this costs one upstream call per hour at most.
-  const [settings, exchangeRates] = await Promise.all([
+  // Colours ride along too: product cards resolve a swatch from a colour name,
+  // and the table is small, shared by every visitor and Redis-cached.
+  const [settings, exchangeRates, storeColors] = await Promise.all([
     getPublicSettings(),
     getExchangeRates(),
+    getStoreColors(),
   ]);
 
+  // Everything analytics runs through this one container (Admin → Settings →
+  // SEO). Empty means no tracking is installed at all.
+  const gtmId = settings.gtm_id?.trim();
+
+  // Orders are stored in the base currency, so that is what GA4 must be told —
+  // reporting whatever currency the visitor happened to be browsing in would
+  // make revenue incomparable between sessions.
+  const baseCurrency = baseCurrencyCode(settings);
+
+  // Site-wide strip above the header. Parsed here rather than in the
+  // component so a malformed stored value never reaches the browser.
+  const announcementBar = parseAnnouncementBar(settings[ANNOUNCEMENT_BAR_SETTING_KEY]);
+
   return (
-    <html lang="en" className={`${plusJakartaSans.variable} h-full antialiased`}>
+    <html lang="en" className={`${outfit.variable} ${plusJakartaSans.variable} h-full antialiased`}>
       <body className={`min-h-full flex flex-col font-sans`}>
+        {gtmId && (
+          <>
+            {/* The array has to exist before anything can push to it. Product
+                pages fire view_item on mount, which can beat the container
+                script; queueing into a plain array means GTM picks those up
+                when it loads instead of them being dropped. */}
+            <Script id="datalayer-init" strategy="beforeInteractive">
+              {`window.dataLayer = window.dataLayer || [];
+                window.__STORE_CURRENCY__ = ${JSON.stringify(baseCurrency)};`}
+            </Script>
+
+            <Script id="gtm-container" strategy="afterInteractive">
+              {`(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+                new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+                j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+                'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+                })(window,document,'script','dataLayer',${JSON.stringify(gtmId)});`}
+            </Script>
+
+            <noscript>
+              <iframe
+                src={`https://www.googletagmanager.com/ns.html?id=${gtmId}`}
+                height="0"
+                width="0"
+                style={{ display: "none", visibility: "hidden" }}
+                title="Google Tag Manager"
+              />
+            </noscript>
+
+            {/* Suspense keeps useSearchParams from making every page dynamic. */}
+            <Suspense fallback={null}>
+              <PageViewTracker />
+            </Suspense>
+          </>
+        )}
+
         {/* Custom head scripts from settings — injected into <head> by next/script (beforeInteractive) */}
         {settings.custom_head_scripts && (
           <Script id="custom-head-scripts" strategy="beforeInteractive">
@@ -85,16 +168,33 @@ export default async function RootLayout({
             `}
           </Script>
         )}
+        {/* Site-wide identity. Emitted once here rather than per page so the
+            graph has a single Organization and WebSite node to reference. */}
+        <JsonLd
+          data={[
+            organizationSchema(settings.brand_store_name || "TallPlus", settings.brand_logo_url),
+            webSiteSchema(settings.brand_store_name || "TallPlus"),
+          ]}
+        />
+        {announcementBar.active && announcementBar.slides.length > 0 && (
+          <AnnouncementBar config={announcementBar} />
+        )}
+
         <SettingsProvider initialSettings={settings}>
-          <CurrencyProvider rates={exchangeRates}>
-            {children}
-          </CurrencyProvider>
+          <ColorsProvider colors={storeColors}>
+            <CurrencyProvider rates={exchangeRates}>
+              {children}
+            </CurrencyProvider>
+          </ColorsProvider>
           {/* Storefront-only: the drawer opts itself out of /admin, auth and checkout. */}
           <PromoDrawer />
+          <TawkChat />
         </SettingsProvider>
 
-        {/* Google Analytics */}
-        {settings.google_analytics_id && (
+        {/* Google Analytics — only when GTM is NOT in use. With a container
+            installed, GA4 is configured inside GTM instead; loading gtag here as
+            well would make every page_view count twice. */}
+        {settings.google_analytics_id && !gtmId && (
           <>
             <Script
               src={`https://www.googletagmanager.com/gtag/js?id=${settings.google_analytics_id}`}

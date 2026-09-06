@@ -67,9 +67,9 @@ export default function SearchBar() {
           }}
           onFocus={() => setIsOpen(true)}
           placeholder="Search products..."
-          className="w-full bg-cream text-foreground border-none rounded-full py-2.5 pl-10 pr-4 text-xs font-medium focus:outline-none focus:ring-1 focus:ring-aqua-400 transition-all placeholder:text-soft"
+          className="w-full bg-zinc-100 text-zinc-900 border-none rounded-full py-2.5 pl-10 pr-4 text-xs font-medium focus:outline-none focus:ring-1 focus:ring-zinc-300 transition-all placeholder:text-zinc-500"
         />
-        <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-soft" />
+        <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
         {query && (
           <button
             type="button"
@@ -77,7 +77,7 @@ export default function SearchBar() {
               setQuery("");
               setResults([]);
             }}
-            className="absolute right-3.5 top-1/2 -translate-y-1/2 text-faint hover:text-soft cursor-pointer"
+            className="absolute right-3.5 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600 cursor-pointer"
           >
             <X className="w-3.5 h-3.5" />
           </button>
@@ -86,9 +86,9 @@ export default function SearchBar() {
 
       {/* Dropdown Results */}
       {isOpen && query.trim().length >= 2 && (
-        <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-line rounded-lg shadow-xl overflow-hidden max-h-96 overflow-y-auto">
+        <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-zinc-150 rounded-lg shadow-xl overflow-hidden max-h-96 overflow-y-auto">
           {loading ? (
-            <div className="flex items-center justify-center p-8 text-faint">
+            <div className="flex items-center justify-center p-8 text-zinc-400">
               <Loader2 className="w-5 h-5 animate-spin" />
             </div>
           ) : results.length > 0 ? (
@@ -98,18 +98,18 @@ export default function SearchBar() {
                   key={product.id}
                   href={`/product/${product.slug}`}
                   onClick={() => setIsOpen(false)}
-                  className="flex items-center gap-3 p-3 hover:bg-cream transition-colors border-b border-line last:border-0"
+                  className="flex items-center gap-3 p-3 hover:bg-zinc-50 transition-colors border-b border-zinc-50 last:border-0"
                 >
-                  <div className="w-10 h-10 bg-cream rounded overflow-hidden flex-shrink-0">
+                  <div className="w-10 h-10 bg-zinc-100 rounded overflow-hidden flex-shrink-0">
                     {product.thumbnail && (
                       <img src={product.thumbnail} alt={product.title} className="w-full h-full object-cover" />
                     )}
                   </div>
                   <div className="flex flex-col">
-                    <span className="text-[11px] font-bold text-foreground uppercase tracking-wide truncate">
+                    <span className="text-[11px] font-bold text-zinc-900 uppercase tracking-wide truncate">
                       {product.title}
                     </span>
-                    <span className="text-[10px] text-soft font-medium">
+                    <span className="text-[10px] text-zinc-500 font-medium">
                       ${product.discountPrice || product.basePrice}
                     </span>
                   </div>
@@ -118,13 +118,13 @@ export default function SearchBar() {
               <Link
                 href={`/shop?search=${encodeURIComponent(query)}`}
                 onClick={() => setIsOpen(false)}
-                className="block w-full p-3 text-center text-[11px] font-bold uppercase tracking-[0.14em] text-foreground bg-cream hover:bg-cream transition-colors"
+                className="block w-full p-3 text-center text-[10px] font-bold uppercase tracking-widest text-zinc-900 bg-zinc-50 hover:bg-zinc-100 transition-colors"
               >
                 View All Results
               </Link>
             </div>
           ) : (
-            <div className="p-8 text-center text-xs text-soft">
+            <div className="p-8 text-center text-xs text-zinc-500">
               No products found for &quot;{query}&quot;
             </div>
           )}

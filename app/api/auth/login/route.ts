@@ -44,15 +44,17 @@ export async function POST(req: NextRequest) {
 
     // 1. Find user by email
     const user = await prisma.user.findUnique({
-      where: { email }
+      where: { email },
+      include: { adminRole: { select: { permissions: true } } },
     })
 
     if (!user) {
       return NextResponse.json({ message: "Invalid credentials" }, { status: 401 })
     }
 
-    // 2. Ensure user is an ADMIN
-    if (user.role !== "ADMIN") {
+    // 2. Ensure user belongs to the admin panel (ADMIN = full access,
+    //    STAFF = limited by the permissions of their AdminRole)
+    if (user.role !== "ADMIN" && user.role !== "STAFF") {
       return NextResponse.json({ message: "Unauthorized access" }, { status: 403 })
     }
 
@@ -62,9 +64,18 @@ export async function POST(req: NextRequest) {
     }
 
     const isValidPassword = await bcrypt.compare(password, user.password)
-    
+
     if (!isValidPassword) {
       return NextResponse.json({ message: "Invalid credentials" }, { status: 401 })
+    }
+
+    // Checked after the password so a wrong password and a deactivated account
+    // are indistinguishable to an attacker probing for valid credentials.
+    if (!user.isActive) {
+      return NextResponse.json(
+        { message: "This account has been deactivated. Contact an administrator." },
+        { status: 403 }
+      )
     }
 
     // 4. Generate JWT Token
@@ -73,7 +84,13 @@ export async function POST(req: NextRequest) {
     }
 
     const secret = new TextEncoder().encode(JWT_SECRET)
-    const token = await new SignJWT({ userId: user.id, role: user.role, email: user.email })
+    // tokenVersion travels in the token so an admin can revoke it later by
+    // bumping the column — see the force-logout route.
+    // STAFF permissions are baked in so proxy.ts can gate every request
+    // without a DB round-trip; editing a role bumps tokenVersion for its
+    // members, which is what retires the stale copy. ADMIN needs none.
+    const permissions = user.role === "STAFF" ? user.adminRole?.permissions ?? [] : []
+    const token = await new SignJWT({ userId: user.id, role: user.role, email: user.email, tokenVersion: user.tokenVersion, permissions })
       .setProtectedHeader({ alg: 'HS256' })
       .setIssuedAt()
       .setExpirationTime('24h') // Token expires in 24 hours

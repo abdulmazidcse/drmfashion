@@ -5,6 +5,7 @@ import { ReactNode } from "react"
 import AdminSidebar from "@/components/admin/AdminSidebar"
 import AdminHeader from "@/components/admin/AdminHeader"
 import { AdminSidebarProvider, useAdminSidebar } from "@/providers/AdminSidebarProvider"
+import { AdminAccessProvider } from "@/providers/AdminAccessProvider"
 
 type Props = {
   children: ReactNode
@@ -32,7 +33,9 @@ export default function AdminLayout({
 }: Props) {
   return (
     <AdminSidebarProvider>
-      <AdminLayoutInner>{children}</AdminLayoutInner>
+      <AdminAccessProvider>
+        <AdminLayoutInner>{children}</AdminLayoutInner>
+      </AdminAccessProvider>
     </AdminSidebarProvider>
   )
 }

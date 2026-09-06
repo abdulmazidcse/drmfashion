@@ -12,7 +12,10 @@ import { useSettings } from "@/providers/SettingsProvider";
 const STORAGE_KEY = "ag_promo_popup";
 
 // Flows that must not be interrupted by a marketing overlay.
-const EXCLUDED_PREFIXES = ["/admin", "/login", "/register", "/checkout"];
+// "/admin-login" is listed separately: the match below is prefix-by-segment
+// (`/admin` or `/admin/…`), so the dashboard sign-in page does not fall under
+// the "/admin" entry.
+const EXCLUDED_PREFIXES = ["/admin", "/admin-login", "/login", "/register", "/checkout"];
 
 type PromoState = { dismissedAt?: number; subscribed?: boolean };
 
@@ -174,14 +177,14 @@ export default function PromoDrawer() {
         type="button"
         onClick={() => setIsOpen(true)}
         aria-label={tabLabel}
-        className={`fixed right-0 top-1/2 z-90 -translate-y-1/2 flex items-center gap-2 bg-brand-600 rounded-full text-white py-4 px-2.5 rounded-l-xl shadow-lg cursor-pointer transition-all duration-300 hover:bg-brand-700 ${
+        className={`fixed right-0 top-1/2 z-90 -translate-y-1/2 flex items-center gap-1.5 md:gap-2 bg-zinc-950 text-white py-2.5 px-1.5 md:py-4 md:px-2.5 rounded-l-xl shadow-lg cursor-pointer transition-all duration-300 hover:bg-zinc-800 ${
           isOpen ? "translate-x-full opacity-0 pointer-events-none" : "translate-x-0 opacity-100"
         }`}
       >
-        <span className="[writing-mode:vertical-rl] rotate-180 text-[11px] font-bold uppercase tracking-[0.2em]">
+        <span className="[writing-mode:vertical-rl] rotate-180 text-[9px] md:text-[11px] font-bold uppercase tracking-[0.15em] md:tracking-[0.2em]">
           {tabLabel}
         </span>
-        <Gift className="w-4 h-4 shrink-0" />
+        <Gift className="w-3 h-3 md:w-4 md:h-4 shrink-0" />
       </button>
 
       {/* Backdrop */}
@@ -207,7 +210,7 @@ export default function PromoDrawer() {
           type="button"
           onClick={close}
           aria-label="Close"
-          className="absolute top-5 right-5 z-10 p-1.5 text-soft hover:text-brand-700 transition-colors cursor-pointer"
+          className="absolute top-5 right-5 z-10 p-1.5 text-zinc-500 hover:text-zinc-950 transition-colors cursor-pointer"
         >
           <X className="w-6 h-6" strokeWidth={2.5} />
         </button>
@@ -220,20 +223,20 @@ export default function PromoDrawer() {
 
           <div className="px-8 py-10 sm:px-10">
             <div className="text-center">
-              <p className="text-3xl sm:text-[34px] font-bold text-foreground leading-tight">
+              <p className="text-3xl sm:text-[34px] font-bold text-zinc-950 leading-tight">
                 {heading}
               </p>
-              <p className="text-[54px] sm:text-[64px] font-extrabold text-foreground leading-[1.05] my-1">
+              <p className="text-[54px] sm:text-[64px] font-black text-zinc-950 leading-[1.05] my-1">
                 {highlight}
               </p>
-              <p className="text-2xl sm:text-[28px] font-bold text-foreground leading-tight">
+              <p className="text-2xl sm:text-[28px] font-bold text-zinc-950 leading-tight">
                 {subheading}
               </p>
             </div>
 
             {status === "success" ? (
               <div className="mt-10 text-center">
-                <p className="text-sm font-bold uppercase tracking-[0.14em] text-soft">
+                <p className="text-sm font-bold uppercase tracking-widest text-zinc-500">
                   {promoCode ? successHeading : message || "Thank you!"}
                 </p>
 
@@ -241,45 +244,45 @@ export default function PromoDrawer() {
                   <button
                     type="button"
                     onClick={handleCopy}
-                    className="mt-4 w-full flex items-center justify-center gap-3 border-2 border-dashed border-brand-600 px-4 py-5 text-2xl font-extrabold tracking-[0.15em] text-foreground hover:bg-cream transition-colors cursor-pointer"
+                    className="mt-4 w-full flex items-center justify-center gap-3 border-2 border-dashed border-zinc-950 px-4 py-5 text-2xl font-black tracking-[0.15em] text-zinc-950 hover:bg-zinc-50 transition-colors cursor-pointer"
                   >
                     {promoCode}
                     {copied ? (
                       <Check className="w-5 h-5 text-emerald-600" />
                     ) : (
-                      <Copy className="w-5 h-5 text-faint" />
+                      <Copy className="w-5 h-5 text-zinc-400" />
                     )}
                   </button>
                 )}
 
-                <p className="mt-4 text-sm text-soft leading-relaxed">
+                <p className="mt-4 text-sm text-zinc-500 leading-relaxed">
                   {copied ? "Copied to clipboard!" : successText}
                 </p>
 
                 <button
                   type="button"
                   onClick={close}
-                  className="mt-8 w-full bg-brand-600 rounded-full hover:bg-brand-700 text-white px-4 py-4 text-base font-bold transition-colors cursor-pointer"
+                  className="mt-8 w-full bg-zinc-950 hover:bg-zinc-800 text-white px-4 py-4 text-base font-bold transition-colors cursor-pointer"
                 >
                   Continue Shopping
                 </button>
               </div>
             ) : (
               <>
-                <p className="mt-8 text-[11px] leading-relaxed text-soft">
+                <p className="mt-8 text-[11px] leading-relaxed text-zinc-500">
                   {consentText}
                   {(termsUrl || privacyUrl) && (
                     <>
                       {" "}
                       View our{" "}
                       {termsUrl && (
-                        <a href={termsUrl} className="underline hover:text-brand-700">
+                        <a href={termsUrl} className="underline hover:text-zinc-950">
                           Terms of Service
                         </a>
                       )}
                       {termsUrl && privacyUrl && " and "}
                       {privacyUrl && (
-                        <a href={privacyUrl} className="underline hover:text-brand-700">
+                        <a href={privacyUrl} className="underline hover:text-zinc-950">
                           Privacy Policy
                         </a>
                       )}
@@ -297,7 +300,7 @@ export default function PromoDrawer() {
                     placeholder="Email"
                     required
                     disabled={disabled}
-                    className="w-full border border-line px-4 py-4 text-base text-foreground placeholder-faint outline-none focus:border-aqua-400 transition-colors"
+                    className="w-full border border-zinc-300 px-4 py-4 text-base text-zinc-900 placeholder-zinc-400 outline-none focus:border-zinc-950 transition-colors"
                   />
 
                   {showShopFor && shopForOptions.length > 0 && (
@@ -305,13 +308,13 @@ export default function PromoDrawer() {
                       value={shopFor}
                       onChange={(e) => setShopFor(e.target.value)}
                       disabled={disabled}
-                      className={`w-full border border-line px-4 py-4 text-base outline-none focus:border-aqua-400 transition-colors bg-white cursor-pointer ${
-                        shopFor ? "text-foreground" : "text-faint"
+                      className={`w-full border border-zinc-300 px-4 py-4 text-base outline-none focus:border-zinc-950 transition-colors bg-white cursor-pointer ${
+                        shopFor ? "text-zinc-900" : "text-zinc-400"
                       }`}
                     >
                       <option value="">I shop for (please select):</option>
                       {shopForOptions.map((option) => (
-                        <option key={option} value={option} className="text-foreground">
+                        <option key={option} value={option} className="text-zinc-900">
                           {option}
                         </option>
                       ))}
@@ -321,7 +324,7 @@ export default function PromoDrawer() {
                   <button
                     type="submit"
                     disabled={disabled}
-                    className="w-full bg-brand-600 rounded-full hover:bg-brand-700 disabled:bg-faint text-white px-4 py-4 text-lg font-bold transition-colors cursor-pointer"
+                    className="w-full bg-zinc-950 hover:bg-zinc-800 disabled:bg-zinc-500 text-white px-4 py-4 text-lg font-bold transition-colors cursor-pointer"
                   >
                     {status === "loading" ? "Please Wait..." : buttonText}
                   </button>

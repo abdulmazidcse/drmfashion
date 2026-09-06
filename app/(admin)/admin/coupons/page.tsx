@@ -22,6 +22,8 @@ type Coupon = {
   code: string
   discount: number
   active: boolean
+  subscribersOnly: boolean
+  firstOrderOnly: boolean
   expiresAt: string | null
 }
 
@@ -50,6 +52,17 @@ export default function CouponsPage() {
       fetchCoupons()
     } catch (error) {
       console.error("Failed to toggle status", error)
+    }
+  }
+
+  // Both rules were added after some codes already existed, so they have to be
+  // switchable from the list rather than only at creation time.
+  async function toggleRule(id: string, rule: "subscribersOnly" | "firstOrderOnly", current: boolean) {
+    try {
+      await api.patch(`/admin/coupons/${id}`, { [rule]: !current })
+      fetchCoupons()
+    } catch (error) {
+      console.error("Failed to toggle rule", error)
     }
   }
 
@@ -106,6 +119,7 @@ export default function CouponsPage() {
                     <TableHead>Code</TableHead>
                     <TableHead>Discount</TableHead>
                     <TableHead>Status</TableHead>
+                    <TableHead>Rules</TableHead>
                     <TableHead>Expires At</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
@@ -134,6 +148,32 @@ export default function CouponsPage() {
                             {coupon.active ? "Active" : "Inactive"}
                           </Badge>
                         </button>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex flex-wrap gap-1.5">
+                          <button
+                            onClick={() => toggleRule(coupon.id, "subscribersOnly", coupon.subscribersOnly)}
+                            title="Only works for newsletter subscribers"
+                          >
+                            <Badge
+                              variant={coupon.subscribersOnly ? "default" : "outline"}
+                              className="cursor-pointer text-[10px]"
+                            >
+                              Subscribers
+                            </Badge>
+                          </button>
+                          <button
+                            onClick={() => toggleRule(coupon.id, "firstOrderOnly", coupon.firstOrderOnly)}
+                            title="Only works if this email has never ordered"
+                          >
+                            <Badge
+                              variant={coupon.firstOrderOnly ? "default" : "outline"}
+                              className="cursor-pointer text-[10px]"
+                            >
+                              First order
+                            </Badge>
+                          </button>
+                        </div>
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground">
                         {coupon.expiresAt ? new Date(coupon.expiresAt).toLocaleDateString() : "Never"}

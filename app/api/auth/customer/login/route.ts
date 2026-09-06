@@ -31,6 +31,27 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ message: "Invalid email or password." }, { status: 401 })
     }
 
+    // Checked after the password so a deactivated account is indistinguishable
+    // from a wrong password to anyone probing for valid credentials.
+    if (!user.isActive) {
+      return NextResponse.json(
+        { message: "This account has been deactivated. Please contact support." },
+        { status: 403 }
+      )
+    }
+
+    // Unconfirmed address — the sign-up never finished. `requiresVerification`
+    // tells the form to switch to the code step instead of showing an error.
+    if (!user.emailVerifiedAt) {
+      return NextResponse.json(
+        {
+          message: "Please confirm your email address to finish signing up.",
+          requiresVerification: true,
+        },
+        { status: 403 }
+      )
+    }
+
     if (!JWT_SECRET) {
       return NextResponse.json({ message: "Server configuration error." }, { status: 500 })
     }

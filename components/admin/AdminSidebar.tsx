@@ -5,6 +5,8 @@ import Image from "next/image"
 import { usePathname } from "next/navigation"
 import { useAdminSidebar } from "@/providers/AdminSidebarProvider"
 import { useSettings } from "@/providers/SettingsProvider"
+import { useAdminAccess } from "@/providers/AdminAccessProvider"
+import { moduleForPath } from "@/lib/permissions"
 
 import {
   LayoutDashboard,
@@ -19,7 +21,9 @@ import {
   Ruler,
   PencilRuler,
   MoveVertical,
+  Package,
   Image as ImageIcon,
+  Barcode,
   Boxes,
   PackagePlus,
   Warehouse,
@@ -36,11 +40,19 @@ import {
   FileText,
   Newspaper,
   Truck,
+  Percent,
+  Layers,
+  GalleryHorizontal,
+  PackageCheck,
+  LineChart,
+  AlertTriangle,
+  Calculator,
+  ShieldCheck,
   ChevronDown,
   type LucideIcon,
 } from "lucide-react"
 
-import { useState } from "react"
+import { useMemo, useState } from "react"
 
 type NavLink = { label: string; href: string; icon: LucideIcon }
 type NavGroup = { title: string; links: NavLink[] }
@@ -60,7 +72,10 @@ const navGroups: NavGroup[] = [
       // { label: "POS Checkout", href: "/admin/pos", icon: ShoppingCart },
       { label: "Orders", href: "/admin/orders", icon: ClipboardList },
       { label: "Products", href: "/admin/products", icon: Shirt },
+      { label: "SKU List", href: "/admin/skus", icon: Barcode },
       { label: "Categories", href: "/admin/categories", icon: FolderTree },
+      { label: "Collections", href: "/admin/collections", icon: Layers },
+      { label: "Banners", href: "/admin/banners", icon: GalleryHorizontal },
       { label: "Menu Builder", href: "/admin/menus", icon: PanelsTopLeft },
     ],
   },
@@ -70,7 +85,9 @@ const navGroups: NavGroup[] = [
       { label: "Brands", href: "/admin/brands", icon: Tag },
       { label: "Colors", href: "/admin/colors", icon: Palette },
       { label: "Sizes", href: "/admin/sizes", icon: Ruler },
+      { label: "Size Packages", href: "/admin/size-packages", icon: Package },
       { label: "Custom Measurements", href: "/admin/measurements", icon: PencilRuler },
+      { label: "Size Charts", href: "/admin/size-charts", icon: Ruler },
       { label: "Lengths", href: "/admin/lengths", icon: MoveVertical },
       { label: "Media Library", href: "/admin/media", icon: ImageIcon },
     ],
@@ -81,7 +98,21 @@ const navGroups: NavGroup[] = [
       { label: "Inventory", href: "/admin/inventory", icon: Boxes },
       { label: "Purchases", href: "/admin/purchases", icon: PackagePlus },
       { label: "Suppliers", href: "/admin/suppliers", icon: Warehouse },
-      { label: "Returns", href: "/admin/returns", icon: RotateCcw },
+      { label: "Deliveries", href: "/admin/deliveries", icon: PackageCheck },
+      { label: "Returns & Refunds", href: "/admin/returns", icon: RotateCcw },
+    ],
+  },
+  {
+    title: "Reports",
+    links: [
+      { label: "Sales Report", href: "/admin/reports/sales", icon: LineChart },
+      { label: "Low Stock Report", href: "/admin/reports/low-stock", icon: AlertTriangle },
+    ],
+  },
+  {
+    title: "Finance",
+    links: [
+      { label: "Accounting", href: "/admin/accounting", icon: Calculator },
     ],
   },
   {
@@ -102,8 +133,10 @@ const navGroups: NavGroup[] = [
     title: "System",
     links: [
       { label: "Settings", href: "/admin/settings", icon: Settings },
+      { label: "Roles & Permissions", href: "/admin/roles", icon: ShieldCheck },
       { label: "Pages", href: "/admin/pages", icon: FileText },
       { label: "Shipping", href: "/admin/settings/shipping", icon: Truck },
+      { label: "Tax", href: "/admin/settings/tax", icon: Percent },
     ],
   },
 ]
@@ -112,6 +145,24 @@ export default function AdminSidebar() {
   const pathname = usePathname()
   const { collapsed } = useAdminSidebar()
   const { settings } = useSettings()
+  const { can, loading: accessLoading } = useAdminAccess()
+
+  // Only links the user may open. Purely cosmetic — proxy.ts is the gate — but
+  // a STAFF member should not see a wall of sections that would 403 on them.
+  // Nothing is rendered until /api/admin/me answers, so the menu never flashes
+  // from "everything" to "a few items".
+  const visibleGroups = useMemo(() => {
+    if (accessLoading) return []
+    return navGroups
+      .map((group) => ({
+        ...group,
+        links: group.links.filter((link) => {
+          const mod = moduleForPath(link.href)
+          return mod ? can(`${mod}.view`) : true
+        }),
+      }))
+      .filter((group) => group.links.length > 0)
+  }, [accessLoading, can])
 
   // By default, all groups are open
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>(() => {
@@ -162,7 +213,7 @@ export default function AdminSidebar() {
 
       {/* NAVIGATION LINKS */}
       <nav className="flex-1 py-3 space-y-5 overflow-y-auto overflow-x-hidden sidebar-scroll">
-        {navGroups.map((group) => {
+        {visibleGroups.map((group) => {
           const isOpen = collapsed || openGroups[group.title]
 
           return (

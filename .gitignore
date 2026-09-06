@@ -49,3 +49,7 @@ public/uploads/fashion-1784542098307-783754987.mp4
 public/uploads/fashion-1784542138220-494466670.mp4
 public/uploads/fashion-1784542583694-81486714.mp4
 public/uploads/fashion-1784542588372-419372750.mp4
+
+# WebKit/Safari compatibility screenshots (npm run check:safari) — regenerated on demand
+scratch/webkit/
+scratch/hero-measure.mjs

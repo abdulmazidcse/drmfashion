@@ -110,7 +110,7 @@ export default function RecentlyViewed({ currentProductId }: RecentlyViewedProps
           {viewedProducts.map((prod, i) => (
             <div
               key={prod.id}
-              className="at-card-up shrink-0 snap-start min-w-[calc((100%-11.25px)/2.25)] md:min-w-[calc((100%-21.25px)/4.25)]"
+              className="at-card-up shrink-0 snap-start w-[calc((100%-11.25px)/2.25)] md:w-[calc((100%-21.25px)/4.25)]"
               style={{ animationDelay: `${i * 60}ms` }}
             >
               <ProductCard product={prod} idPrefix="rv" />

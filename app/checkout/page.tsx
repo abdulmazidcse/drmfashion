@@ -6,6 +6,7 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { ChevronRight, ShoppingBag, Shield, Check, MapPin, CreditCard, Truck, Tag, Loader2 } from "lucide-react";
 import { CartItem, getCart, cartTotal, cartCount, clearCart } from "@/lib/cart";
+import { trackPurchase, storeCurrency } from "@/lib/analytics";
 import Header from "@/components/HeaderClient";
 import Footer from "@/components/Footer";
 import StripeCheckout from "@/components/StripeCheckout";
@@ -13,6 +14,31 @@ import SquareCheckout from "@/components/SquareCheckout";
 import { useCurrency } from "@/providers/CurrencyProvider";
 import Swal from "@/lib/swal";
 import { COUNTRIES } from "@/lib/countries";
+import { regionLabelFor } from "@/lib/regions";
+import { useRegions } from "@/lib/useRegions";
+import {
+  DEFAULT_TAX_SETTINGS,
+  resolveTax,
+  taxLineLabel,
+  taxSettingsFromSettings,
+  type TaxSettings,
+} from "@/lib/tax";
+import {
+  DEFAULT_SHIPPING_METHODS,
+  activeShippingMethods,
+  defaultShippingMethod,
+  parseShippingMethods,
+  upsMethodId,
+  type ShippingMethod,
+} from "@/lib/shipping";
+
+interface UpsRate {
+  serviceName: string;
+  serviceCode: string;
+  rate: number;
+  currency: string;
+  daysToDelivery?: string;
+}
 
 const COUNTRY_METADATA = COUNTRIES.reduce((acc, c) => {
   acc[c.code] = c;
@@ -57,9 +83,17 @@ export default function CheckoutPage() {
 
   const [pointValue, setPointValue] = useState(1);
   const [pointEarnRate, setPointEarnRate] = useState(10);
-  const [shippingFee, setShippingFee] = useState(0);
-  const [shippingFreeThreshold, setShippingFreeThreshold] = useState(1000);
+  const [shippingMethods, setShippingMethods] = useState<ShippingMethod[]>(DEFAULT_SHIPPING_METHODS);
+  const [selectedMethodId, setSelectedMethodId] = useState("");
   const [shippingEnabled, setShippingEnabled] = useState(true);
+  const [upsRates, setUpsRates] = useState<UpsRate[]>([]);
+  const [upsRatesAreMock, setUpsRatesAreMock] = useState(false);
+  const [fetchingRates, setFetchingRates] = useState(false);
+  const [upsError, setUpsError] = useState("");
+  // Null until the first rate lookup answers — the UPS block stays hidden until
+  // the store has said whether it offers UPS at all.
+  const [upsAvailable, setUpsAvailable] = useState<boolean | null>(null);
+  const [taxSettings, setTaxSettings] = useState<TaxSettings>(DEFAULT_TAX_SETTINGS);
   const [squareAppId, setSquareAppId] = useState("");
   const [squareLocationId, setSquareLocationId] = useState("");
   
@@ -82,6 +116,8 @@ export default function CheckoutPage() {
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  const { regions: countryRegions, loading: regionsLoading } = useRegions(form.country);
 
   // Set default country based on the Store Currency selected country if not logged in
   useEffect(() => {
@@ -115,10 +151,6 @@ export default function CheckoutPage() {
     }
   }, [form.country, paymentMethods, paymentCodCountry, form.paymentMethod]);
 
-  const [upsRates, setUpsRates] = useState<any[]>([]);
-  const [selectedUpsRate, setSelectedUpsRate] = useState<any | null>(null);
-  const [fetchingRates, setFetchingRates] = useState(false);
-  const [shippingCarrier, setShippingCarrier] = useState<"Standard" | "UPS">("Standard");
 
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [customerEmail, setCustomerEmail] = useState("");
@@ -263,54 +295,71 @@ export default function CheckoutPage() {
     return null;
   };
 
+  // UPS quotes in its account currency; product prices and the order total are
+  // in the store's base currency, so convert on the way in. `lib/shippingServer`
+  // repeats this server-side from the same `supported_currencies` rates, which
+  // is what keeps the figure shown here equal to the amount actually charged.
+  const toBase = (amount: number, currency: string) => {
+    const entry = currencies?.find((c) => c.code === currency);
+    if (!entry || !(entry.rate > 0)) return amount;
+    return amount / entry.rate;
+  };
+
   const fetchShippingRates = async (currentForm: typeof form) => {
+    if (!currentForm.city || !currentForm.postalCode) return;
     setFetchingRates(true);
+    setUpsError("");
     try {
-      const totalWeight = items.reduce((acc, item) => acc + (item.quantity * 1.5), 0);
+      const totalWeight = items.reduce((acc, item) => acc + item.quantity * 1.5, 0);
       const res = await fetch("/api/shipping/rates", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           city: currentForm.city,
-          postalCode: currentForm.postalCode || "10001",
+          postalCode: currentForm.postalCode,
           countryCode: currentForm.country,
           addressLine: currentForm.address,
           totalWeight,
         }),
       });
 
-      if (!res.ok) throw new Error("Failed to fetch rates");
       const data = await res.json();
-      if (data.success && data.rates) {
-        const usdCurrency = currencies?.find((c) => c.code === "USD");
-        const usdToBaseFactor = usdCurrency && usdCurrency.rate > 0 ? 1.0 / usdCurrency.rate : 117.0;
+      if (!res.ok) throw new Error(data.message || "Failed to fetch rates");
 
-        const convertedRates = data.rates.map((rate: any) => {
-          const convertedRate = rate.currency === "USD" ? rate.rate * usdToBaseFactor : rate.rate;
-          return {
-            ...rate,
-            rate: convertedRate,
-          };
-        });
+      if (data.success && data.disabled) {
+        setUpsAvailable(false);
+        setUpsRates([]);
+        return;
+      }
 
-        setUpsRates(convertedRates);
-        if (convertedRates.length > 0) {
-          setSelectedUpsRate(convertedRates[0]);
-          setShippingCarrier("UPS");
-        }
+      if (data.success && Array.isArray(data.rates)) {
+        setUpsAvailable(true);
+        setUpsRatesAreMock(Boolean(data.isMock));
+        setUpsRates(
+          data.rates
+            .map((rate: UpsRate) => ({ ...rate, rate: toBase(rate.rate, rate.currency) }))
+            .sort((a: UpsRate, b: UpsRate) => a.rate - b.rate)
+        );
       }
     } catch (err) {
+      // Non-fatal: the store's own methods are still selectable, so surface the
+      // failure inline instead of interrupting checkout with a modal.
       console.error(err);
-      Swal.fire({
-        text: "Could not fetch shipping rates from UPS. Falling back to standard shipping.",
-        icon: "warning",
-        confirmButtonColor: "#18181b",
-      });
-      setShippingCarrier("Standard");
+      setUpsRates([]);
+      setUpsError(err instanceof Error ? err.message : "Could not load UPS rates.");
     } finally {
       setFetchingRates(false);
     }
   };
+
+  // Quote UPS as soon as the address can be priced, debounced so typing a
+  // postal code does not fire one request per keystroke.
+  useEffect(() => {
+    if (!form.city || !form.postalCode || items.length === 0) return;
+    const timer = setTimeout(() => fetchShippingRates(form), 700);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.city, form.postalCode, form.country, items.length]);
 
   useEffect(() => {
     setItems(getCart());
@@ -351,12 +400,17 @@ export default function CheckoutPage() {
           setForm(f => ({ ...f, paymentMethod: pMethods[f.paymentMethod as keyof typeof pMethods] ? f.paymentMethod : firstAvailable }));
 
           // Shipping settings are now in the same public API call
-          const enabled = data.shipping_enabled !== "false";
-          const flatRate = Number(data.shipping_flat_rate || 10);
-          const freeThreshold = Number(data.shipping_free_threshold || 150);
-          setShippingEnabled(enabled);
-          setShippingFreeThreshold(freeThreshold);
-          if (enabled) setShippingFee(flatRate);
+          setShippingEnabled(data.shipping_enabled !== "false");
+          setTaxSettings(taxSettingsFromSettings(data));
+          const methods = parseShippingMethods(data.shipping_methods);
+          setShippingMethods(methods);
+          // Pre-select the cheapest tier so the summary is never blank; the
+          // shopper can still switch before continuing.
+          setSelectedMethodId((prev) =>
+            activeShippingMethods(methods).some((m) => m.id === prev)
+              ? prev
+              : defaultShippingMethod(methods)?.id ?? ""
+          );
 
           if (data.square_app_id) setSquareAppId(data.square_app_id);
           if (data.square_location_id) setSquareLocationId(data.square_location_id);
@@ -509,14 +563,43 @@ export default function CheckoutPage() {
   const discountAmount = Math.round(subtotal * (discountPercentage / 100));
   const pointsDiscount = pointsRedeemedApplied ? pointsRedeemed * pointValue : 0;
   const preTaxAmount = Math.max(0, subtotal - discountAmount - pointsDiscount);
-  const tax = preTaxAmount * 0.05; // 5% Standard Tax
 
-  const effectiveShippingFee = shippingEnabled
-    ? (shippingFreeThreshold > 0 && (subtotal - discountAmount) >= shippingFreeThreshold ? 0 : shippingFee)
-    : 0;
-  const shipping = shippingCarrier === "UPS" && selectedUpsRate
-    ? selectedUpsRate.rate
-    : effectiveShippingFee;
+  // Display only — the server re-resolves every fee before charging: store
+  // tiers from the settings row, UPS services by re-quoting the carrier.
+  const availableMethods = activeShippingMethods(shippingMethods);
+
+  // UPS services are modelled as methods too, so one radio group covers both
+  // and the selected id means the same thing to the server either way.
+  const upsAsMethods: ShippingMethod[] = upsRates.map((r) => ({
+    id: upsMethodId(r.serviceCode),
+    name: r.serviceName,
+    deliveryTime: r.daysToDelivery || "",
+    price: r.rate,
+    active: true,
+  }));
+
+  const selectedMethod =
+    [...availableMethods, ...upsAsMethods].find((m) => m.id === selectedMethodId) ??
+    defaultShippingMethod(shippingMethods);
+  const shipping = shippingEnabled ? selectedMethod?.price ?? 0 : 0;
+
+  const shippingDestination = {
+    city: form.city,
+    postalCode: form.postalCode,
+    countryCode: form.country,
+    state: form.area,
+    addressLine: form.address,
+  };
+
+  // Display only — /api/checkout recomputes this from the same settings row.
+  // Computed after shipping because the merchant can opt to tax the fee too.
+  const resolvedTax = resolveTax(taxSettings, {
+    country: form.country,
+    state: form.area,
+    taxableAmount: preTaxAmount,
+    shippingFee: shipping,
+  });
+  const tax = resolvedTax.amount;
   const total = preTaxAmount + tax + shipping;
   const count = cartCount(items);
 
@@ -535,8 +618,8 @@ export default function CheckoutPage() {
         totalAmount: total,
         tax: tax,
         shipping: shipping,
-        shippingCarrier: shippingCarrier,
-        shippingMethod: shippingCarrier === "UPS" && selectedUpsRate ? selectedUpsRate.serviceName : "Standard Shipping",
+        shippingMethodId: selectedMethod?.id || "",
+        shippingDestination,
         currencyCode: selectedCurrency?.code || "USD",
         currencySymbol: selectedCurrency?.symbol || "$",
         exchangeRate: selectedCurrency?.rate || 1.0,
@@ -575,6 +658,25 @@ export default function CheckoutPage() {
         throw new Error(errorData.message || "Failed to place order");
       }
 
+      const result = await res.json();
+
+      // Fired before clearCart(), which wipes the items the event describes.
+      // trackPurchase ignores an order id it has already reported, so a refresh
+      // of the success panel cannot count the revenue twice.
+      trackPurchase({
+        transaction_id: result.orderId,
+        value: result.analytics?.value ?? cartTotal(items),
+        currency: result.analytics?.currency ?? storeCurrency(),
+        shipping: result.analytics?.shipping,
+        items: items.map((i) => ({
+          item_id: i.productId,
+          item_name: i.title,
+          price: i.price,
+          quantity: i.quantity,
+          item_variant: [i.color, i.size, i.length].filter(Boolean).join(" / ") || undefined,
+        })),
+      });
+
       clearCart();
       setPlaced(true);
     } catch (err: any) {
@@ -587,15 +689,15 @@ export default function CheckoutPage() {
 
 
   if (!mounted) {
-    return <div className="min-h-screen flex items-center justify-center"><div className="w-8 h-8 border-2 border-line border-t-brand-600 rounded-full animate-spin" /></div>;
+    return <div className="min-h-screen bg-white flex items-center justify-center"><div className="w-8 h-8 border-2 border-zinc-200 border-t-zinc-950 rounded-full animate-spin" /></div>;
   }
 
   if (items.length === 0 && !placed) {
     return (
-      <div className="min-h-screen bg-cream flex flex-col items-center justify-center gap-6 px-6 text-center">
-        <ShoppingBag className="w-14 h-14 text-faint" />
-        <h2 className="text-[28px] font-extrabold">Your cart is empty</h2>
-        <Link href="/shop" className="bg-brand-600 rounded-full text-white px-10 py-4 text-xs font-bold tracking-[0.14em] uppercase hover:bg-brand-700 transition-colors">
+      <div className="min-h-screen bg-zinc-50 flex flex-col items-center justify-center gap-6 px-6 text-center">
+        <ShoppingBag className="w-14 h-14 text-zinc-300" />
+        <h2 className="text-2xl font-black uppercase tracking-tight">Your cart is empty</h2>
+        <Link href="/shop" className="bg-zinc-950 text-white px-10 py-4 text-xs font-bold tracking-widest uppercase hover:bg-zinc-800 transition-colors">
           Shop Now
         </Link>
       </div>
@@ -605,85 +707,85 @@ export default function CheckoutPage() {
   // ORDER PLACED SUCCESS
   if (placed) {
     return (
-      <div className="min-h-screen bg-cream flex flex-col items-center justify-center gap-8 px-6 text-center">
-        <div className="w-24 h-24 rounded-full bg-brand-600 flex items-center justify-center ring-8 ring-brand-50 animate-bounce">
+      <div className="min-h-screen bg-zinc-50 flex flex-col items-center justify-center gap-8 px-6 text-center">
+        <div className="w-24 h-24 rounded-full bg-zinc-950 flex items-center justify-center ring-8 ring-zinc-100 animate-bounce">
           <Check className="w-10 h-10 text-white" />
         </div>
         <div>
-          <h1 className="text-[32px] sm:text-[40px] font-extrabold mb-3">Order confirmed</h1>
-          <p className="text-soft text-[15px] leading-relaxed max-w-md mx-auto">
-            Thank you, <strong className="text-soft">{form.fullName || "valued customer"}</strong>! Your order has been placed successfully.
-            You'll receive a confirmation at <strong className="text-soft">{form.email || "your email"}</strong>.
+          <h1 className="text-3xl sm:text-4xl font-extrabold uppercase tracking-tight mb-3">Order Confirmed!</h1>
+          <p className="text-zinc-400 text-sm font-light max-w-md mx-auto">
+            Thank you, <strong className="text-zinc-700">{form.fullName || "valued customer"}</strong>! Your order has been placed successfully.
+            You'll receive a confirmation at <strong className="text-zinc-700">{form.email || "your email"}</strong>.
           </p>
         </div>
-        <div className="sg-card sg-raise px-8 py-6 max-w-sm w-full">
-          <div className="flex justify-between text-xs mb-2 text-soft"><span>Order Total</span><span className="font-extrabold text-foreground">{formatPrice(total)}</span></div>
-          <div className="flex justify-between text-xs text-soft"><span>Payment</span><span className="font-bold text-soft uppercase">{form.paymentMethod === "cod" ? "Cash on Delivery" : form.paymentMethod === "card" ? "Credit / Debit Card" : form.paymentMethod === "square" ? "Square" : form.paymentMethod}</span></div>
+        <div className="bg-white border border-zinc-100 px-8 py-6 max-w-sm w-full">
+          <div className="flex justify-between text-xs mb-2 text-zinc-500"><span>Order Total</span><span className="font-black text-zinc-950">{formatPrice(total)}</span></div>
+          <div className="flex justify-between text-xs text-zinc-500"><span>Payment</span><span className="font-bold text-zinc-700 uppercase">{form.paymentMethod === "cod" ? "Cash on Delivery" : form.paymentMethod === "card" ? "Credit / Debit Card" : form.paymentMethod === "square" ? "Square" : form.paymentMethod}</span></div>
         </div>
         <div className="flex gap-4">
-          <Link href="/account" className="sg-btn sg-btn-ghost">Go to Account</Link>
-          <Link href="/shop" className="bg-brand-600 rounded-full text-white px-8 py-3 text-xs font-bold tracking-[0.14em] uppercase hover:bg-brand-700 transition-colors">Continue Shopping</Link>
+          <Link href="/account" className="border border-zinc-950 text-zinc-950 px-8 py-3 text-xs font-bold tracking-widest uppercase hover:bg-zinc-50 transition-colors">Go to Account</Link>
+          <Link href="/shop" className="bg-zinc-950 text-white px-8 py-3 text-xs font-bold tracking-widest uppercase hover:bg-zinc-800 transition-colors">Continue Shopping</Link>
         </div>
-        <p className="text-[13px] text-faint animate-pulse">Redirecting to your account in 4 seconds…</p>
+        <p className="text-[10px] text-zinc-400 animate-pulse uppercase tracking-widest font-bold">Redirecting to your account in 4 seconds...</p>
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col min-h-screen bg-cream text-foreground font-sans antialiased">
+    <div className="flex flex-col min-h-screen bg-zinc-50 text-zinc-950 font-sans antialiased">
 
       <Header />
 
       {/* STEPPER */}
-      <div className="bg-surface border-b border-line">
-        <div className="max-w-[1200px] mx-auto px-6 py-5 flex items-center justify-center gap-0">
+      <div className="bg-white border-b border-zinc-100">
+        <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-center gap-0">
           {STEPS.map((s, i) => (
             <div key={s} className="flex items-center">
               <button
                 onClick={() => i < step && setStep(i)}
-                className={`flex items-center gap-2.5 text-[13px] font-bold transition-colors ${i === step ? "text-foreground" : i < step ? "text-soft cursor-pointer hover:text-foreground" : "text-faint cursor-default"}`}
+                className={`flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest transition-colors ${i === step ? "text-zinc-950" : i < step ? "text-zinc-500 cursor-pointer hover:text-zinc-800" : "text-zinc-300 cursor-default"}`}
               >
-                <span className={`w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-extrabold border-2 transition-all ${i === step ? "bg-brand-600 text-white border-brand-600" : i < step ? "bg-white text-brand-700 border-brand-600" : "bg-white text-faint border-line"}`}>
+                <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black border-2 transition-all ${i === step ? "bg-zinc-950 text-white border-zinc-950" : i < step ? "bg-white text-zinc-950 border-zinc-950" : "bg-white text-zinc-300 border-zinc-200"}`}>
                   {i < step ? <Check className="w-3 h-3" /> : i + 1}
                 </span>
                 <span className="hidden sm:block">{s}</span>
               </button>
-              {i < STEPS.length - 1 && <div className={`w-12 sm:w-24 h-px mx-3 transition-colors ${i < step ? "bg-brand-600" : "bg-line"}`} />}
+              {i < STEPS.length - 1 && <div className={`w-12 sm:w-24 h-px mx-3 transition-colors ${i < step ? "bg-zinc-950" : "bg-zinc-200"}`} />}
             </div>
           ))}
         </div>
       </div>
 
-      <main className="max-w-[1200px] mx-auto px-5 sm:px-7 py-9 w-full flex-1">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+      <main className="max-w-6xl mx-auto px-4 sm:px-6 py-10 w-full flex-1">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
 
           {/* LEFT: FORM STEPS */}
           <div className="lg:col-span-7">
 
             {/* STEP 0: SHIPPING */}
             {step === 0 && (
-              <div className="sg-card sg-raise p-6 sm:p-8 space-y-6">
+              <div className="bg-white border border-zinc-100 p-6 sm:p-8 space-y-6">
                 <div className="flex items-center gap-3 mb-2">
-                  <MapPin className="w-5 h-5 text-faint" />
-                  <h2 className="text-[18px] font-extrabold">Shipping Information</h2>
+                  <MapPin className="w-5 h-5 text-zinc-400" />
+                  <h2 className="text-sm font-black uppercase tracking-widest">Shipping Information</h2>
                 </div>
 
                 {/* Home/Office Address Selector */}
                 {isLoggedIn && (
-                  <div className="grid grid-cols-2 gap-4 pb-4 border-b border-line">
+                  <div className="grid grid-cols-2 gap-4 pb-4 border-b border-zinc-100">
                     <button
                       type="button"
                       onClick={() => handleSelectSavedAddress("home")}
-                      className={`flex flex-col items-start p-4 border rounded-sg text-left transition-all ${
+                      className={`flex flex-col items-start p-3 border text-left transition-all ${
                         selectedAddressType === "home"
-                          ? "border-brand-600 bg-brand-50"
-                          : "border-line hover:border-brand-300"
+                          ? "border-zinc-950 bg-zinc-50"
+                          : "border-zinc-200 hover:border-zinc-300"
                       }`}
                     >
-                      <span className="text-[14px] font-bold flex items-center gap-1.5 mb-1 text-foreground">
+                      <span className="text-xs font-black uppercase tracking-wider flex items-center gap-1.5 mb-1 text-zinc-900">
                         🏠 Home Address
                       </span>
-                      <span className="text-[13px] text-soft line-clamp-2">
+                      <span className="text-[10px] text-zinc-500 line-clamp-2">
                         {savedAddresses.home
                           ? `${savedAddresses.home.address}, ${savedAddresses.home.city}`
                           : "No address saved yet"}
@@ -693,16 +795,16 @@ export default function CheckoutPage() {
                     <button
                       type="button"
                       onClick={() => handleSelectSavedAddress("office")}
-                      className={`flex flex-col items-start p-4 border rounded-sg text-left transition-all ${
+                      className={`flex flex-col items-start p-3 border text-left transition-all ${
                         selectedAddressType === "office"
-                          ? "border-brand-600 bg-brand-50"
-                          : "border-line hover:border-brand-300"
+                          ? "border-zinc-950 bg-zinc-50"
+                          : "border-zinc-200 hover:border-zinc-300"
                       }`}
                     >
-                      <span className="text-[14px] font-bold flex items-center gap-1.5 mb-1 text-foreground">
+                      <span className="text-xs font-black uppercase tracking-wider flex items-center gap-1.5 mb-1 text-zinc-900">
                         🏢 Office Address
                       </span>
-                      <span className="text-[13px] text-soft line-clamp-2">
+                      <span className="text-[10px] text-zinc-500 line-clamp-2">
                         {savedAddresses.office
                           ? `${savedAddresses.office.address}, ${savedAddresses.office.city}`
                           : "No address saved yet"}
@@ -719,23 +821,53 @@ export default function CheckoutPage() {
                     { label: "Street Address *", key: "address", type: "text", placeholder: "123 Main St, Apt 4B", colSpan: true },
                     { label: "Country *", key: "country", type: "select", placeholder: "", colSpan: false },
                     { label: "City *", key: "city", type: "text", placeholder: "New York", colSpan: false },
-                    { label: "State / Province / Region *", key: "area", type: "text", placeholder: "NY", colSpan: false },
+                    { label: `${regionLabelFor(form.country)} *`, key: "area", type: countryRegions.length > 0 || regionsLoading ? "region" : "text", placeholder: "NY", colSpan: false },
                     { label: "Postal Code *", key: "postalCode", type: "text", placeholder: "10001", colSpan: false },
                   ] as { label: string; key: keyof typeof form; type: string; placeholder: string; colSpan: boolean }[]).map((f) => (
                     <div key={f.key} className={f.colSpan ? "sm:col-span-2" : ""}>
-                      <label className="text-[11px] font-bold uppercase tracking-[0.14em] text-soft mb-1.5 block">{f.label}</label>
-                      {f.type === "select" ? (
+                      <label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 mb-1.5 block">{f.label}</label>
+                      {f.type === "region" ? (
+                        <select
+                          value={form[f.key]}
+                          disabled={regionsLoading}
+                          onChange={(e) => {
+                            setForm((prev) => ({ ...prev, area: e.target.value }));
+                            if (errors[f.key]) setErrors((errs) => ({ ...errs, [f.key]: "" }));
+                          }}
+                          className={`w-full px-4 py-2 text-sm border bg-zinc-50 focus:bg-white focus:outline-none transition-all ${
+                            errors[f.key]
+                              ? "border-red-500 focus:border-red-500 focus:ring-1 focus:ring-red-500"
+                              : "border-zinc-200 focus:border-zinc-950 focus:ring-1 focus:ring-zinc-950"
+                          }`}
+                        >
+                          <option value="">
+                            {regionsLoading ? "Loading…" : `Select ${regionLabelFor(form.country).toLowerCase()}…`}
+                          </option>
+                          {countryRegions.map((r) => (
+                            <option key={r.code} value={r.code}>
+                              {r.name}
+                            </option>
+                          ))}
+                        </select>
+                      ) : f.type === "select" ? (
                         <select
                           value={form[f.key]}
                           onChange={(e) => {
                             const newCountry = e.target.value;
                             setForm((prev) => ({
                               ...prev,
-                              country: newCountry
+                              country: newCountry,
+                              // A province code means nothing in another country,
+                              // and a stale one would silently pick its tax rate.
+                              area: "",
                             }));
                             if (errors[f.key]) setErrors((errs) => ({ ...errs, [f.key]: "" }));
                           }}
-                          className={`sg-input sg-input-box ${errors[f.key] ? "!border-red-500" : ""}`}
+                          className={`w-full px-4 py-2 text-sm border bg-zinc-50 focus:bg-white focus:outline-none transition-all ${
+                            errors[f.key] 
+                              ? "border-red-500 focus:border-red-500 focus:ring-1 focus:ring-red-500" 
+                              : "border-zinc-200 focus:border-zinc-950 focus:ring-1 focus:ring-zinc-950"
+                          }`}
                         >
                           {COUNTRIES.map((c) => (
                             <option key={c.code} value={c.code}>
@@ -744,9 +876,9 @@ export default function CheckoutPage() {
                           ))}
                         </select>
                       ) : f.key === "phone" ? (
-                        <div className="flex items-stretch border border-line bg-cream focus-within:bg-white focus-within:border-brand-600 focus-within:ring-1 focus-within:ring-aqua-400 transition-all">
+                        <div className="flex items-stretch border border-zinc-200 bg-zinc-50 focus-within:bg-white focus-within:border-zinc-950 focus-within:ring-1 focus-within:ring-zinc-950 transition-all">
                           {/* Flag Dropdown/Selector on the left */}
-                          <div className="relative flex items-center bg-cream border-r border-line px-3 cursor-pointer hover:bg-line transition-colors">
+                          <div className="relative flex items-center bg-zinc-100 border-r border-zinc-200 px-3 cursor-pointer hover:bg-zinc-200 transition-colors">
                             <img
                               src={`https://flagcdn.com/w20/${form.country.toLowerCase()}.png`}
                               alt={form.country}
@@ -757,10 +889,10 @@ export default function CheckoutPage() {
                                 (e.target as HTMLElement).style.display = "none";
                               }}
                             />
-                            <span className="text-xs font-bold text-soft mr-1.5">
+                            <span className="text-xs font-bold text-zinc-600 mr-1.5">
                               {COUNTRY_METADATA[form.country as keyof typeof COUNTRY_METADATA]?.dialCode}
                             </span>
-                            <span className="text-[7px] text-faint">▼</span>
+                            <span className="text-[7px] text-zinc-400">▼</span>
                             {/* Invisible select to change country */}
                             <select
                               value={form.country}
@@ -799,7 +931,7 @@ export default function CheckoutPage() {
                               if (errors.phone) setErrors((errs) => ({ ...errs, phone: "" }));
                             }}
                             placeholder={f.placeholder}
-                            className="w-full px-4 py-3 text-[15px] bg-transparent focus:outline-none"
+                            className="w-full px-4 py-2 text-sm bg-transparent focus:outline-none"
                           />
                         </div>
                       ) : (
@@ -811,15 +943,15 @@ export default function CheckoutPage() {
                             if (errors[f.key]) setErrors((errs) => ({ ...errs, [f.key]: "" }));
                           }}
                           placeholder={f.placeholder}
-                          className={`w-full px-4 py-2 text-sm border bg-cream focus:bg-white focus:outline-none transition-all ${
+                          className={`w-full px-4 py-2 text-sm border bg-zinc-50 focus:bg-white focus:outline-none transition-all ${
                             errors[f.key] 
                               ? "border-red-500 focus:border-red-500 focus:ring-1 focus:ring-red-500" 
-                              : "border-line focus:border-aqua-400 focus:ring-0"
+                              : "border-zinc-200 focus:border-zinc-950 focus:ring-1 focus:ring-zinc-950"
                           }`}
                         />
                       )}
                       {errors[f.key] && (
-                        <p className="text-red-500 text-[12px] font-semibold mt-1.5">{errors[f.key]}</p>
+                        <p className="text-red-500 text-[10px] mt-1 uppercase font-bold tracking-wider">{errors[f.key]}</p>
                       )}
                     </div>
                   ))}
@@ -828,19 +960,19 @@ export default function CheckoutPage() {
                 {/* Save Address Actions */}
                 {isLoggedIn && (
                   <div className="flex flex-col sm:flex-row sm:items-center gap-3 pt-2 text-xs">
-                    <span className="text-soft text-[13px] font-semibold">Save current details as:</span>
+                    <span className="text-zinc-500 text-[10px] font-bold uppercase tracking-wider">Save current details as:</span>
                     <div className="flex gap-2">
                       <button
                         type="button"
                         onClick={() => handleSaveAddress("home")}
-                        className="border border-line hover:border-brand-400 px-3 py-1.5 font-bold uppercase text-[9px] tracking-wider transition-all rounded-none"
+                        className="border border-zinc-200 hover:border-zinc-950 px-3 py-1.5 font-bold uppercase text-[9px] tracking-wider transition-all rounded-none"
                       >
                         💾 Save as Home
                       </button>
                       <button
                         type="button"
                         onClick={() => handleSaveAddress("office")}
-                        className="border border-line hover:border-brand-400 px-3 py-1.5 font-bold uppercase text-[9px] tracking-wider transition-all rounded-none"
+                        className="border border-zinc-200 hover:border-zinc-950 px-3 py-1.5 font-bold uppercase text-[9px] tracking-wider transition-all rounded-none"
                       >
                         💾 Save as Office
                       </button>
@@ -849,84 +981,128 @@ export default function CheckoutPage() {
                 )}
 
                 {/* Shipping methods selector */}
-                {(upsRates.length > 0 || fetchingRates) && (
-                  <div className="pt-4 border-t border-line space-y-3">
-                    <h3 className="text-[12.5px] font-extrabold uppercase tracking-[0.12em] text-foreground">Select Shipping Method</h3>
-                    {fetchingRates ? (
-                      <div className="py-4 text-center text-xs text-faint flex items-center justify-center gap-2">
-                        <div className="w-4 h-4 border-2 border-line border-t-brand-600 rounded-full animate-spin" />
-                        Fetching live UPS rates...
-                      </div>
-                    ) : (
-                      <div className="space-y-2">
-                        {/* Standard Option */}
-                        <label
-                          className={`flex items-start gap-4 p-4 border cursor-pointer transition-all ${
-                            shippingCarrier === "Standard"
-                              ? "border-brand-600 bg-brand-50"
-                              : "border-line hover:border-brand-300"
-                          }`}
-                        >
-                          <input
-                            type="radio"
-                            name="shippingMethod"
-                            checked={shippingCarrier === "Standard"}
-                            onChange={() => {
-                              setShippingCarrier("Standard");
-                              setSelectedUpsRate(null);
-                            }}
-                            className="mt-0.5"
-                          />
-                          <div className="flex-1">
-                            <p className="text-xs font-extrabold uppercase tracking-wider text-foreground">
-                              Standard Shipping
-                            </p>
-                            <p className="text-[10px] text-faint font-light mt-0.5">
-                              Deliver in 3-7 business days
-                            </p>
-                          </div>
-                          <span className="text-xs font-extrabold text-foreground">
-                            {effectiveShippingFee === 0 ? "FREE" : formatPrice(effectiveShippingFee)}
-                          </span>
-                        </label>
+                {(availableMethods.length > 0 ||
+                  upsAsMethods.length > 0 ||
+                  (fetchingRates && upsAvailable !== false)) && (
+                  <div className="pt-4 border-t border-zinc-100 space-y-4">
+                    <h3 className="text-xs font-black uppercase tracking-widest text-zinc-900">Select Shipping Method</h3>
 
-                        {/* UPS Options */}
-                        {upsRates.map((rate) => (
-                          <label
-                            key={rate.serviceCode}
-                            className={`flex items-start gap-4 p-4 border cursor-pointer transition-all ${
-                              shippingCarrier === "UPS" && selectedUpsRate?.serviceCode === rate.serviceCode
-                                ? "border-brand-600 bg-cream"
-                                : "border-line hover:border-brand-300"
-                            }`}
-                          >
-                            <input
-                              type="radio"
-                              name="shippingMethod"
-                              checked={shippingCarrier === "UPS" && selectedUpsRate?.serviceCode === rate.serviceCode}
-                              onChange={() => {
-                                setShippingCarrier("UPS");
-                                setSelectedUpsRate(rate);
-                              }}
-                              className="mt-0.5"
-                            />
-                            <div className="flex-1">
-                              <p className="text-xs font-extrabold uppercase tracking-wider text-foreground">
-                                {rate.serviceName}
-                              </p>
-                              {rate.daysToDelivery && (
-                                <p className="text-[10px] text-faint font-light mt-0.5">
-                                  Estimated delivery: {rate.daysToDelivery}
+                    {availableMethods.length > 0 && (
+                      <div className="space-y-2">
+                        {availableMethods.map((method) => {
+                          const price = shippingEnabled ? method.price : 0;
+                          return (
+                            <label
+                              key={method.id}
+                              className={`flex items-start gap-4 p-4 border cursor-pointer transition-all ${
+                                selectedMethod?.id === method.id
+                                  ? "border-zinc-950 bg-zinc-50"
+                                  : "border-zinc-200 hover:border-zinc-300"
+                              }`}
+                            >
+                              <input
+                                type="radio"
+                                name="shippingMethod"
+                                checked={selectedMethod?.id === method.id}
+                                onChange={() => setSelectedMethodId(method.id)}
+                                className="mt-0.5"
+                              />
+                              <div className="flex-1">
+                                <p className="text-xs font-black uppercase tracking-wider text-zinc-900">
+                                  {method.name}
                                 </p>
-                              )}
-                            </div>
-                            <span className="text-xs font-extrabold text-foreground">
-                              {formatPrice(rate.rate)}
-                            </span>
-                          </label>
-                        ))}
+                                {method.deliveryTime && (
+                                  <p className="text-[10px] text-zinc-400 font-light mt-0.5">
+                                    Estimated delivery: {method.deliveryTime}
+                                  </p>
+                                )}
+                              </div>
+                              <span className={`text-xs font-black ${price === 0 ? "text-emerald-600" : "text-zinc-950"}`}>
+                                {price === 0 ? "FREE" : formatPrice(price)}
+                              </span>
+                            </label>
+                          );
+                        })}
                       </div>
                     )}
+
+                    {/* UPS live services */}
+                    <div className="space-y-2" hidden={upsAvailable === false}>
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-[10px] font-black uppercase tracking-widest text-zinc-400">
+                          UPS Services
+                        </p>
+                        {!fetchingRates && (
+                          <button
+                            type="button"
+                            onClick={() => fetchShippingRates(form)}
+                            disabled={!form.city || !form.postalCode}
+                            className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 hover:text-zinc-950 disabled:opacity-40 disabled:cursor-not-allowed underline underline-offset-2"
+                          >
+                            {upsRates.length > 0 ? "Refresh rates" : "Get UPS rates"}
+                          </button>
+                        )}
+                      </div>
+
+                      {fetchingRates ? (
+                        <div className="py-4 text-center text-xs text-zinc-400 flex items-center justify-center gap-2">
+                          <div className="w-4 h-4 border-2 border-zinc-200 border-t-zinc-950 rounded-full animate-spin" />
+                          Fetching UPS rates...
+                        </div>
+                      ) : upsError ? (
+                        <p className="text-[10px] text-amber-600 bg-amber-50 border border-amber-100 p-3">
+                          {upsError} You can still continue with the options above.
+                        </p>
+                      ) : upsRates.length === 0 ? (
+                        <p className="text-[10px] text-zinc-400 font-light">
+                          Enter your city and postal code, then fetch rates to see every UPS service
+                          available to your address.
+                        </p>
+                      ) : (
+                        <>
+                          {upsRatesAreMock && (
+                            <p className="text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 p-3">
+                              ⚠️ Test rates — UPS credentials are not configured, so these prices are
+                              samples and cannot be used to place an order.
+                            </p>
+                          )}
+                          {upsAsMethods.map((method) => (
+                            <label
+                              key={method.id}
+                              className={`flex items-start gap-4 p-4 border transition-all ${
+                                upsRatesAreMock
+                                  ? "opacity-60 cursor-not-allowed border-zinc-200"
+                                  : selectedMethod?.id === method.id
+                                    ? "border-zinc-950 bg-zinc-50 cursor-pointer"
+                                    : "border-zinc-200 hover:border-zinc-300 cursor-pointer"
+                              }`}
+                            >
+                              <input
+                                type="radio"
+                                name="shippingMethod"
+                                disabled={upsRatesAreMock}
+                                checked={selectedMethod?.id === method.id}
+                                onChange={() => setSelectedMethodId(method.id)}
+                                className="mt-0.5"
+                              />
+                              <div className="flex-1">
+                                <p className="text-xs font-black uppercase tracking-wider text-zinc-900">
+                                  {method.name}
+                                </p>
+                                {method.deliveryTime && (
+                                  <p className="text-[10px] text-zinc-400 font-light mt-0.5">
+                                    Estimated delivery: {method.deliveryTime}
+                                  </p>
+                                )}
+                              </div>
+                              <span className="text-xs font-black text-zinc-950">
+                                {formatPrice(method.price)}
+                              </span>
+                            </label>
+                          ))}
+                        </>
+                      )}
+                    </div>
                   </div>
                 )}
 
@@ -956,11 +1132,6 @@ export default function CheckoutPage() {
                       return;
                     }
 
-                    if (upsRates.length === 0) {
-                      await fetchShippingRates(form);
-                      return;
-                    }
-
                     // Fetch reward points balance for returning customer
                     try {
                       const res = await fetch(`/api/customer/reward-points?email=${encodeURIComponent(form.email)}`);
@@ -974,26 +1145,19 @@ export default function CheckoutPage() {
 
                     setStep(1);
                   }}
-                  disabled={fetchingRates}
-                  className="sg-btn sg-btn-primary w-full !py-[18px] !text-[14px]"
+                  className="w-full bg-zinc-950 text-white py-4 text-xs font-black tracking-widest uppercase hover:bg-zinc-800 disabled:opacity-60 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
                 >
-                  {fetchingRates ? (
-                    <>Calculating rates...</>
-                  ) : upsRates.length === 0 ? (
-                    <>Calculate Shipping <ChevronRight className="w-4 h-4" /></>
-                  ) : (
-                    <>Continue to Payment <ChevronRight className="w-4 h-4" /></>
-                  )}
+                  Continue to Payment <ChevronRight className="w-4 h-4" />
                 </button>
               </div>
             )}
 
             {/* STEP 1: PAYMENT */}
             {step === 1 && (
-              <div className="sg-card sg-raise p-6 sm:p-8 space-y-6">
+              <div className="bg-white border border-zinc-100 p-6 sm:p-8 space-y-6">
                 <div className="flex items-center gap-3 mb-2">
-                  <CreditCard className="w-5 h-5 text-faint" />
-                  <h2 className="text-[18px] font-extrabold">Payment Method</h2>
+                  <CreditCard className="w-5 h-5 text-zinc-400" />
+                  <h2 className="text-sm font-black uppercase tracking-widest">Payment Method</h2>
                 </div>
 
                 {/* Payment options */}
@@ -1006,26 +1170,26 @@ export default function CheckoutPage() {
                 ].filter(opt => opt.enabled).map((opt) => (
                   <label
                     key={opt.value}
-                    className={`flex items-start gap-4 p-4 border-2 cursor-pointer transition-all ${form.paymentMethod === opt.value ? "border-brand-600 bg-cream" : "border-line hover:border-brand-300"}`}
+                    className={`flex items-start gap-4 p-4 border-2 cursor-pointer transition-all ${form.paymentMethod === opt.value ? "border-zinc-950 bg-zinc-50" : "border-zinc-100 hover:border-zinc-300"}`}
                   >
                     <input type="radio" name="paymentMethod" value={opt.value} checked={form.paymentMethod === opt.value} onChange={set("paymentMethod")} className="mt-0.5" />
                     <div>
-                      <p className="text-xs font-extrabold uppercase tracking-wider text-foreground">{opt.label}</p>
-                      <p className="text-[10px] text-faint font-light mt-0.5">{opt.desc}</p>
+                      <p className="text-xs font-black uppercase tracking-wider text-zinc-900">{opt.label}</p>
+                      <p className="text-[10px] text-zinc-400 font-light mt-0.5">{opt.desc}</p>
                     </div>
                   </label>
                 ))}
 
                 {/* Card fields */}
                 {form.paymentMethod === "card" && (
-                  <div className="pt-2 text-xs text-soft">
+                  <div className="pt-2 text-xs text-zinc-500">
                     <p>You will enter your card details securely via Stripe in the next step.</p>
                   </div>
                 )}
 
                 {form.paymentMethod === "bkash" && (
                   <div>
-                    <label className="text-[11px] font-bold uppercase tracking-[0.14em] text-soft mb-1.5 block">bKash Number *</label>
+                    <label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 mb-1.5 block">bKash Number *</label>
                     <input 
                       type="tel" 
                       value={form.bkashNumber} 
@@ -1034,10 +1198,10 @@ export default function CheckoutPage() {
                         if (errors.bkashNumber) setErrors((errs) => ({ ...errs, bkashNumber: "" }));
                       }} 
                       placeholder="+880 1XXXXXXXXX" 
-                      className={`w-full px-4 py-2 text-sm border bg-cream focus:bg-white focus:outline-none transition-all ${
+                      className={`w-full px-4 py-2 text-sm border bg-zinc-50 focus:bg-white focus:outline-none transition-all ${
                         errors.bkashNumber 
                           ? "border-red-500 focus:border-red-500 focus:ring-1 focus:ring-red-500" 
-                          : "border-line focus:border-aqua-400 focus:ring-0"
+                          : "border-zinc-200 focus:border-zinc-950 focus:ring-1 focus:ring-zinc-950"
                       }`}
                     />
                     {errors.bkashNumber && (
@@ -1048,7 +1212,7 @@ export default function CheckoutPage() {
 
                 {form.paymentMethod === "nagad" && (
                   <div>
-                    <label className="text-[11px] font-bold uppercase tracking-[0.14em] text-soft mb-1.5 block">Nagad Number *</label>
+                    <label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 mb-1.5 block">Nagad Number *</label>
                     <input 
                       type="tel" 
                       value={form.nagadNumber} 
@@ -1057,10 +1221,10 @@ export default function CheckoutPage() {
                         if (errors.nagadNumber) setErrors((errs) => ({ ...errs, nagadNumber: "" }));
                       }} 
                       placeholder="+880 1XXXXXXXXX" 
-                      className={`w-full px-4 py-2 text-sm border bg-cream focus:bg-white focus:outline-none transition-all ${
+                      className={`w-full px-4 py-2 text-sm border bg-zinc-50 focus:bg-white focus:outline-none transition-all ${
                         errors.nagadNumber 
                           ? "border-red-500 focus:border-red-500 focus:ring-1 focus:ring-red-500" 
-                          : "border-line focus:border-aqua-400 focus:ring-0"
+                          : "border-zinc-200 focus:border-zinc-950 focus:ring-1 focus:ring-zinc-950"
                       }`}
                     />
                     {errors.nagadNumber && (
@@ -1070,7 +1234,7 @@ export default function CheckoutPage() {
                 )}
 
                 <div className="flex gap-3">
-                  <button onClick={() => setStep(0)} className="flex-1 border border-line py-4 text-xs font-bold tracking-[0.14em] uppercase hover:bg-cream transition-colors">
+                  <button onClick={() => setStep(0)} className="flex-1 border border-zinc-200 py-4 text-xs font-bold tracking-widest uppercase hover:bg-zinc-50 transition-colors">
                     Back
                   </button>
                   <button onClick={() => {
@@ -1082,7 +1246,7 @@ export default function CheckoutPage() {
                     if (Object.keys(newErrors).length > 0) return;
 
                     setStep(2);
-                  }} className="sg-btn sg-btn-primary flex-[2] !py-[18px] !text-[14px]">
+                  }} className="flex-[2] bg-zinc-950 text-white py-4 text-xs font-black tracking-widest uppercase hover:bg-zinc-800 transition-colors flex items-center justify-center gap-2">
                     Review Order <ChevronRight className="w-4 h-4" />
                   </button>
                 </div>
@@ -1091,53 +1255,54 @@ export default function CheckoutPage() {
 
             {/* STEP 2: CONFIRM */}
             {step === 2 && (
-              <div className="sg-card sg-raise p-6 sm:p-8 space-y-6">
-                <h2 className="text-sm font-extrabold uppercase tracking-[0.14em] flex items-center gap-2">
-                  <Truck className="w-5 h-5 text-faint" /> Review & Confirm
+              <div className="bg-white border border-zinc-100 p-6 sm:p-8 space-y-6">
+                <h2 className="text-sm font-black uppercase tracking-widest flex items-center gap-2">
+                  <Truck className="w-5 h-5 text-zinc-400" /> Review & Confirm
                 </h2>
 
                 {/* Shipping summary */}
-                <div className="bg-cream p-4 space-y-1">
-                  <p className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-faint mb-2">Shipping To</p>
-                  <p className="text-sm font-bold text-foreground">{form.fullName}</p>
-                  <p className="text-xs text-soft">{form.address}, {form.area}, {form.city} {form.postalCode}</p>
-                  <p className="text-xs text-soft">{form.phone} · {form.email}</p>
-                  <div className="pt-2 border-t border-line mt-2">
-                    <p className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-faint">Shipping Method</p>
-                    <p className="text-xs font-bold text-foreground mt-0.5">
-                      {shippingCarrier === "UPS" && selectedUpsRate ? selectedUpsRate.serviceName : "Standard Shipping"} (
+                <div className="bg-zinc-50 p-4 space-y-1">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-zinc-400 mb-2">Shipping To</p>
+                  <p className="text-sm font-bold text-zinc-900">{form.fullName}</p>
+                  <p className="text-xs text-zinc-500">{form.address}, {form.area}, {form.city} {form.postalCode}</p>
+                  <p className="text-xs text-zinc-500">{form.phone} · {form.email}</p>
+                  <div className="pt-2 border-t border-zinc-200 mt-2">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Shipping Method</p>
+                    <p className="text-xs font-bold text-zinc-900 mt-0.5">
+                      {selectedMethod?.name ?? "Standard Shipping"}
+                      {selectedMethod?.deliveryTime ? ` · ${selectedMethod.deliveryTime}` : ""} (
                       {shipping === 0 ? "FREE" : formatPrice(shipping)})
                     </p>
                   </div>
                 </div>
 
                 {/* Payment summary */}
-                <div className="bg-cream p-4">
-                  <p className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-faint mb-2">Payment Method</p>
-                  <p className="text-sm font-bold text-foreground">
+                <div className="bg-zinc-50 p-4">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-zinc-400 mb-2">Payment Method</p>
+                  <p className="text-sm font-bold text-zinc-900">
                     {form.paymentMethod === "cod" ? "Cash on Delivery" : form.paymentMethod === "card" ? "Credit/Debit Card (Stripe)" : form.paymentMethod === "square" ? "Square Payment" : form.paymentMethod === "bkash" ? `bKash — ${form.bkashNumber}` : `Nagad — ${form.nagadNumber}`}
                   </p>
                 </div>
 
                 {/* Items list */}
                 <div className="space-y-3">
-                  <p className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-faint">Items ({count})</p>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Items ({count})</p>
                   {items.map((item) => (
                     <div key={item.id} className="flex gap-3 items-center">
-                      <div className="relative w-12 h-16 bg-cream border border-line flex-shrink-0">
+                      <div className="relative w-12 h-16 bg-zinc-100 border border-zinc-100 flex-shrink-0">
                         <Image src={item.thumbnail} alt={item.title} fill className="object-cover" />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-xs font-bold uppercase tracking-wide text-foreground line-clamp-1">{item.title}</p>
-                        <p className="text-[10px] text-faint">{item.color} · Size {item.size} {item.length ? `· ${item.length}` : ""} · Qty {item.quantity}</p>
+                        <p className="text-xs font-bold uppercase tracking-wide text-zinc-900 line-clamp-1">{item.title}</p>
+                        <p className="text-[10px] text-zinc-400">{item.color} · Size {item.size} {item.length ? `· ${item.length}` : ""} · Qty {item.quantity}</p>
                       </div>
-                      <p className="text-[14px] font-extrabold text-brand-700 shrink-0">{formatPrice(item.price * item.quantity)}</p>
+                      <p className="text-xs font-black text-zinc-950 flex-shrink-0">{formatPrice(item.price * item.quantity)}</p>
                     </div>
                   ))}
                 </div>
 
                 <div className="flex gap-3 pt-2">
-                  <button onClick={() => setStep(1)} className="flex-1 border border-line py-4 text-xs font-bold tracking-[0.14em] uppercase hover:bg-cream transition-colors">
+                  <button onClick={() => setStep(1)} className="flex-1 border border-zinc-200 py-4 text-xs font-bold tracking-widest uppercase hover:bg-zinc-50 transition-colors">
                     Back
                   </button>
                   {form.paymentMethod === "card" || form.paymentMethod === "square" ? (
@@ -1148,7 +1313,7 @@ export default function CheckoutPage() {
                     <button
                       onClick={() => handlePlaceOrder()}
                       disabled={placing}
-                      className="sg-btn sg-btn-primary flex-[2] !py-[18px] !text-[14px]"
+                      className="flex-[2] bg-zinc-950 text-white py-4 text-xs font-black tracking-widest uppercase hover:bg-zinc-800 disabled:opacity-60 disabled:cursor-wait transition-all flex items-center justify-center gap-2"
                     >
                       {placing ? (
                         <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Placing Order…</>
@@ -1160,14 +1325,14 @@ export default function CheckoutPage() {
                 </div>
 
                 {form.paymentMethod === "card" && (
-                  <div className="pt-4 border-t border-line">
+                  <div className="pt-4 border-t border-zinc-100">
                     <StripeCheckout 
                       items={items}
                       email={form.email}
                       pointsRedeemed={pointsRedeemedApplied ? pointsRedeemed : 0}
                       promoCode={promoCode || undefined}
-                      shippingCarrier={shippingCarrier}
-                      shippingFee={shipping}
+                      shippingMethodId={selectedMethod?.id || ""}
+                      shippingDestination={shippingDestination}
                       onSuccess={(intentId) => handlePlaceOrder(intentId)}
                       onError={(err) => Swal.fire({ text: err, confirmButtonColor: "#18181b" })}
                     />
@@ -1175,7 +1340,7 @@ export default function CheckoutPage() {
                 )}
 
                 {form.paymentMethod === "square" && (
-                  <div className="pt-4 border-t border-line">
+                  <div className="pt-4 border-t border-zinc-100">
                     {squareAppId && squareLocationId ? (
                       <SquareCheckout 
                         items={items}
@@ -1188,8 +1353,8 @@ export default function CheckoutPage() {
                         onError={(err) => Swal.fire({ text: err, confirmButtonColor: "#18181b" })}
                       />
                     ) : (
-                      <div className="py-8 text-center text-xs text-soft flex items-center justify-center gap-2">
-                        <Loader2 className="w-4 h-4 animate-spin text-faint" /> Connecting to Square gateway...
+                      <div className="py-8 text-center text-xs text-zinc-500 flex items-center justify-center gap-2">
+                        <Loader2 className="w-4 h-4 animate-spin text-zinc-400" /> Connecting to Square gateway...
                       </div>
                     )}
                   </div>
@@ -1200,22 +1365,22 @@ export default function CheckoutPage() {
 
           {/* RIGHT: ORDER SUMMARY */}
           <div className="lg:col-span-5 space-y-6">
-            <div className="sg-card sg-raise p-6 sm:p-7 sticky top-[92px] space-y-5">
-              <h2 className="text-[18px] font-extrabold">Order summary</h2>
+            <div className="bg-white border border-zinc-100 p-6 sticky top-24 space-y-5">
+              <h2 className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Order Summary</h2>
               <div className="space-y-4 max-h-72 overflow-y-auto pr-1">
                 {items.map((item) => (
                   <div key={item.id} className="flex gap-3 items-start">
                     <div className="relative flex-shrink-0">
-                      <div className="relative w-14 h-[70px] bg-cream rounded-xl overflow-hidden">
+                      <div className="relative w-14 h-20 bg-zinc-100 border border-zinc-100 overflow-hidden">
                         <Image src={item.thumbnail} alt={item.title} fill className="object-cover" />
                       </div>
-                      <span className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-brand-600 text-white text-[9px] font-extrabold rounded-full flex items-center justify-center">{item.quantity}</span>
+                      <span className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-zinc-950 text-white text-[9px] font-black rounded-full flex items-center justify-center">{item.quantity}</span>
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-[14px] font-bold text-foreground line-clamp-2 leading-snug">{item.title}</p>
+                      <p className="text-xs font-bold uppercase tracking-wide text-zinc-900 line-clamp-2 leading-snug">{item.title}</p>
                       <div className="flex justify-between mt-2">
-                        <p className="text-[13px] text-soft">Qty {item.quantity}</p>
-                        <p className="text-[14px] font-extrabold text-brand-700 shrink-0">{formatPrice(item.price * item.quantity)}</p>
+                        <p className="text-xs text-zinc-500 font-medium">Qty: {item.quantity}</p>
+                        <p className="text-xs font-black text-zinc-950 flex-shrink-0">{formatPrice(item.price * item.quantity)}</p>
                       </div>
                     </div>
                   </div>
@@ -1224,12 +1389,12 @@ export default function CheckoutPage() {
 
               {/* Loyalty Reward Points Redemption Widget */}
               {availablePoints > 0 && (
-                <div className="bg-cream border border-line p-4 rounded-sg space-y-2.5">
+                <div className="bg-zinc-50 border border-zinc-150 p-4 rounded-sm space-y-2.5">
                   <div className="flex items-center justify-between">
-                    <span className="text-[13px] font-bold text-foreground flex items-center gap-1.5">
+                    <span className="text-[10px] font-black uppercase tracking-wider text-zinc-900 flex items-center gap-1">
                       🌟 Reward Points
                     </span>
-                    <span className="sg-chip bg-aqua-50 text-aqua-700 !text-[11px] !py-1">
+                    <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full">
                       {availablePoints} Available
                     </span>
                   </div>
@@ -1242,7 +1407,7 @@ export default function CheckoutPage() {
                         value={redeemInput}
                         onChange={(e) => setRedeemInput(e.target.value)}
                         placeholder={`Max ${Math.min(availablePoints, Math.floor((subtotal - discountAmount) / pointValue))}`}
-                        className="sg-input sg-input-box flex-1 !py-2.5 !text-[14px]"
+                        className="flex-1 px-3 py-2 text-xs border border-zinc-200 bg-white focus:outline-none focus:border-zinc-950 transition-all placeholder-zinc-350"
                       />
                       <button
                         onClick={() => {
@@ -1263,13 +1428,13 @@ export default function CheckoutPage() {
                           setPointsRedeemed(pts);
                           setPointsRedeemedApplied(true);
                         }}
-                        className="bg-brand-600 hover:bg-brand-700 text-white text-[10px] font-bold px-4 py-2 uppercase tracking-wider transition-colors rounded-full"
+                        className="bg-zinc-950 hover:bg-zinc-800 text-white text-[10px] font-bold px-4 py-2 uppercase tracking-wider transition-colors rounded-xs"
                       >
                         Redeem
                       </button>
                     </div>
                   ) : (
-                    <div className="flex items-center justify-between text-xs bg-emerald-50 text-emerald-800 border border-emerald-100 p-2.5 rounded-lg">
+                    <div className="flex items-center justify-between text-xs bg-emerald-50 text-emerald-800 border border-emerald-100 p-2.5 rounded-xs">
                       <span className="font-semibold">Redeemed {pointsRedeemed} Points</span>
                       <button
                         onClick={() => {
@@ -1277,7 +1442,7 @@ export default function CheckoutPage() {
                           setPointsRedeemedApplied(false);
                           setRedeemInput("");
                         }}
-                        className="text-emerald-850 hover:text-emerald-950 font-extrabold cursor-pointer ml-2"
+                        className="text-emerald-850 hover:text-emerald-950 font-black cursor-pointer ml-2"
                       >
                         ✕
                       </button>
@@ -1287,40 +1452,40 @@ export default function CheckoutPage() {
               )}
 
               {availablePoints === 0 && form.email && (
-                <div className="bg-cream border border-line p-4 rounded-xl text-center">
-                  <span className="text-[9px] font-bold tracking-[0.14em] text-faint uppercase block mb-1">Loyalty Rewards</span>
-                  <p className="text-[10px] text-soft font-light leading-relaxed">
-                    Earn <span className="font-bold text-soft">1 reward point</span> for every ${pointEarnRate} spent on this purchase!
+                <div className="bg-zinc-50 border border-zinc-150 p-4 rounded-sm text-center">
+                  <span className="text-[9px] font-bold tracking-widest text-zinc-400 uppercase block mb-1">Loyalty Rewards</span>
+                  <p className="text-[10px] text-zinc-500 font-light leading-relaxed">
+                    Earn <span className="font-bold text-zinc-700">1 reward point</span> for every ${pointEarnRate} spent on this purchase!
                   </p>
                 </div>
               )}
 
-              <div className="border-t border-line pt-4 space-y-2">
-                <div className="flex justify-between text-xs text-soft"><span>Subtotal</span><span className="font-bold text-soft">{formatPrice(subtotal)}</span></div>
-                <div className="flex justify-between text-xs text-soft"><span>Shipping</span><span className={shipping === 0 ? "text-emerald-600 font-bold" : "font-bold text-soft"}>{shipping === 0 ? "FREE" : formatPrice(shipping)}</span></div>
-                <div className="flex justify-between text-xs text-soft"><span>Tax (5%)</span><span className="font-bold text-soft">{formatPrice(tax)}</span></div>
+              <div className="border-t border-zinc-100 pt-4 space-y-2">
+                <div className="flex justify-between text-xs text-zinc-500"><span>Subtotal</span><span className="font-bold text-zinc-700">{formatPrice(subtotal)}</span></div>
+                <div className="flex justify-between text-xs text-zinc-500"><span>Shipping</span><span className={shipping === 0 ? "text-emerald-600 font-bold" : "font-bold text-zinc-700"}>{shipping === 0 ? "FREE" : formatPrice(shipping)}</span></div>
+                <div className="flex justify-between text-xs text-zinc-500"><span>{taxLineLabel(resolvedTax.rate, resolvedTax.label)}</span><span className="font-bold text-zinc-700">{formatPrice(tax)}</span></div>
               </div>
               {discountPercentage > 0 && (
-                <div className="flex justify-between items-center text-emerald-600 font-bold border-b border-line pb-3">
+                <div className="flex justify-between items-center text-emerald-600 font-bold border-b border-zinc-100 pb-3">
                   <span className="flex items-center gap-1.5"><Tag className="w-3.5 h-3.5" /> Promo Discount ({discountPercentage}%)</span>
                   <span>-${discountAmount.toFixed(2)}</span>
                 </div>
               )}
               {pointsRedeemedApplied && (
-                <div className="flex justify-between items-center text-emerald-600 font-bold border-b border-line pb-3">
+                <div className="flex justify-between items-center text-emerald-600 font-bold border-b border-zinc-100 pb-3">
                   <span className="flex items-center gap-1.5">🌟 Points Redeemed</span>
                   <span>-${(pointsRedeemed * pointValue).toFixed(2)}</span>
                 </div>
               )}
-              <div className="flex justify-between items-end border-t border-line pt-6">
-                <span className="text-sm font-extrabold uppercase tracking-[0.14em] text-foreground">Total</span>
-                <span className="text-lg font-extrabold">{formatPrice(total)}</span>
+              <div className="flex justify-between items-end border-t border-zinc-100 pt-6">
+                <span className="text-sm font-black uppercase tracking-widest text-zinc-950">Total</span>
+                <span className="text-lg font-black">{formatPrice(total)}</span>
               </div>
 
               {/* Pending Points Earner Note */}
-              <div className="bg-aqua-50 border border-aqua-100 p-3 rounded-lg flex items-center justify-between text-[10px] font-bold text-aqua-700">
+              <div className="bg-indigo-50 border border-indigo-100 p-3 rounded-xs flex items-center justify-between text-[10px] font-bold text-indigo-700">
                 <span>🌟 Points Earned on this Order:</span>
-                <span className="bg-aqua-100 text-aqua-800 px-2 py-0.5 rounded-xl font-extrabold">
+                <span className="bg-indigo-100 text-indigo-800 px-2 py-0.5 rounded-sm font-black">
                   +{Math.floor(total / pointEarnRate)} pts
                 </span>
               </div>

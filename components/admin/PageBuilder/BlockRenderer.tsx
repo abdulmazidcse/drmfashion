@@ -5,9 +5,9 @@ import { Block, HeroProps, TextProps, ImageProps, TwoColumnProps, CtaProps, Divi
 function HeroRender({ p }: { p: HeroProps }) {
   const heightMap = { small: '280px', medium: '420px', large: '560px', full: '100vh' }
   const alignMap = {
-    left: { container: 'items-start', text: 'text-left' },
-    center: { container: 'items-center', text: 'text-center' },
-    right: { container: 'items-end', text: 'text-right' },
+    left: { container: 'items-start', text: 'text-left', self: 'self-start' },
+    center: { container: 'items-center', text: 'text-center', self: 'self-center' },
+    right: { container: 'items-end', text: 'text-right', self: 'self-end' },
   }
   const a = alignMap[p.textAlign]
 
@@ -17,7 +17,7 @@ function HeroRender({ p }: { p: HeroProps }) {
       style={{ minHeight: heightMap[p.height], backgroundColor: p.backgroundColor }}
     >
       {p.backgroundImage && (
-        <img src={p.backgroundImage} alt="" className="absolute inset-0 w-full h-full object-cover" />
+        <img src={p.backgroundImage} alt={p.backgroundImageAlt || ''} className="absolute inset-0 w-full h-full object-cover" />
       )}
       {p.overlayOpacity > 0 && (
         <div className="absolute inset-0" style={{ backgroundColor: `rgba(0,0,0,${p.overlayOpacity / 100})` }} />
@@ -26,7 +26,16 @@ function HeroRender({ p }: { p: HeroProps }) {
         {p.heading && <h1 className="text-4xl sm:text-6xl font-black tracking-tight leading-tight" style={{ color: p.textColor }}>{p.heading}</h1>}
         {p.subheading && <p className="text-lg sm:text-xl font-light max-w-2xl opacity-90" style={{ color: p.textColor }}>{p.subheading}</p>}
         {p.buttonText && (
-          <a href={p.buttonLink || '#'} className="self-start inline-block px-8 py-3.5 text-sm font-bold uppercase tracking-widest border-2 transition-all hover:bg-white hover:text-zinc-900" style={{ color: p.textColor, borderColor: p.textColor }}>
+          // The colour is fed through a custom property rather than `style.color`
+          // so the hover rule can win — an inline `color` beats any class, which
+          // left the label white against the white hover fill and invisible.
+          // `self` follows textAlign; it used to be pinned to self-start, so a
+          // centred hero still had its button hard against the left edge.
+          <a
+            href={p.buttonLink || '#'}
+            className={`${a.self} inline-block px-8 py-3.5 text-sm font-bold uppercase tracking-widest border-2 text-[var(--hero-btn)] border-[var(--hero-btn)] transition-all hover:bg-white hover:text-zinc-900 hover:border-white`}
+            style={{ ['--hero-btn' as string]: p.textColor }}
+          >
             {p.buttonText}
           </a>
         )}
@@ -78,11 +87,11 @@ function TwoColumnRender({ p }: { p: TwoColumnProps }) {
     <div className="w-full px-8 py-10">
       <div className={`grid grid-cols-1 ${colMap[p.leftWidth] ?? 'sm:grid-cols-2'} ${gapMap[p.gap]}`}>
         <div>
-          {p.leftImage && <img src={p.leftImage} alt="" className="w-full object-cover rounded-lg mb-4" />}
+          {p.leftImage && <img src={p.leftImage} alt={p.leftImageAlt || ''} className="w-full object-cover rounded-lg mb-4" />}
           <div className="page-content max-w-none" dangerouslySetInnerHTML={{ __html: p.leftHtml }} />
         </div>
         <div className={p.reverseOnMobile ? 'order-first sm:order-last' : ''}>
-          {p.rightImage && <img src={p.rightImage} alt="" className="w-full object-cover rounded-lg mb-4" />}
+          {p.rightImage && <img src={p.rightImage} alt={p.rightImageAlt || ''} className="w-full object-cover rounded-lg mb-4" />}
           <div className="page-content max-w-none" dangerouslySetInnerHTML={{ __html: p.rightHtml }} />
         </div>
       </div>
@@ -94,7 +103,7 @@ function CtaRender({ p }: { p: CtaProps }) {
   const alignMap = { left: 'items-start text-left', center: 'items-center text-center', right: 'items-end text-right' }
   return (
     <div className="relative w-full overflow-hidden" style={{ backgroundColor: p.backgroundColor }}>
-      {p.backgroundImage && <img src={p.backgroundImage} alt="" className="absolute inset-0 w-full h-full object-cover opacity-20" />}
+      {p.backgroundImage && <img src={p.backgroundImage} alt={p.backgroundImageAlt || ''} className="absolute inset-0 w-full h-full object-cover opacity-20" />}
       <div className={`relative z-10 flex flex-col ${alignMap[p.align]} gap-5 px-10 py-16 max-w-4xl mx-auto`}>
         {p.heading && <h2 className="text-3xl sm:text-4xl font-black tracking-tight" style={{ color: p.textColor }}>{p.heading}</h2>}
         {p.subtext && <p className="text-base opacity-80 max-w-xl" style={{ color: p.textColor }}>{p.subtext}</p>}

@@ -5,10 +5,12 @@ import { useParams } from "next/navigation"
 import { Printer, Loader2, ArrowLeft } from "lucide-react"
 import api from "@/lib/axios"
 import { useSettings } from "@/providers/SettingsProvider"
+import { taxLineLabel } from "@/lib/tax"
 
 type CustomMeasurement = {
   templateName?: string
   values?: { key: string; label: string; value: number; unit: string }[]
+  feeBreakdown?: { label: string; amount: number }[]
 }
 
 type OrderItem = {
@@ -33,6 +35,9 @@ type Order = {
   id: string
   totalAmount: number
   shippingFee: number
+  taxAmount?: number | null
+  taxRate?: number | null
+  taxLabel?: string | null
   pointsRedeemed: number
   status: string
   paymentStatus: string
@@ -113,7 +118,16 @@ export default function InvoicePage() {
   const shipping = order.shippingFee || 0
   const pointsDiscount = order.pointsRedeemed || 0
   // tax = totalAmount − subtotal − shipping + pointsDiscount
-  const tax = Math.max(0, order.totalAmount - subtotal - shipping + pointsDiscount)
+  // Orders placed before tax was stored per-region carry taxAmount 0, so fall
+  // back to deriving it from the total the way this invoice always did.
+  const storedTax = Number(order.taxAmount) || 0
+  const tax = storedTax > 0
+    ? storedTax
+    : Math.max(0, order.totalAmount - subtotal - shipping + pointsDiscount)
+  const taxLabelText =
+    storedTax > 0 && Number(order.taxRate) > 0
+      ? taxLineLabel(Number(order.taxRate), order.taxLabel || "Tax")
+      : "Tax"
 
   return (
     <div className="invoice-print-root min-h-screen bg-zinc-50 p-4 md:p-8">
@@ -212,6 +226,10 @@ export default function InvoicePage() {
                       {(item.customFee ?? 0) > 0 && (
                         <p className="text-[10px] text-zinc-500 mb-1.5">
                           Custom tailoring fee: +{formatPrice(item.customFee ?? 0)}/item
+                          {(item.customMeasurements?.feeBreakdown?.length ?? 0) > 1 &&
+                            ` (${item.customMeasurements!.feeBreakdown!
+                              .map(line => `${line.label} +${formatPrice(line.amount)}`)
+                              .join(", ")})`}
                         </p>
                       )}
                       {item.customMeasurements?.values && item.customMeasurements.values.length > 0 && (
@@ -249,7 +267,7 @@ export default function InvoicePage() {
             )}
             {tax > 0 && (
               <div className="flex justify-between text-sm">
-                <span className="font-bold text-zinc-600">Tax (5%)</span>
+                <span className="font-bold text-zinc-600">{taxLabelText}</span>
                 <span className="font-bold text-zinc-900 font-mono whitespace-nowrap">{formatPrice(tax)}</span>
               </div>
             )}

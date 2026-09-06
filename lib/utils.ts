@@ -5,10 +5,16 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
+export function stripScriptTags(html: string | null | undefined): string {
+  if (!html) return "";
+  return html.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "");
+}
+
 export function formatImageUrl(url: string | null | undefined): string {
   if (!url) return "";
 
-  let resolvedUrl = url;
+  let resolvedUrl = url.trim();
+  if (!resolvedUrl) return "";
 
   // 1. Determine the Minio/CDN endpoint context-aware
   const isServer = typeof window === "undefined";
@@ -25,24 +31,23 @@ export function formatImageUrl(url: string | null | undefined): string {
     endpoint = isLocal ? "http://localhost:9000" : "https://storage.tallplus.co";
   }
 
-  // 2. Rewrite local Minio absolute URLs to the relative proxy path /products/...
-  // On production, replace with CDN/storage endpoint directly to bypass Node.js proxying.
   const bucketName = process.env.MINIO_BUCKET_NAME || "fashion-store-bucket";
-  
+
   if (isLocal) {
     const localPrefix = `http://localhost:9000/${bucketName}/products/`;
     if (resolvedUrl.startsWith(localPrefix)) {
       return "/products/" + resolvedUrl.substring(localPrefix.length);
     }
+    const localBucketPrefix = `http://localhost:9000/${bucketName}/`;
+    if (resolvedUrl.startsWith(localBucketPrefix)) {
+      const rest = resolvedUrl.substring(localBucketPrefix.length);
+      return rest.startsWith("products/") ? "/" + rest : "/products/" + rest;
+    }
   } else {
     resolvedUrl = resolvedUrl.replace("http://localhost:9000", endpoint);
   }
 
-  if (resolvedUrl.startsWith("http://") || resolvedUrl.startsWith("https://")) {
-    return resolvedUrl;
-  }
-  
-  if (resolvedUrl.startsWith("/products/")) {
+  if (resolvedUrl.startsWith("http://") || resolvedUrl.startsWith("https://") || resolvedUrl.startsWith("//")) {
     return resolvedUrl;
   }
 
@@ -51,18 +56,40 @@ export function formatImageUrl(url: string | null | undefined): string {
     resolvedUrl.startsWith("/images/") ||
     resolvedUrl.startsWith("/videos/") ||
     resolvedUrl.startsWith("/logo.") ||
-    resolvedUrl.startsWith("/favicon.")
+    resolvedUrl.startsWith("/favicon.") ||
+    resolvedUrl.startsWith("/placeholder") ||
+    resolvedUrl.startsWith("data:") ||
+    // Object URL for a file staged in the admin but not uploaded yet. Without
+    // this it falls through to the bare-filename branch below and comes back as
+    // "/products/blob:…", which is why staged photos previewed as broken.
+    resolvedUrl.startsWith("blob:")
   ) {
     return resolvedUrl;
   }
-  
-  if (resolvedUrl.startsWith("/uploads/")) {
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || (isServer ? "http://localhost:3000" : window.location.origin);
-    return `${appUrl}${resolvedUrl}`;
+
+  if (resolvedUrl.startsWith("/products/")) {
+    return resolvedUrl;
   }
 
+  if (resolvedUrl.startsWith("products/")) {
+    return "/" + resolvedUrl;
+  }
+
+  if (resolvedUrl.startsWith("/uploads/")) {
+    return resolvedUrl;
+  }
+
+  if (resolvedUrl.startsWith("uploads/")) {
+    return "/" + resolvedUrl;
+  }
+
+  // Bare filename or un-prefixed path (e.g. "Shirt_Sample_1-1786177936478-690879140.jpg")
   const cleanPath = resolvedUrl.startsWith("/") ? resolvedUrl : `/${resolvedUrl}`;
-  return `${endpoint}/${bucketName}${cleanPath}`;
+  if (isLocal) {
+    return `/products${cleanPath}`;
+  }
+
+  return `${endpoint}/${bucketName}/products${cleanPath}`;
 }
 
 /**
@@ -87,14 +114,82 @@ export function formatProductUrls(product: any) {
     images: product.images
       ? product.images.map((img: any) => ({
           ...img,
-          url: formatImageUrl(img.url),
+          url: formatImageUrl(typeof img === "string" ? img : img.url),
         }))
       : [],
     variants: product.variants
       ? product.variants.map((v: any) => ({
           ...v,
           image: v.image ? formatImageUrl(v.image) : null,
+          images: Array.isArray(v.images)
+            ? v.images.map((img: any) => formatImageUrl(typeof img === "string" ? img : img?.url))
+            : v.images,
         }))
       : [],
   };
+}
+
+/**
+ * Normalize an incoming image URL/paths into a stored filename.
+ * Examples:
+ * - https://storage.tallplus.co/fashion-store-bucket/path/name.jpg -> name.jpg
+ * - http://localhost:9000/fashion-store-bucket/products/name.jpg -> name.jpg
+ * - /products/name.jpg -> name.jpg
+ * - uploads/name.jpg -> name.jpg
+ */
+export function normalizeStoredImageFilename(url: string | null | undefined): string {
+  if (!url) return "";
+
+  let resolved = url.toString();
+
+  // Remove protocol+host+bucket segments like https://host/<bucket>/...
+  const bucketName = process.env.MINIO_BUCKET_NAME || "fashion-store-bucket";
+  // Matches: http(s)://anything/<bucketName>/ or http(s)://anything/<bucketName>
+  const fullRe = new RegExp(`^https?:\\/\\/[^\\/]+\\/${bucketName}\\/`, "i");
+  resolved = resolved.replace(fullRe, "");
+
+  // Also drop any leading path segments like /products/ or /uploads/
+  resolved = resolved.replace(/^\/*(?:products|uploads)\/*/i, "");
+
+  // If there remain any path segments, keep only the basename (filename)
+  const parts = resolved.split("/").filter(Boolean);
+  return parts.length ? parts[parts.length - 1] : resolved;
+}
+
+/**
+ * "Ayesha Rahman" → "Ayesha R." — how a reviewer is credited on the storefront.
+ *
+ * Reviews are shown publicly, so the surname is reduced to an initial rather
+ * than published in full; a single-word or missing name is passed through as-is
+ * (falling back to "Verified buyer") so the card never renders a blank byline.
+ */
+export function reviewerDisplayName(name: string | null | undefined): string {
+  const trimmed = (name || "").trim();
+  // Every storefront review is written against one shared placeholder account
+  // (see app/api/products/[id]/reviews) — crediting it by name would put
+  // "Guest User" under a dozen different quotes.
+  if (!trimmed || trimmed.toLowerCase() === "guest user") return "Verified buyer";
+
+  const parts = trimmed.split(/\s+/).filter(Boolean);
+  if (parts.length === 1) return parts[0];
+  return `${parts[0]} ${parts[parts.length - 1][0].toUpperCase()}.`;
+}
+
+/**
+ * Storefront reviews have no author column of their own: the POST handler
+ * prepends whatever name the visitor typed onto the comment as `"Name: text"`
+ * and files the row under the shared guest account. This pulls the two apart
+ * again so a card can show the author above the quote instead of inside it.
+ *
+ * The prefix is only recognised when it is short and word-like, so a review
+ * that genuinely opens "Honestly: ..." keeps its first word — the cost of a
+ * false positive is a mangled quote, the cost of a miss is only a generic byline.
+ */
+export function splitReviewAuthor(comment: string): { author: string | null; body: string } {
+  const match = comment.match(/^([\p{L}][\p{L}\p{M}.'’-]*(?:\s+[\p{L}][\p{L}\p{M}.'’-]*){0,2}):\s+(\S[\s\S]*)$/u);
+  if (!match) return { author: null, body: comment };
+
+  const [, author, body] = match;
+  if (author.length > 40) return { author: null, body: comment };
+  return { author, body };
 }

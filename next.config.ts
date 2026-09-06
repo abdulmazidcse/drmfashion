@@ -33,9 +33,19 @@ const nextConfig: NextConfig = {
       { protocol: "https", hostname: "storage.tallplus.co" },
       { protocol: "https", hostname: "tallplus.co" },
       { protocol: "https", hostname: "images.unsplash.com" },
+      // Grey fallback shown wherever a product or category has no image of its
+      // own. Third-party, so every one of those slots depends on placehold.co
+      // being up — worth replacing with a local asset at some point.
+      { protocol: "https", hostname: "placehold.co" },
       { protocol: "http", hostname: "localhost", port: "9000" },
       { protocol: "http", hostname: "127.0.0.1", port: "9000" }
     ],
+    // Next 16 blocks optimizing images served from local IPs even when they are
+    // listed in remotePatterns, so the local MinIO on :9000 returned 400 for
+    // every category/product image. Dev only — production serves them from
+    // storage.tallplus.co, and leaving this on there would turn the optimizer
+    // into a proxy for anything reachable on the box's private network.
+    dangerouslyAllowLocalIP: process.env.NODE_ENV !== "production",
   },
   typescript: {
     ignoreBuildErrors: true,

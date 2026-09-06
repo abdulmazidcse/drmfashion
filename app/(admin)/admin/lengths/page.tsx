@@ -81,14 +81,14 @@ export default function LengthsPage() {
               <Label>Length Name</Label>
               <Input
                 {...editForm.register("name", { required: true })}
-                placeholder="e.g. Regular, Long"
+                placeholder="e.g. Regular, Tall"
               />
             </div>
             <div className="space-y-1.5">
               <Label>Code / Value</Label>
               <Input
                 {...editForm.register("value", { required: true })}
-                placeholder="e.g. REG, LNG"
+                placeholder="e.g. REG, TALL"
                 className="font-bold"
               />
             </div>
@@ -141,14 +141,14 @@ export default function LengthsPage() {
                   <Label>Name</Label>
                   <Input
                     {...register("name", { required: true })}
-                    placeholder="e.g. Regular, Long, 30 Inseam"
+                    placeholder="e.g. Regular, Tall, 30 Inseam"
                   />
                 </div>
                 <div className="space-y-1.5">
                   <Label>Code / Value</Label>
                   <Input
                     {...register("value", { required: true })}
-                    placeholder="e.g. REG, LNG, 30L"
+                    placeholder="e.g. REG, TALL, 30L"
                     className="font-bold"
                   />
                 </div>

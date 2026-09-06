@@ -50,6 +50,12 @@ export async function POST(req: NextRequest) {
       await invalidateCache("home:hero:slides")
       await invalidateCache("home:community:tabs")
       await invalidateCache("home:flash_sale:products_data")
+      await invalidateCache("home:style:sections")
+      await invalidateCache("home:style:sections:v2")
+      await invalidateCache("home:reels")
+      await invalidateCache("home:videoBanners:v1")
+      await invalidateCache("home:icons:v1")
+      await invalidateCache("home:showcase:v1")
     } catch (e) {
       console.warn("Could not invalidate settings cache:", e)
     }

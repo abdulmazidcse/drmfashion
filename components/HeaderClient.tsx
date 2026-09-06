@@ -49,22 +49,23 @@ function AboutMenuContent({ category, storeName }: { category: any; storeName: s
 
   const tiles = items.filter((i) => i.imageUrl);
 
-  // Root title is usually just "About", so the brand name is appended — "About
-  // drm Fashion". A title that already says more than that is left alone.
+  // Root title is usually just "About", so the brand name is appended to match
+  // the reference's "About American Tall". A title that already says more than
+  // that is left alone.
   const rootTitle = category.title || category.name || "About";
   const heading =
     /^about$/i.test(rootTitle.trim()) && storeName && storeName !== "My Store"
       ? `About ${storeName}`
       : rootTitle;
 
-  const headingClass = "text-[17px] font-extrabold tracking-tight text-foreground";
+  const headingClass = "text-base font-bold tracking-tight text-zinc-950";
 
   return (
     <div className="max-w-[1600px] mx-auto px-4 xl:px-8 py-8 flex flex-col lg:flex-row gap-8 xl:gap-12 w-full">
       {/* Left: heading + text links */}
       <div className="w-full lg:w-[230px] xl:w-[270px] shrink-0">
         {aboutEntry ? (
-          <Link href={aboutEntry.url || "/pages/about-us"} className={`${headingClass} block w-fit hover:text-brand-700 transition-colors`}>
+          <Link href={aboutEntry.url || "/pages/about-us"} className={`${headingClass} block w-fit hover:text-zinc-600 transition-colors`}>
             {heading}
           </Link>
         ) : (
@@ -76,7 +77,7 @@ function AboutMenuContent({ category, storeName }: { category: any; storeName: s
             <li key={item.id}>
               <Link
                 href={item.url || "#"}
-                className="relative inline-block text-[15px] font-medium text-soft hover:text-brand-700 transition-colors after:absolute after:bottom-0 after:left-0 after:h-px after:w-0 after:bg-brand-500 after:transition-[width] after:duration-300 after:ease-out hover:after:w-full"
+                className="relative inline-block text-[15px] font-medium text-zinc-500 hover:text-zinc-950 transition-colors after:absolute after:bottom-0 after:left-0 after:h-px after:w-0 after:bg-zinc-950 after:transition-[width] after:duration-300 after:ease-out hover:after:w-full"
               >
                 {item.title || item.name}
               </Link>
@@ -97,7 +98,7 @@ function AboutMenuContent({ category, storeName }: { category: any; storeName: s
             <Link
               key={tile.id}
               href={tile.url || "#"}
-              className="group/tile relative block aspect-[3/4] overflow-hidden rounded-2xl bg-brand-50"
+              className="group/tile relative block aspect-[3/4] overflow-hidden bg-zinc-100"
             >
               <Image
                 src={tile.imageUrl}
@@ -107,7 +108,7 @@ function AboutMenuContent({ category, storeName }: { category: any; storeName: s
                 className="object-cover transition-transform duration-700 ease-out group-hover/tile:scale-105"
               />
               <div className="absolute inset-0 bg-black/10 transition-colors group-hover/tile:bg-black/25" />
-              <span className="absolute inset-0 flex items-center justify-center px-4 text-center text-xl xl:text-2xl font-extrabold tracking-tight text-white drop-shadow-[0_2px_8px_rgba(0,0,0,0.45)]">
+              <span className="absolute inset-0 flex items-center justify-center px-4 text-center text-xl xl:text-2xl font-black tracking-tight text-white drop-shadow-[0_2px_8px_rgba(0,0,0,0.45)]">
                 {tile.title || tile.name}
               </span>
             </Link>
@@ -147,10 +148,14 @@ function MegaMenuContent({ category }: { category: any }) {
     urlLower.includes('category=man') ||
     urlLower.includes('category=woman');
 
-  const hasImage = !!(category.imageUrl || category.image || isShopMenu);
+  const hasImage = !!(category.imageUrl || category.categoryImage || category.image || isShopMenu);
 
-  const imageUrl = category.imageUrl || category.image || (category.slug === 'women' || titleLower === 'woman' || titleLower === 'women' || urlLower.includes('woman') || urlLower.includes('women')
-    ? "https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?auto=format&fit=crop&q=80&w=800" 
+  // `categoryImage` is the card image of the Category this menu item points at,
+  // resolved in Header.tsx. It sits ahead of the stock photos so a category the
+  // admin has already illustrated shows its own artwork here; the Unsplash pair
+  // only covers a shop menu whose category has no image at all.
+  const imageUrl = category.imageUrl || category.categoryImage || category.image || (category.slug === 'women' || titleLower === 'woman' || titleLower === 'women' || urlLower.includes('woman') || urlLower.includes('women')
+    ? "https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?auto=format&fit=crop&q=80&w=800"
     : "https://images.unsplash.com/photo-1516257984-b1b4d707412e?auto=format&fit=crop&q=80&w=800");
 
   // Group the columns into 4 vertical columns as requested
@@ -184,11 +189,11 @@ function MegaMenuContent({ category }: { category: any }) {
           <div key={groupIdx} className="flex flex-col gap-6">
             {colGroup.map((col: any) => (
               <div key={col.id} className="flex flex-col gap-2">
-                <Link href={col.url || (col.slug === '#' ? '#' : `/category/${col.slug}`)} className="relative font-bold text-foreground text-[15px] capitalize block w-fit after:absolute after:bottom-0 after:left-0 after:h-px after:w-0 after:bg-brand-500 after:transition-[width] after:duration-300 after:ease-out hover:after:w-full">
+                <Link href={col.url || (col.slug === '#' ? '#' : `/category/${col.slug}`)} className="relative font-semibold text-zinc-950 text-base capitalize block w-fit after:absolute after:bottom-0 after:left-0 after:h-px after:w-0 after:bg-zinc-950 after:transition-[width] after:duration-300 after:ease-out hover:after:w-full">
                   {col.title || col.name}
                 </Link>
                 {col.children && col.children.length > 0 && (
-                  <ul className="space-y-2.5 text-soft text-[14px]">
+                  <ul className="space-y-2 text-zinc-500 text-[13px]">
                     {col.children.map((child: any) => {
                       // Check if it's a dynamic link (contains ? or starts with 'shop' or 'pages')
                       const slug = child.slug || child.url || '';
@@ -196,7 +201,7 @@ function MegaMenuContent({ category }: { category: any }) {
                       const href = child.url || (isDynamic ? `/${slug}` : `/category/${slug}`);
                       return (
                         <li key={child.id}>
-                          <Link href={href} className="relative inline-block hover:text-brand-700 transition-colors after:absolute after:bottom-0 after:left-0 after:h-px after:w-0 after:bg-brand-500 after:transition-[width] after:duration-300 after:ease-out hover:after:w-full">
+                          <Link href={href} className="relative inline-block hover:text-zinc-950 transition-colors after:absolute after:bottom-0 after:left-0 after:h-px after:w-0 after:bg-zinc-950 after:transition-[width] after:duration-300 after:ease-out hover:after:w-full">
                             {child.title || child.name}
                           </Link>
                         </li>
@@ -213,7 +218,7 @@ function MegaMenuContent({ category }: { category: any }) {
       {/* Right Image Container */}
       {hasImage && (
         <div className="w-[220px] xl:w-[260px] shrink-0">
-          <Link href={category.url || `/category/${category.slug}`} className="block relative w-full aspect-[4/5] group/image overflow-hidden rounded-2xl bg-brand-50">
+          <Link href={category.url || `/category/${category.slug}`} className="block relative w-full aspect-[4/5] group/image overflow-hidden bg-zinc-100">
             <Image 
               src={imageUrl} 
               alt={category.title || category.name || "Category"} 
@@ -221,7 +226,7 @@ function MegaMenuContent({ category }: { category: any }) {
               className="object-cover group-hover/image:scale-105 transition-transform duration-700 ease-out" 
             />
             <div className="absolute inset-0 flex items-center justify-center bg-black/20">
-              <span className="text-white text-lg xl:text-xl font-extrabold tracking-wide drop-shadow-lg text-center px-4">
+              <span className="text-white text-lg xl:text-xl font-black tracking-wide drop-shadow-lg text-center px-4">
                 Shop {category.title || category.name}
               </span>
             </div>
@@ -232,10 +237,13 @@ function MegaMenuContent({ category }: { category: any }) {
   );
 }
 
-export default function HeaderClient({ menus }: { menus?: any[] }) {
+export default function HeaderClient({ menus, transparent = false }: { menus?: any[]; transparent?: boolean }) {
   const router = useRouter();
   const pathname = usePathname();
   const { storeName, settings } = useSettings();
+
+  const logoSrc = settings["brand_logo_url"] || "/logo.svg";
+  const logoIsSvg = /\.svg(\?|$)/i.test(logoSrc);
   const [categories, setCategories] = useState<any[]>(menus || []);
   const [cartItemsCount, setCartItemsCount] = useState(0);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -249,10 +257,28 @@ export default function HeaderClient({ menus }: { menus?: any[] }) {
   // `liveSlogan` only holds a value after an admin save (see the listener below).
   const [liveSlogan, setLiveSlogan] = useState<string | null>(null);
   const brandSlogan =
-    liveSlogan ?? settings["brand_slogan"] ?? "Free shipping over ৳5,000 · 30-day easy returns";
+    liveSlogan ?? settings["brand_slogan"] ?? "Tall Men 6' - 7'1\" | Tall Women 5'9\" - 6'6\"";
 
-  // Drives the header shadow once the page leaves the top
+  // Shrink header/logo once the page is scrolled
   const [isScrolled, setIsScrolled] = useState(false);
+
+  // Transparent mode: solid again on hover so the mega menu stays readable
+  const [isHovered, setIsHovered] = useState(false);
+  const isOverlay = transparent && !isScrolled && !isHovered && !isSearchOpen;
+
+  /**
+   * The logo links home, but on the home page itself a Link to the current
+   * route is a no-op in the App Router — the click registers and nothing
+   * happens, which reads as a broken logo. Scroll back to the top instead,
+   * which is what tapping the mark is expected to do once you are already home.
+   */
+  const handleHomeClick = (e: React.MouseEvent) => {
+    setIsMenuOpen(false);
+    setIsSearchOpen(false);
+    if (pathname !== "/") return;
+    e.preventDefault();
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
 
   const { 
     currencies, 
@@ -418,44 +444,42 @@ export default function HeaderClient({ menus }: { menus?: any[] }) {
 
   return (
     <>
-      {/* 1. ANNOUNCEMENT BAR — the copper→cyan gradient band that opens every
-          page. Slogan centred, utilities on the right; both drop out on mobile
-          so the sale message keeps the width to itself. */}
-      <div className="w-full bg-gradient-to-r from-brand-700 via-brand-500 to-aqua-600 text-white py-2.5 px-4 text-[12px] font-semibold z-60 relative flex justify-between items-center">
+      {/* 1. TOP UTILITY BAR */}
+      <div className="w-full bg-zinc-50 text-zinc-800 py-2 px-4 text-[10px] sm:text-[11px] font-medium tracking-wide border-b border-zinc-200 z-60 relative flex justify-between items-center">
         <div className="hidden md:flex flex-1"></div>
-        <div className="flex-1 text-center whitespace-nowrap">
+        <div className="flex-1 text-center whitespace-nowrap font-semibold text-[12px]">
           {brandSlogan}
         </div>
-        <div className="hidden md:flex flex-1 justify-end items-center gap-5 text-[11.5px]">
+        <div className="hidden md:flex flex-1 justify-end items-center space-x-6">
           <button
             onClick={openCurrencyModal}
-            className="hover:text-white/75 transition-colors flex items-center gap-2 cursor-pointer"
+            className="hover:text-zinc-500 transition-colors font-bold uppercase tracking-wide flex items-center gap-2 cursor-pointer"
           >
             {selectedCountryCode && (
               <img
                 src={`https://flagcdn.com/w40/${selectedCountryCode.toLowerCase()}.png`}
                 alt=""
-                className="w-4.5 h-3 object-cover rounded-lg shrink-0 border border-white/30"
+                className="w-4.5 h-3 object-cover rounded-xs shrink-0 border border-zinc-200/50"
               />
             )}
-            <span>{selectedCurrency?.symbol} {selectedCurrency?.code}</span>
+            <span>CURRENCY ({selectedCurrency?.symbol} {selectedCurrency?.code})</span>
           </button>
           {/* Help dropdown */}
           <div className="relative group/help">
             <Link
               href="/pages/help-center"
-              className="hover:text-white/75 transition-colors flex items-center gap-1 py-1"
+              className="hover:text-zinc-500 transition-colors font-bold uppercase tracking-wide flex items-center gap-1 py-1"
             >
-              Help
+              HELP
             </Link>
 
-            <div className="absolute right-0 top-full pt-3 opacity-0 invisible translate-y-1 group-hover/help:opacity-100 group-hover/help:visible group-hover/help:translate-y-0 focus-within:opacity-100 focus-within:visible focus-within:translate-y-0 transition-all duration-200 z-[110]">
-              <ul className="min-w-[240px] sg-card sg-raise overflow-hidden py-2 text-left">
+            <div className="absolute right-0 top-full pt-2 opacity-0 invisible translate-y-1 group-hover/help:opacity-100 group-hover/help:visible group-hover/help:translate-y-0 focus-within:opacity-100 focus-within:visible focus-within:translate-y-0 transition-all duration-200 z-[110]">
+              <ul className="min-w-[240px] bg-white border border-zinc-200 shadow-xl py-2 text-left">
                 {HELP_LINKS.map((item) => (
                   <li key={item.href}>
                     <Link
                       href={item.href}
-                      className="block px-6 py-2.5 text-[14px] font-medium text-soft hover:bg-brand-50 hover:text-brand-700 transition-colors whitespace-nowrap"
+                      className="block px-6 py-2.5 text-[14px] font-normal text-zinc-800 hover:bg-zinc-50 hover:text-zinc-950 transition-colors whitespace-nowrap"
                     >
                       {item.label}
                     </Link>
@@ -467,100 +491,148 @@ export default function HeaderClient({ menus }: { menus?: any[] }) {
         </div>
       </div>
 
-      {/* 2. NAVIGATION HEADER — logo left, a white pill holding the nav in the
-          middle, round icon buttons right. Blurred cream rather than solid so
-          content scrolling under it stays faintly visible. */}
+      {/* 2. PREMIUM NAVIGATION HEADER */}
+      {/* `transform: translateZ(0)` forces this onto its own GPU compositing
+          layer. iOS Safari has a known bug where a `position: sticky` element
+          is occasionally left painted at a stale scroll offset — visually
+          detached mid-page — until something forces a repaint; promoting it
+          to its own layer is the standard workaround. */}
       <header
-        className={`sticky top-0 z-50 w-full bg-cream/92 backdrop-blur-xl transition-shadow duration-300 border-b border-line ${
-          isScrolled ? "shadow-sg" : ""
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
+        style={{ transform: "translateZ(0)", WebkitBackfaceVisibility: "hidden" }}
+        className={`sticky top-0 z-50 w-full transition-all duration-300 ${
+          isOverlay
+            ? "at-header-overlay bg-transparent"
+            : "bg-white border-b border-zinc-100"
         }`}
       >
-        <div className="max-w-[1600px] mx-auto px-5 lg:px-8 flex items-center gap-4 xl:gap-7 min-h-[74px]">
-
+        {/* Slim constant-height bar (~56px), matching the reference's 50px header */}
+        <div className="max-w-[1600px] mx-auto px-6 lg:px-8 flex items-center justify-between min-h-14">
+          
           {/* Menu Icon (Mobile) */}
-          <button
+          <button 
             onClick={() => setIsMenuOpen(true)}
-            className="lg:hidden sg-icon cursor-pointer text-foreground"
+            className="lg:hidden p-2 text-zinc-700 hover:text-black transition-colors cursor-pointer"
             aria-label="Open Menu"
           >
-            <Menu className="w-5 h-5" />
+            <Menu className="w-6 h-6" />
           </button>
 
-          {/* Logo */}
-          <Link href="/" className="hover:opacity-90 transition-opacity shrink-0">
-            <div className="relative h-11 w-[132px]">
-              <Image src={settings["brand_logo_url"] || "/logo.svg"} alt={storeName} fill className="object-contain object-left" />
-            </div>
-          </Link>
-
-          {/* Nav pill — the design's signature move. Sits in its own white
-              capsule so the cream bar reads as page, not chrome. */}
-          <nav className="hidden lg:flex items-center gap-1 mx-auto sg-card rounded-full p-1.5">
+          {/* Navigation Links (Left side - to balance the layout like screenshot) */}
+          <nav className="hidden lg:flex items-center h-full space-x-4 xl:space-x-8 flex-1">
             {categories.map((cat) => (
-              <div key={cat.id} className="group/cat">
-                <Link
-                  href={cat.url || `/category/${cat.slug}`}
-                  className="block rounded-full px-4 xl:px-5 py-2.5 text-[14px] font-semibold text-soft hover:text-brand-700 hover:bg-brand-50 transition-colors whitespace-nowrap"
-                >
+              <div key={cat.id} className="group/cat h-full flex items-center">
+                <Link href={cat.url || `/category/${cat.slug}`} className="relative text-sm xl:text-base font-semibold text-zinc-500 hover:text-zinc-950 h-full flex items-center tracking-wide transition-colors whitespace-nowrap after:absolute after:bottom-0 after:left-0 after:h-px after:w-0 after:bg-zinc-950 after:transition-[width] after:duration-300 after:ease-out group-hover/cat:after:w-full">
                   {cat.title || cat.name}
                 </Link>
 
-                {/* Mega menu. Detached from the pill and pinned to the header, so
-                    it spans the full width no matter which item opened it. */}
+                {/* Dropdown Container */}
                 {cat.children && cat.children.length > 0 && (
-                  <div className="absolute left-0 top-full w-full pt-2 opacity-0 invisible group-hover/cat:opacity-100 group-hover/cat:visible transition-all duration-200 z-[100] cursor-default px-5 lg:px-8">
-                    <div className="sg-card sg-card-lg sg-raise overflow-hidden max-h-[calc(100vh-140px)] overflow-y-auto scrollbar-thin">
-                      <MegaMenuContent category={cat} />
-                    </div>
+                  <div className="absolute left-0 top-full w-full bg-white shadow-xl opacity-0 invisible group-hover/cat:opacity-100 group-hover/cat:visible transition-all duration-200 z-[100] border-t border-zinc-100 pb-12 cursor-default max-h-[calc(100vh-110px)] overflow-y-auto scrollbar-thin">
+                    <MegaMenuContent category={cat} />
                   </div>
                 )}
               </div>
             ))}
+
           </nav>
 
-          {/* Right icon row */}
-          <div className="flex items-center gap-2.5 ml-auto lg:ml-0">
+          {/* Logo */}
+          {/* `unoptimized` for SVG sources: next/image refuses to run SVG
+              through the optimizer unless `dangerouslyAllowSVG` is on, so both
+              an uploaded .svg logo and the /logo.svg fallback came back 400 and
+              the header rendered with no mark at all. A vector gains nothing
+              from re-encoding anyway; raster logos still get optimized.
+
+              Fixed width/height rather than `fill`: `fill` makes the <img>
+              `position: absolute`, and iOS Safari has a bug where an absolutely
+              positioned descendant of a `position: sticky` element gets left
+              painted mid-page as you scroll — which is why the mark was showing
+              up floating in the middle of pages on mobile. An in-flow image
+              inside the sticky header does not hit that bug. */}
+          <div className="flex-1 flex justify-center">
+            <Link
+              href="/"
+              onClick={handleHomeClick}
+              className="hover:opacity-90 transition-opacity flex-shrink-0"
+            >
+              <Image
+                src={logoSrc}
+                alt={storeName}
+                width={144}
+                height={48}
+                className="h-12 w-auto max-w-[9rem] object-contain"
+                unoptimized={logoIsSvg}
+                priority
+              />
+            </Link>
+          </div>
+
+          {/* Right Header Icons — bare 20px icons in a 16px-gap row, like the reference */}
+          <div className="flex items-center justify-end gap-4 flex-1">
+            {/* Reference pill: 40x150px, 2px radius, translucent over hero (see .at-search-pill) */}
             <button
               onClick={() => setIsSearchOpen(!isSearchOpen)}
-              className="at-focus sg-card rounded-full hidden md:flex items-center gap-2.5 px-5 h-[42px] text-[13.5px] font-medium text-soft hover:border-brand-300 transition-colors cursor-pointer min-w-[172px]"
+              className="at-search-pill flex items-center gap-[5px] text-zinc-600 hover:text-zinc-950 transition-colors cursor-pointer lg:h-10 lg:w-[150px] lg:justify-start lg:rounded-at-btn lg:bg-zinc-100 lg:p-2.5"
               aria-label="Search"
             >
-              <Search className="w-4 h-4" />
-              <span>Search products</span>
-            </button>
-            <button
-              onClick={() => setIsSearchOpen(!isSearchOpen)}
-              className="at-focus sg-icon md:hidden cursor-pointer"
-              aria-label="Search"
-            >
-              <Search className="w-[18px] h-[18px]" />
+              <Search className="w-5 h-5" />
+              <span className="hidden lg:inline text-[13px] font-semibold">Search</span>
             </button>
             <button
               onClick={() => router.push("/wishlist")}
-              className="at-focus sg-icon hidden sm:grid cursor-pointer"
+              className="hidden sm:flex items-center justify-center text-zinc-700 hover:text-zinc-950 transition-all cursor-pointer"
               aria-label="Wishlist"
             >
-              <svg className="w-[18px] h-[18px]" viewBox="0 0 24 24" stroke="currentColor" fill="none" strokeWidth="1.7">
-                <path d="M12 20s-7-4.5-7-9a4 4 0 017-2.5A4 4 0 0119 11c0 4.5-7 9-7 9z" />
+              <svg
+                className="w-5 h-5"
+                viewBox="0 0 15 20"
+                xmlns="http://www.w3.org/2000/svg"
+                stroke="currentColor"
+                fill="none"
+              >
+                <path d="M14.0132 19.28L7.13317 14.45L0.253174 19.28V0.720001H14.0132V19.28Z" fill="none" />
               </svg>
             </button>
             <button
               onClick={() => router.push("/account")}
-              className="at-focus sg-icon cursor-pointer"
+              className="flex items-center justify-center text-zinc-700 hover:text-zinc-950 transition-all cursor-pointer"
               aria-label="Account"
             >
-              <svg className="w-[18px] h-[18px]" viewBox="0 0 24 24" stroke="currentColor" fill="none" strokeWidth="1.7">
-                <circle cx="12" cy="8" r="3.6" />
-                <path strokeLinecap="round" d="M4.5 20a7.5 7.5 0 0115 0" />
+              <svg
+                className="w-5 h-5"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                fill="none"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <rect width="10.5" height="10.5" x="6.75" y="1.75" rx="5.25" />
+                <path
+                  strokeLinecap="round"
+                  d="M12 15.5c1.5 0 4 .333 4.5.5.5.167 3.7.8 4.5 2 1 1.5 1 2 1 4m-10-6.5c-1.5 0-4 .333-4.5.5-.5.167-3.7.8-4.5 2-1 1.5-1 2-1 4"
+                />
               </svg>
             </button>
-            <Link href="/cart" className="at-focus sg-icon" aria-label="Cart">
-              <svg className="w-[18px] h-[18px]" viewBox="0 0 24 24" stroke="currentColor" fill="none" strokeWidth="1.7">
-                <path d="M6 8h12l-1 12H7L6 8z" />
-                <path d="M9 8a3 3 0 016 0" />
+            <Link
+              href="/cart"
+              className="flex items-center justify-center text-zinc-700 hover:text-zinc-950 transition-all relative"
+              aria-label="Cart"
+            >
+              <svg
+                className="w-5 h-5"
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 18 17"
+                fill="currentColor"
+              >
+                <path
+                  fillRule="evenodd"
+                  clipRule="evenodd"
+                  d="M6.04167 0.875C5.48938 0.875 5.04167 1.32272 5.04167 1.875V3.20833C5.04167 3.76062 4.59395 4.20833 4.04167 4.20833H1.875C1.32272 4.20833 0.875 4.65605 0.875 5.20833V15.2917C0.875 15.844 1.32272 16.2917 1.875 16.2917H16.125C16.6773 16.2917 17.125 15.844 17.125 15.2917V5.20833C17.125 4.65605 16.6773 4.20833 16.125 4.20833H13.9583C13.406 4.20833 12.9583 3.76062 12.9583 3.20833V1.875C12.9583 1.32271 12.5106 0.875 11.9583 0.875H6.04167ZM7.29167 4.20833C6.73938 4.20833 6.29167 3.76062 6.29167 3.20833V3.125C6.29167 2.57272 6.73938 2.125 7.29167 2.125H10.7083C11.2606 2.125 11.7083 2.57272 11.7083 3.125V3.20833C11.7083 3.76062 11.2606 4.20833 10.7083 4.20833H7.29167ZM16 5.5H2V15H16V5.5Z"
+                />
               </svg>
               {cartItemsCount > 0 && (
-                <span className="absolute -top-1 -right-1 min-w-[19px] h-[19px] px-1 bg-brand-600 text-white text-[10px] font-extrabold rounded-full flex items-center justify-center border-2 border-cream">
+                <span className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-zinc-950 text-white text-[8px] font-black rounded-full flex items-center justify-center border border-white">
                   {cartItemsCount}
                 </span>
               )}
@@ -574,12 +646,12 @@ export default function HeaderClient({ menus }: { menus?: any[] }) {
       {/* Full-screen Search Overlay (reference: SearchDrawer — dark blurred backdrop, underline input) */}
       {isSearchOpen && (
         <div
-          className="fixed inset-0 z-100 flex items-start justify-center bg-brand-950/45 backdrop-blur-md pt-24 sm:pt-32 px-6 animate-in fade-in duration-200"
+          className="fixed inset-0 z-100 flex items-start justify-center bg-at-ink/50 backdrop-blur-md pt-24 sm:pt-32 px-6 animate-in fade-in duration-200"
           onClick={() => setIsSearchOpen(false)}
         >
           <button
             onClick={() => setIsSearchOpen(false)}
-            className="fixed top-5 right-5 sm:top-6 sm:right-6 z-110 sg-icon cursor-pointer"
+            className="fixed top-5 right-5 sm:top-6 sm:right-6 z-110 flex items-center justify-center w-10 h-10 bg-white text-zinc-950 hover:bg-zinc-100 transition-colors cursor-pointer"
             aria-label="Close search"
           >
             <X className="w-5 h-5" />
@@ -594,7 +666,7 @@ export default function HeaderClient({ menus }: { menus?: any[] }) {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search for ..."
-              className="w-full sg-card sg-raise rounded-full text-foreground placeholder-faint text-lg sm:text-xl font-medium px-8 py-5 outline-none focus:border-aqua-400 transition-colors"
+              className="w-full bg-white/15 backdrop-blur-sm border-b border-white/60 focus:border-white text-white placeholder-white/70 text-xl sm:text-2xl font-light px-5 py-4 outline-none transition-colors"
               autoFocus
             />
           </form>
@@ -611,13 +683,13 @@ export default function HeaderClient({ menus }: { menus?: any[] }) {
           />
 
           {/* Sidebar content */}
-          <div className="relative w-80 max-w-[85vw] bg-cream h-full flex flex-col shadow-2xl z-10 animate-in slide-in-from-left duration-300">
+          <div className="relative w-80 max-w-[85vw] bg-white h-full flex flex-col shadow-2xl z-10 animate-in slide-in-from-left duration-300">
             {/* Header */}
-            <div className="flex items-center justify-between border-b border-line px-6 py-5 shrink-0">
-              <span className="text-base font-extrabold tracking-tight">{storeName}</span>
+            <div className="flex items-center justify-between border-b border-zinc-100 px-6 py-5 shrink-0">
+              <span className="text-sm font-black tracking-widest uppercase">{storeName}</span>
               <button
                 onClick={() => setIsMenuOpen(false)}
-                className="sg-icon w-9 h-9 cursor-pointer"
+                className="p-1 text-zinc-500 hover:text-zinc-950 cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -629,21 +701,21 @@ export default function HeaderClient({ menus }: { menus?: any[] }) {
               {/* Home */}
               <Link
                 href="/"
-                onClick={() => setIsMenuOpen(false)}
-                className="block text-[14px] font-bold text-foreground hover:text-brand-700 py-3 border-b border-line"
+                onClick={handleHomeClick}
+                className="block text-[11px] font-bold tracking-widest uppercase text-zinc-800 hover:text-zinc-950 py-3 border-b border-zinc-100"
               >
                 Home
               </Link>
 
               {/* --- Dynamic API categories with multi-level accordion --- */}
               {categories.length > 0 && (
-                <div className="pt-4 pb-1 border-b border-line">
+                <div className="pt-4 pb-1 border-b border-zinc-100">
                   {categories.map((cat) => {
                     const hasChildren = cat.children && cat.children.length > 0;
                     const isCatExpanded = !!expandedMobileCategories[cat.id];
 
                     return (
-                      <div key={cat.id} className="border-b border-line last:border-0">
+                      <div key={cat.id} className="border-b border-zinc-50 last:border-0">
                         {hasChildren ? (
                           <>
                             {/* Category Accordion Header Row */}
@@ -651,19 +723,19 @@ export default function HeaderClient({ menus }: { menus?: any[] }) {
                               <Link
                                 href={cat.url || `/category/${cat.slug}`}
                                 onClick={() => setIsMenuOpen(false)}
-                                className="text-[14px] font-semibold text-foreground hover:text-brand-700 py-3 transition-colors flex-1"
+                                className="text-[12px] font-medium text-zinc-700 hover:text-zinc-950 py-3 transition-colors flex-1"
                               >
                                 {cat.title || cat.name}
                               </Link>
                               <button
                                 onClick={() => toggleMobileCategory(cat.id)}
-                                className="p-3 text-faint hover:text-soft transition-colors cursor-pointer"
+                                className="p-3 text-zinc-400 hover:text-zinc-600 transition-colors cursor-pointer"
                                 aria-label="Toggle Category"
                               >
                                 {isCatExpanded ? (
-                                  <ChevronUp className="w-4 h-4 text-faint" />
+                                  <ChevronUp className="w-4 h-4 text-zinc-400" />
                                 ) : (
-                                  <ChevronDown className="w-4 h-4 text-faint" />
+                                  <ChevronDown className="w-4 h-4 text-zinc-400" />
                                 )}
                               </button>
                             </div>
@@ -685,26 +757,26 @@ export default function HeaderClient({ menus }: { menus?: any[] }) {
                                             <Link
                                               href={subCat.url || (subCat.slug === '#' ? '#' : `/category/${subCat.slug}`)}
                                               onClick={() => setIsMenuOpen(false)}
-                                              className="text-[12.5px] font-bold text-soft hover:text-brand-700 py-2 flex-1"
+                                              className="text-[11px] font-bold uppercase tracking-wider text-zinc-500 hover:text-zinc-950 py-2 flex-1"
                                             >
                                               {subCat.title || subCat.name}
                                             </Link>
                                             <button
                                               onClick={() => toggleMobileSubCategory(subCat.id)}
-                                              className="p-2 text-faint hover:text-soft transition-colors cursor-pointer"
+                                              className="p-2 text-zinc-400 hover:text-zinc-600 transition-colors cursor-pointer"
                                               aria-label="Toggle Subcategory"
                                             >
                                               {isSubExpanded ? (
-                                                <ChevronUp className="w-3.5 h-3.5 text-faint" />
+                                                <ChevronUp className="w-3.5 h-3.5 text-zinc-400" />
                                               ) : (
-                                                <ChevronDown className="w-3.5 h-3.5 text-faint" />
+                                                <ChevronDown className="w-3.5 h-3.5 text-zinc-400" />
                                               )}
                                             </button>
                                           </div>
 
                                           {/* Sub-subcategory links */}
                                           {isSubExpanded && (
-                                            <div className="pl-3.5 py-1.5 space-y-2 border-l border-line ml-1.5 animate-in fade-in duration-200">
+                                            <div className="pl-3.5 py-1.5 space-y-2 border-l border-zinc-100 ml-1.5 animate-in fade-in duration-200">
                                               {subCat.children.map((child: any) => {
                                                 const slug = child.slug || child.url || '';
                                                 const isDynamic = slug.includes('?') || slug.startsWith('shop') || slug.startsWith('pages');
@@ -715,7 +787,7 @@ export default function HeaderClient({ menus }: { menus?: any[] }) {
                                                     key={child.id}
                                                     href={href}
                                                     onClick={() => setIsMenuOpen(false)}
-                                                    className="block text-[13px] text-soft hover:text-brand-700 transition-colors"
+                                                    className="block text-[11px] text-zinc-500 hover:text-zinc-950 transition-colors"
                                                   >
                                                     {child.title || child.name}
                                                   </Link>
@@ -728,7 +800,7 @@ export default function HeaderClient({ menus }: { menus?: any[] }) {
                                         <Link
                                           href={subCat.url || (subCat.slug === '#' ? '#' : `/category/${subCat.slug}`)}
                                           onClick={() => setIsMenuOpen(false)}
-                                          className="block text-[12.5px] font-bold text-soft hover:text-brand-700 py-1.5"
+                                          className="block text-[11px] font-bold uppercase tracking-wider text-zinc-500 hover:text-zinc-950 py-1.5"
                                         >
                                           {subCat.title || subCat.name}
                                         </Link>
@@ -743,7 +815,7 @@ export default function HeaderClient({ menus }: { menus?: any[] }) {
                           <Link
                             href={cat.url || `/category/${cat.slug}`}
                             onClick={() => setIsMenuOpen(false)}
-                            className="block text-[14px] font-semibold text-foreground hover:text-brand-700 py-3 transition-colors"
+                            className="block text-[12px] font-medium text-zinc-700 hover:text-zinc-950 py-3 transition-colors"
                           >
                             {cat.title || cat.name}
                           </Link>
@@ -758,7 +830,7 @@ export default function HeaderClient({ menus }: { menus?: any[] }) {
               <Link
                 href="/account"
                 onClick={() => setIsMenuOpen(false)}
-                className="flex items-center gap-2 text-[14px] font-bold text-foreground hover:text-brand-700 py-3 border-b border-line"
+                className="flex items-center gap-2 text-[11px] font-black tracking-widest uppercase text-zinc-800 hover:text-zinc-950 py-3 border-b border-zinc-100"
               >
                 <User className="w-4 h-4" />
                 My Account
@@ -766,8 +838,8 @@ export default function HeaderClient({ menus }: { menus?: any[] }) {
 
 
               {/* Help (Mobile) */}
-              <div className="pt-2 border-b border-line pb-3">
-                <span className="block text-[14px] font-bold text-foreground py-3">
+              <div className="pt-2 border-b border-zinc-100 pb-3">
+                <span className="block text-[11px] font-black tracking-widest uppercase text-zinc-800 py-3">
                   Help
                 </span>
                 <div className="space-y-2.5 pl-1">
@@ -776,7 +848,7 @@ export default function HeaderClient({ menus }: { menus?: any[] }) {
                       key={item.href}
                       href={item.href}
                       onClick={() => setIsMenuOpen(false)}
-                      className="block text-[13px] text-soft hover:text-brand-700 transition-colors"
+                      className="block text-[12px] text-zinc-500 hover:text-zinc-950 transition-colors"
                     >
                       {item.label}
                     </Link>
@@ -791,27 +863,27 @@ export default function HeaderClient({ menus }: { menus?: any[] }) {
                     setIsMenuOpen(false); // Close drawer to show modal
                     openCurrencyModal();
                   }}
-                  className="w-full flex items-center justify-between text-[14px] font-bold text-foreground hover:text-brand-700 py-3 transition-colors cursor-pointer"
+                  className="w-full flex items-center justify-between text-[11px] font-bold tracking-widest uppercase text-zinc-800 hover:text-zinc-950 py-3 transition-colors cursor-pointer"
                 >
                   <span className="flex items-center gap-2">
                     {selectedCountryCode && (
                       <img
                         src={`https://flagcdn.com/w40/${selectedCountryCode.toLowerCase()}.png`}
                         alt=""
-                        className="w-4.5 h-3 object-cover rounded-lg shrink-0 border border-line/50"
+                        className="w-4.5 h-3 object-cover rounded-xs shrink-0 border border-zinc-200/50"
                       />
                     )}
                     <span>Currency ({selectedCurrency?.symbol} {selectedCurrency?.code})</span>
                   </span>
-                  <ChevronDown className="w-4 h-4 text-faint" />
+                  <ChevronDown className="w-4 h-4 text-zinc-400" />
                 </button>
               </div>
             </nav>
 
             {/* Footer */}
-            <div className="border-t border-line px-6 py-5 shrink-0">
-              <span className="sg-kicker block mb-2">Need help?</span>
-              <a href={`mailto:${settings["contact_email"] || "support@store.local"}`} className="text-[13px] text-soft hover:text-brand-700 transition-colors">
+            <div className="border-t border-zinc-100 px-6 py-5 shrink-0">
+              <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-widest block mb-2">Need help?</span>
+              <a href={`mailto:${settings["contact_email"] || "support@store.local"}`} className="text-xs text-zinc-600 hover:text-zinc-950 transition-colors">
                 {settings["contact_email"] || "support@store.local"}
               </a>
             </div>
@@ -832,27 +904,27 @@ export default function HeaderClient({ menus }: { menus?: any[] }) {
 
           {/* Modal Box */}
           <div
-            className={`bg-white w-full max-w-[420px] rounded-[24px] border border-line p-6 md:p-8 shadow-2xl relative z-10 transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] overflow-hidden ${
+            className={`bg-white w-full max-w-[420px] rounded-[24px] border border-zinc-100 p-6 md:p-8 shadow-2xl relative z-10 transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] overflow-hidden ${
               isModalAnimating
                 ? "opacity-100 scale-100 translate-y-0"
                 : "opacity-0 scale-95 translate-y-8"
             }`}
           >
             {/* Modal Header */}
-            <div className="flex items-center justify-between border-b border-line pb-4 mb-4 text-left">
-              <span className="text-[11px] font-bold text-soft uppercase tracking-[0.14em] flex items-center gap-2">
+            <div className="flex items-center justify-between border-b border-zinc-100 pb-4 mb-4 text-left">
+              <span className="text-[11px] font-bold text-zinc-500 uppercase tracking-widest flex items-center gap-2">
                 {selectedCountryCode && (
                   <img
                     src={`https://flagcdn.com/w40/${selectedCountryCode.toLowerCase()}.png`}
                     alt=""
-                    className="w-4.5 h-3 object-cover rounded-lg shrink-0 border border-line/50"
+                    className="w-4.5 h-3 object-cover rounded-xs shrink-0 border border-zinc-200/50"
                   />
                 )}
                 <span>{selectedCountry} ({selectedCurrency?.symbol} {selectedCurrency?.code})</span>
               </span>
               <button
                 onClick={closeCurrencyModal}
-                className="p-1.5 text-faint hover:text-brand-700 hover:bg-cream rounded-xl transition cursor-pointer"
+                className="p-1.5 text-zinc-400 hover:text-zinc-950 hover:bg-zinc-100 rounded-xl transition cursor-pointer"
                 aria-label="Close modal"
               >
                 <X className="w-4 h-4" />
@@ -861,22 +933,22 @@ export default function HeaderClient({ menus }: { menus?: any[] }) {
 
             {/* Modal Content */}
             <div className="text-left">
-              <h3 className="text-sm font-extrabold uppercase tracking-wider text-foreground mb-1">
+              <h3 className="text-sm font-black uppercase tracking-wider text-zinc-950 mb-1">
                 Select your shipping location.
               </h3>
-              <p className="text-[9px] sm:text-[10px] font-bold text-faint uppercase tracking-[0.14em] leading-relaxed mb-5">
+              <p className="text-[9px] sm:text-[10px] font-bold text-zinc-400 uppercase tracking-widest leading-relaxed mb-5">
                 YOUR CURRENT SELECTED LOCATION IS {selectedCountry?.toUpperCase()} AND YOUR ORDER WILL BE BILLED IN {selectedCurrency?.code}
               </p>
 
               {/* Country Search Bar */}
               <div className="relative mb-5">
-                <Search className="w-4 h-4 text-faint absolute left-4 top-1/2 -translate-y-1/2" />
+                <Search className="w-4 h-4 text-zinc-400 absolute left-4 top-1/2 -translate-y-1/2" />
                 <input
                   type="text"
                   placeholder="Search for a delivery location"
                   value={countrySearchQuery}
                   onChange={(e) => setCountrySearchQuery(e.target.value)}
-                  className="w-full bg-cream hover:bg-brand-50 focus:bg-white text-foreground placeholder-faint font-bold text-xs rounded-sg pl-11 pr-4 py-3 border border-transparent focus:border-line focus:outline-none transition-all"
+                  className="w-full bg-zinc-100 hover:bg-zinc-200/50 focus:bg-white text-zinc-900 placeholder-zinc-400 font-bold text-xs rounded-xl pl-11 pr-4 py-3 border border-transparent focus:border-zinc-200 focus:outline-none transition-all"
                 />
               </div>
 
@@ -887,19 +959,19 @@ export default function HeaderClient({ menus }: { menus?: any[] }) {
                   CONTINENTS.map((group) => {
                     const isOpen = !!expandedContinents[group.name];
                     return (
-                      <div key={group.name} className="border-b border-line pb-2 last:border-0 last:pb-0">
+                      <div key={group.name} className="border-b border-zinc-100 pb-2 last:border-0 last:pb-0">
                         {/* Continent Header Toggle */}
                         <button
                           onClick={() => toggleContinent(group.name)}
                           className="w-full flex items-center justify-between py-3 text-left cursor-pointer group"
                         >
-                          <span className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-foreground group-hover:text-brand-700 transition-colors">
+                          <span className="text-[10px] font-black uppercase tracking-widest text-zinc-800 group-hover:text-zinc-950 transition-colors">
                             {group.name}
                           </span>
                           {isOpen ? (
-                            <ChevronUp className="w-3.5 h-3.5 text-faint group-hover:text-soft transition-colors" />
+                            <ChevronUp className="w-3.5 h-3.5 text-zinc-400 group-hover:text-zinc-600 transition-colors" />
                           ) : (
-                            <ChevronDown className="w-3.5 h-3.5 text-faint group-hover:text-soft transition-colors" />
+                            <ChevronDown className="w-3.5 h-3.5 text-zinc-400 group-hover:text-zinc-600 transition-colors" />
                           )}
                         </button>
 
@@ -914,15 +986,15 @@ export default function HeaderClient({ menus }: { menus?: any[] }) {
                                   onClick={() => handleCountrySelect(country.name, country.currency)}
                                   className={`w-full text-left py-2 px-3 text-xs font-bold rounded-xl transition-all flex justify-between items-center cursor-pointer ${
                                     isSelected
-                                      ? "bg-brand-600 rounded-full text-white"
-                                      : "bg-transparent text-soft hover:text-brand-700 hover:bg-cream"
+                                      ? "bg-zinc-950 text-white"
+                                      : "bg-transparent text-zinc-500 hover:text-zinc-950 hover:bg-zinc-50"
                                   }`}
                                 >
                                   <span className="flex items-center gap-2">
                                     <img
                                       src={`https://flagcdn.com/w20/${country.code.toLowerCase()}.png`}
                                       alt=""
-                                      className="w-4 h-3 object-cover rounded-lg shrink-0 border border-line"
+                                      className="w-4 h-3 object-cover rounded-xs shrink-0 border border-zinc-100"
                                     />
                                     <span>{country.name}</span>
                                   </span>
@@ -941,7 +1013,7 @@ export default function HeaderClient({ menus }: { menus?: any[] }) {
                   // Search Results
                   <div className="space-y-1.5">
                     {searchResults.length === 0 ? (
-                      <div className="text-center py-6 text-xs font-bold text-faint uppercase tracking-wider">
+                      <div className="text-center py-6 text-xs font-bold text-zinc-400 uppercase tracking-wider">
                         No locations found
                       </div>
                     ) : (
@@ -953,15 +1025,15 @@ export default function HeaderClient({ menus }: { menus?: any[] }) {
                             onClick={() => handleCountrySelect(country.name, country.currency)}
                             className={`w-full text-left py-2 px-3 text-xs font-bold rounded-xl transition-all flex justify-between items-center cursor-pointer ${
                               isSelected
-                                ? "bg-brand-600 rounded-full text-white"
-                                : "bg-transparent text-soft hover:text-brand-700 hover:bg-cream"
+                                ? "bg-zinc-950 text-white"
+                                : "bg-transparent text-zinc-500 hover:text-zinc-950 hover:bg-zinc-50"
                             }`}
                           >
                             <span className="flex items-center gap-2">
                               <img
                                 src={`https://flagcdn.com/w20/${country.code.toLowerCase()}.png`}
                                 alt=""
-                                className="w-4 h-3 object-cover rounded-lg shrink-0 border border-line"
+                                className="w-4 h-3 object-cover rounded-xs shrink-0 border border-zinc-100"
                               />
                               <span>{country.name}</span>
                             </span>

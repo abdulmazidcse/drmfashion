@@ -10,6 +10,8 @@ datasource db {
 enum Role {
   USER
   ADMIN
+  /// Admin-panel user whose access is limited by `User.adminRole` permissions.
+  STAFF
 }
 
 enum OrderStatus {
@@ -59,7 +61,33 @@ model User {
   password    String
   phone       String?
   role        Role        @default(USER)
+  /// Permission set for STAFF users. ADMIN ignores it (full access); USER never
+  /// reaches the admin panel. See lib/permissions.ts.
+  adminRoleId String?
+  adminRole   AdminRole?  @relation(fields: [adminRoleId], references: [id], onDelete: SetNull)
   rewardPoints Int        @default(0)
+
+  /// Bumped to revoke every JWT already issued to this user — the admin
+  /// "Force Logout" action. Tokens carry the value they were signed with and
+  /// are rejected once it no longer matches (see lib/auth.ts).
+  tokenVersion Int        @default(0)
+
+  /// Deactivated accounts cannot log in and any live session is rejected on the
+  /// next request. Force Logout only ends the current session — this is what
+  /// stops the account from signing straight back in.
+  isActive    Boolean     @default(true)
+
+  /// Self-service account deletion. The row survives because orders, payments
+  /// and returns reference it and the shop still needs its own records; the
+  /// personal details are overwritten instead. See /api/customer/account DELETE.
+  deletedAt   DateTime?
+
+  /// Set once the customer enters the code mailed to them at sign-up. Login is
+  /// refused until it is set, which is what stops accounts being opened on
+  /// addresses that do not exist. Google sign-ins are stamped immediately —
+  /// Google has already proven the address — and guest-checkout rows never log
+  /// in at all, so they are unaffected.
+  emailVerifiedAt DateTime?
 
   addresses   Address[]
   cart        Cart?
@@ -97,9 +125,44 @@ model Category {
   id          String      @id @default(cuid())
   name        String
   slug        String      @unique
+  /// Portrait tile (≈5:7) — the Trending / Summer / Winter grids, the admin
+  /// list and the category cards all render this one.
   image       String?
+
+  /// Wide artwork (≈3:1) for the top of /category/[slug]. Separate from
+  /// `image` because the same photo cannot serve both a 5:7 tile and a 3:1
+  /// banner without one of them being cropped to nonsense.
+  bannerImage String?
+
+  /// Alt text for the two pictures above. Empty falls back to a line built from
+  /// the category name — see categoryImageAlt in lib/imageMeta.ts. Separate
+  /// fields because they are separate photographs.
+  imageAlt       String?
+  bannerImageAlt String?
+
+  /// Optional visible caption printed under each picture. Unlike alt there is
+  /// no generated fallback: an invented caption would be visible copy nobody
+  /// wrote, so empty simply renders nothing.
+  imageCaption       String?
+  bannerImageCaption String?
+
   description String?     @db.Text
   isTrending  Boolean     @default(false)
+
+  /// Search-engine overrides for /category/[slug]. Empty falls back to the
+  /// category name and description — see that page's generateMetadata.
+  metaTitle       String?
+  metaDescription String?  @db.Text
+  metaKeywords    String?  @db.Text
+
+  /// "How to measure" copy for the size guide, inherited up the category chain
+  /// — see lib/sizeChart.ts. Independent of which SizeChart a product points
+  /// at, so one guide written on "Men" covers every shirt beneath it. Rich text
+  /// (HTML) from the admin editor.
+  howToMeasure String? @db.Text
+  /// The body illustration shown beside that copy (numbered figure). Inherits
+  /// up the chain the same way; empty falls back to the built-in drawing.
+  howToMeasureImage String?
 
   parentId    String?
   parent      Category?   @relation("CategoryChildren", fields: [parentId], references: [id])
@@ -109,6 +172,23 @@ model Category {
 
   createdAt   DateTime    @default(now())
   deletedAt   DateTime?
+}
+
+/// A named, reusable size chart — "Men's Tops", "Women's Denim" — written once
+/// in Admin → Size Charts and pointed at by any number of products.
+///
+/// `table` holds the same shape the editor and storefront already speak:
+/// { title, unit: "in" | "cm", columns: string[], rows: string[][] }
+/// Values are stored in ONE unit; the storefront toggle converts on the fly.
+model SizeChart {
+  id          String      @id @default(cuid())
+  name        String      @unique
+  table       Json
+
+  products    Product[]
+
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
 }
 
 model Brand {
@@ -145,7 +225,21 @@ model Size {
   name        String
   value       String      @unique
 
+  packages    SizePackage[]
+
   createdAt   DateTime    @default(now())
+}
+
+/// A named subset of sizes, so the variant form can offer "Menswear Tops"
+/// (S–2XL) instead of the full 35-size list. Purely an authoring convenience —
+/// nothing references it from a Product; the sizes still live on the variants.
+model SizePackage {
+  id          String      @id @default(cuid())
+  name        String      @unique
+  sizes       Size[]
+
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
 }
 
 model Length {
@@ -160,6 +254,11 @@ model Product {
   id              String            @id @default(cuid())
 
   title           String
+  /// Merchant-facing code, unique across the catalogue. Titles are deliberately
+  /// NOT unique — two products may share one — so this is what identifies a
+  /// product to staff, and the slug is built from it to stay collision-free.
+  /// Nullable because products created before this field existed have none.
+  productCode     String?           @unique
   slug            String            @unique
   description     String            @db.Text
   sizeAndFit      String?           @db.Text
@@ -173,7 +272,11 @@ model Product {
   brandId         String?
   brand           Brand?            @relation(fields: [brandId], references: [id])
   thumbnail       String
-  sizeChart       String?
+
+  /// The size chart this product shows, picked in Admin → Products. Null means
+  /// no chart is offered — there is no inheritance, so the choice is explicit.
+  sizeChartId     String?
+  sizeChart       SizeChart?        @relation(fields: [sizeChartId], references: [id], onDelete: SetNull)
 
   basePrice       Float
   costPrice       Float?
@@ -195,10 +298,18 @@ model Product {
   categoryId      String
   category        Category          @relation(fields: [categoryId], references: [id])
 
+  /// The item the model has on with this one, shown as "Model is also wearing"
+  /// on the product page. Curated — the section is hidden when this is null,
+  /// rather than falling back to a guessed related product.
+  modelWearsProductId String?
+  modelWearsProduct   Product?      @relation("ModelWears", fields: [modelWearsProductId], references: [id], onDelete: SetNull)
+  modelWornWith       Product[]     @relation("ModelWears")
+
   images          ProductImage[]
   variants        ProductVariant[]
   reviews         Review[]
   questions       ProductQuestion[]
+  collections     CollectionProduct[]
 
   createdAt       DateTime          @default(now())
   updatedAt       DateTime          @updatedAt
@@ -210,6 +321,7 @@ model Product {
   @@index([deletedAt, createdAt])
   @@index([categoryId])
   @@index([brandId])
+  @@index([modelWearsProductId])
 }
 
 model ProductImage {
@@ -220,6 +332,17 @@ model ProductImage {
 
   url         String
   color       String?
+
+  /// Alt text for this specific shot. Empty falls back to a generated one built
+  /// from the product title, its colourway and the shot's position — see
+  /// lib/imageMeta.ts. Written for a reader who cannot see the image, so it
+  /// describes the garment rather than repeating the file name.
+  alt         String?
+
+  /// Optional visible caption rendered under the image in the gallery. Google
+  /// Images reads the text surrounding a picture, so this is indexable copy as
+  /// well as something a shopper reads — most images want none.
+  caption     String?   @db.Text
 }
 
 model ProductVariant {
@@ -321,6 +444,28 @@ model Order {
   shippingCarrier     String?
   shippingMethod      String?
   shippingFee         Float             @default(0)
+  // ─── Delivery tracking ───────────────────────────────────────────────────
+  // Set from Admin → Deliveries. `trackingUrl` is resolved from the carrier's
+  // template in settings when the number is saved, so the customer page never
+  // has to know about carriers.
+  trackingNumber      String?
+  trackingUrl         String?
+  estimatedDeliveryAt DateTime?
+  shippedAt           DateTime?
+  deliveredAt         DateTime?
+  deliveryNote        String?
+
+  /// Destination region, used to pick the tax rate. Stored separately from the
+  /// flattened `shippingAddress` string so reports can group by province.
+  shippingState       String?
+  shippingCountry     String?
+
+  /// Tax as charged, frozen at order time. The rate and label are snapshots for
+  /// the same reason `shippingFee` is: editing a rate in Admin later must not
+  /// rewrite what an old invoice says was collected.
+  taxAmount           Float             @default(0)
+  taxRate             Float             @default(0)
+  taxLabel            String?
 
   items               OrderItem[]
 
@@ -416,21 +561,77 @@ model Coupon {
 
   active          Boolean     @default(true)
 
+  /// When true the code only works for an email that is in the Subscriber
+  /// table. This is what makes a "sign up and get 15% off" code actually
+  /// require the sign-up — checkout matches the order's email against it.
+  subscribersOnly Boolean     @default(false)
+
+  /// Restricts the code to someone who has never ordered before — the other
+  /// half of "15% off your first order". Checked against the email on the
+  /// order, so guest checkouts count too.
+  firstOrderOnly  Boolean     @default(false)
+
   expiresAt       DateTime?
 }
 
 model Banner {
-  id              String      @id @default(cuid())
+  id          String    @id @default(cuid())
+  title       String
+  subtitle    String?
+  image       String
+  /// Optional portrait crop for small screens; falls back to `image`.
+  mobileImage String?
+  link        String?
+  buttonText  String?
+  /// Where the storefront renders it. See BANNER_POSITIONS in lib/banners.ts.
+  position    String    @default("home_top")
+  sortOrder   Int       @default(0)
+  active      Boolean   @default(true)
+  /// Optional schedule; null means always.
+  startsAt    DateTime?
+  endsAt      DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @default(now()) @updatedAt
 
-  title           String
+  @@index([position, active, sortOrder])
+}
 
-  image           String
+/// Curated, merchandised groups of products ("Summer Edit", "Wedding Guest").
+/// Independent of the category tree: a product belongs to exactly one category
+/// but can sit in any number of collections.
+model Collection {
+  id              String              @id @default(cuid())
+  name            String
+  slug            String              @unique
+  description     String?             @db.Text
+  /// Portrait tile used in listings.
+  image           String?
+  /// Wide artwork for the top of /collection/[slug].
+  bannerImage     String?
+  active          Boolean             @default(true)
+  featured        Boolean             @default(false)
+  sortOrder       Int                 @default(0)
+  metaTitle       String?
+  metaDescription String?             @db.Text
+  startsAt        DateTime?
+  endsAt          DateTime?
+  products        CollectionProduct[]
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @default(now()) @updatedAt
 
-  link            String?
+  @@index([active, sortOrder])
+}
 
-  active          Boolean     @default(true)
+model CollectionProduct {
+  collectionId String
+  collection   Collection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+  productId    String
+  product      Product    @relation(fields: [productId], references: [id], onDelete: Cascade)
+  sortOrder    Int        @default(0)
+  createdAt    DateTime   @default(now())
 
-  createdAt       DateTime    @default(now())
+  @@id([collectionId, productId])
+  @@index([productId])
 }
 
 model ReturnRequest {
@@ -445,6 +646,16 @@ model ReturnRequest {
   reason          String
   status          ReturnStatus  @default(PENDING)
   adminNote       String?
+  // ─── Refund record ───────────────────────────────────────────────────────
+  // Filled in when the request moves to REFUNDED. `refundMethod` is "stripe"
+  // when the money went back through the gateway, "manual" for cash / bank /
+  // COD refunds handled outside the system.
+  refundAmount        Float?
+  refundMethod        String?
+  refundTransactionId String?
+  refundedAt          DateTime?
+  /// Whether the returned units were put back into variant stock.
+  restocked           Boolean       @default(false)
 
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
@@ -479,15 +690,23 @@ model ContactMessage {
 
 // One-time password codes for customer "forgot password" reset flow.
 // OTP is stored hashed; rows are short-lived and cleaned up on use/expiry.
+/// One-time codes mailed to a customer. Despite the name it now serves two
+/// flows — see `purpose`. Kept under the original name so the existing table
+/// and its rows survive.
 model PasswordResetOtp {
   id          String      @id @default(cuid())
   email       String
   otpHash     String
+
+  /// "PASSWORD_RESET" or "EMAIL_VERIFICATION". Codes are scoped to a purpose so
+  /// a reset code cannot be used to verify an address, or the other way round.
+  purpose     String      @default("PASSWORD_RESET")
+
   expiresAt   DateTime
   attempts    Int         @default(0)
   createdAt   DateTime    @default(now())
 
-  @@index([email])
+  @@index([email, purpose])
 }
 
 model InventoryLog {
@@ -516,6 +735,7 @@ model Supplier {
   address         String?
   
   purchaseOrders  PurchaseOrder[]
+  expenses        Expense[]
   
   createdAt       DateTime          @default(now())
   updatedAt       DateTime          @updatedAt
@@ -568,6 +788,13 @@ model Page {
   slug      String   @unique
   content   String   // Stores HTML content
   published Boolean  @default(true)
+
+  /// Search-engine overrides for /pages/[slug]. Empty falls back to the page
+  /// title and the opening text of the body — see that page's generateMetadata.
+  metaTitle       String?
+  metaDescription String?  @db.Text
+  metaKeywords    String?  @db.Text
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -661,11 +888,36 @@ model MeasurementField {
   required   Boolean             @default(true)
   position   Int                 @default(0)
 
+  /// Size-based upcharges ("Waist 41-42 → +$50"). Empty = no per-size pricing.
+  tiers      MeasurementFieldTier[]
+
   createdAt  DateTime            @default(now())
   updatedAt  DateTime            @updatedAt
 
   @@unique([templateId, key])
   @@index([templateId])
+}
+
+/// One price bracket on a measurement field: when the customer's value falls
+/// inside [minValue, maxValue] this surcharge is added on top of the template's
+/// base tailoring fee. Ranges must not overlap — enforced in the admin API.
+model MeasurementFieldTier {
+  id             String                   @id @default(cuid())
+
+  fieldId        String
+  field          MeasurementField         @relation(fields: [fieldId], references: [id], onDelete: Cascade)
+
+  minValue       Float // 39
+  maxValue       Float // 40 — inclusive on both ends
+  surchargeType  MeasurementSurchargeType @default(FLAT)
+  surchargeValue Float                    @default(0) // 45
+
+  position       Int                      @default(0)
+
+  createdAt      DateTime                 @default(now())
+  updatedAt      DateTime                 @updatedAt
+
+  @@index([fieldId])
 }
 
 model JournalCategory {
@@ -711,4 +963,127 @@ model JournalPost {
   @@index([published, publishedAt])
   @@index([categoryId])
   @@index([featured])
+}
+
+// ─── Role based access control ───────────────────────────────────────────────
+
+/// A named bundle of permissions ("Order Manager", "Content Editor"). The
+/// permission keys are `<module>.<action>` strings validated against
+/// PERMISSIONS in lib/permissions.ts; unknown keys are dropped on save.
+model AdminRole {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  slug        String   @unique
+  description String?
+  permissions String[] @default([])
+  /// Seeded roles cannot be deleted, only edited.
+  isSystem    Boolean  @default(false)
+  users       User[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @default(now()) @updatedAt
+}
+
+// ─── Accounting ──────────────────────────────────────────────────────────────
+
+enum AccountType {
+  ASSET
+  LIABILITY
+  EQUITY
+  INCOME
+  EXPENSE
+}
+
+enum JournalSource {
+  MANUAL
+  ORDER
+  PAYMENT
+  REFUND
+  PURCHASE
+  EXPENSE
+  ADJUSTMENT
+}
+
+/// Chart of accounts. `code` is the merchant-facing number (1000 Cash, 4000
+/// Sales). System accounts are the ones auto-posting relies on and cannot be
+/// deleted — see DEFAULT_ACCOUNTS in lib/accounting.ts.
+model Account {
+  id           String        @id @default(cuid())
+  code         String        @unique
+  name         String
+  type         AccountType
+  description  String?
+  isSystem     Boolean       @default(false)
+  active       Boolean       @default(true)
+  parentId     String?
+  parent       Account?      @relation("AccountChildren", fields: [parentId], references: [id], onDelete: SetNull)
+  children     Account[]     @relation("AccountChildren")
+  lines        JournalLine[]
+  expenses     Expense[]     @relation("ExpenseAccount")
+  paidExpenses Expense[]     @relation("ExpensePaidFrom")
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @default(now()) @updatedAt
+
+  @@index([type, active])
+}
+
+/// Double-entry journal. Every entry balances (sum debit == sum credit).
+/// Auto-posted entries carry the source and the id of the row they came from,
+/// which is what makes re-posting idempotent.
+model JournalEntry {
+  id            String        @id @default(cuid())
+  entryNo       Int           @unique @default(autoincrement())
+  date          DateTime      @default(now())
+  memo          String?
+  source        JournalSource @default(MANUAL)
+  referenceType String?
+  referenceId   String?
+  createdById   String?
+  lines         JournalLine[]
+  expense       Expense?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @default(now()) @updatedAt
+
+  @@unique([source, referenceType, referenceId])
+  @@index([date])
+}
+
+model JournalLine {
+  id          String       @id @default(cuid())
+  entryId     String
+  entry       JournalEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  accountId   String
+  account     Account      @relation(fields: [accountId], references: [id])
+  debit       Float        @default(0)
+  credit      Float        @default(0)
+  description String?
+
+  @@index([entryId])
+  @@index([accountId])
+}
+
+/// Operating expenses recorded by staff (rent, ads, packaging…). Saving one
+/// posts a journal entry: debit the expense account, credit the account it was
+/// paid from.
+model Expense {
+  id                String        @id @default(cuid())
+  date              DateTime      @default(now())
+  accountId         String
+  account           Account       @relation("ExpenseAccount", fields: [accountId], references: [id])
+  paidFromAccountId String
+  paidFromAccount   Account       @relation("ExpensePaidFrom", fields: [paidFromAccountId], references: [id])
+  amount            Float
+  vendor            String?
+  supplierId        String?
+  supplier          Supplier?     @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  reference         String?
+  note              String?       @db.Text
+  receiptUrl        String?
+  entryId           String?       @unique
+  entry             JournalEntry? @relation(fields: [entryId], references: [id], onDelete: SetNull)
+  createdById       String?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @default(now()) @updatedAt
+
+  @@index([date])
+  @@index([accountId])
 }

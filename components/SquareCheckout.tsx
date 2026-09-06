@@ -169,7 +169,7 @@ export default function SquareCheckout({
   if (isConfigError) {
     return (
       <div className="flex flex-col items-center justify-center p-8 text-red-500 bg-red-50 border border-red-100 rounded-md">
-        <p className="text-sm font-bold uppercase tracking-[0.14em] mb-1">Configuration Error</p>
+        <p className="text-sm font-bold uppercase tracking-widest mb-1">Configuration Error</p>
         <p className="text-xs text-center">
           Square API Keys are missing or invalid in your store settings.<br/>
           Please add a valid Application ID and ensure your Server Access Token is correct.
@@ -188,21 +188,21 @@ export default function SquareCheckout({
 
       <div className="space-y-4 relative">
         {initializing && (
-          <div className="absolute inset-0 bg-white/95 z-10 flex flex-col items-center justify-center py-8 text-soft rounded-xl min-h-[140px]">
+          <div className="absolute inset-0 bg-white/95 z-10 flex flex-col items-center justify-center py-8 text-zinc-500 rounded-xl min-h-[140px]">
             <Loader2 className="w-6 h-6 animate-spin mb-2" />
             <p className="text-sm">Loading Square payments form...</p>
           </div>
         )}
 
         <form onSubmit={handlePay}>
-          <div className="border border-line rounded-sg p-4 bg-cream focus-within:bg-white focus-within:ring-2 focus-within:ring-aqua-400 transition">
+          <div className="border border-zinc-200 rounded-xl p-4 bg-zinc-50 focus-within:bg-white focus-within:ring-2 focus-within:ring-zinc-950 transition">
             <div id="square-card-container" className="min-h-[80px]"></div>
           </div>
 
           <button
             type="submit"
             disabled={processing || initializing}
-            className="w-full mt-6 bg-brand-600 rounded-full text-white font-bold uppercase tracking-[0.14em] text-xs py-4 px-6 hover:bg-brand-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex justify-center items-center gap-2"
+            className="w-full mt-6 bg-zinc-950 text-white font-bold uppercase tracking-widest text-xs py-4 px-6 hover:bg-zinc-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex justify-center items-center gap-2"
           >
             {processing ? (
               <>

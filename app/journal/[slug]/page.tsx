@@ -45,6 +45,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     title: `${post.metaTitle || post.title} | ${storeName} Journal`,
     description,
     keywords: post.metaKeywords || (post.tags.length ? post.tags.join(", ") : undefined),
+    alternates: { canonical: `/journal/${post.slug}` },
     openGraph: {
       type: "article",
       title: post.metaTitle || post.title,
@@ -143,13 +144,13 @@ export default async function JournalArticlePage({ params }: PageProps) {
     })
 
   return (
-    <div className="flex min-h-screen flex-col bg-white font-sans text-foreground antialiased">
+    <div className="flex min-h-screen flex-col bg-white font-sans text-zinc-950 antialiased">
       <Header />
       <JournalViewTracker slug={post.slug} />
 
       <main className="flex-1 w-full">
         {/* ─── Hero ─────────────────────────────────────────────────── */}
-        <section className="relative flex min-h-[45vh] w-full items-end overflow-hidden bg-brand-ink-soft md:min-h-[60vh]">
+        <section className="relative flex min-h-[45vh] w-full items-end overflow-hidden bg-zinc-900 md:min-h-[60vh]">
           {post.coverImage ? (
             <>
               <Image
@@ -163,7 +164,7 @@ export default async function JournalArticlePage({ params }: PageProps) {
               <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-black/10" />
             </>
           ) : (
-            <div className="absolute inset-0 bg-gradient-to-tr from-brand-ink via-brand-ink-soft to-brand-ink-soft" />
+            <div className="absolute inset-0 bg-gradient-to-tr from-zinc-950 via-zinc-900 to-zinc-800" />
           )}
 
           <div className="relative z-10 mx-auto w-full max-w-[900px] px-6 pb-12 pt-24 text-white md:px-12 md:pb-16">
@@ -172,7 +173,7 @@ export default async function JournalArticlePage({ params }: PageProps) {
                 <>
                   <Link
                     href={`/journal?category=${post.category.slug}`}
-                    className="bg-white px-3 py-1.5 font-bold text-foreground transition-colors hover:bg-line"
+                    className="bg-white px-3 py-1.5 font-bold text-zinc-950 transition-colors hover:bg-zinc-200"
                   >
                     {post.category.name}
                   </Link>
@@ -216,7 +217,7 @@ export default async function JournalArticlePage({ params }: PageProps) {
           <div className={PROSE}>
             <Link
               href="/journal"
-              className="inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.15em] text-soft transition-colors hover:text-brand-700"
+              className="inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.15em] text-zinc-500 transition-colors hover:text-zinc-950"
             >
               <ArrowLeft className="h-3 w-3" /> All stories
             </Link>
@@ -237,13 +238,13 @@ export default async function JournalArticlePage({ params }: PageProps) {
           </div>
 
           {post.tags.length > 0 && (
-            <div className={`${PROSE} mt-12 flex flex-wrap items-center gap-2 border-t border-line pt-8`}>
-              <span className="mr-1 text-[10px] font-bold uppercase tracking-[0.2em] text-faint">Tags</span>
+            <div className={`${PROSE} mt-12 flex flex-wrap items-center gap-2 border-t border-zinc-100 pt-8`}>
+              <span className="mr-1 text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-400">Tags</span>
               {post.tags.map((tag) => (
                 <Link
                   key={tag}
                   href={`/journal?tag=${encodeURIComponent(tag)}`}
-                  className="border border-line px-3 py-1.5 text-[11px] font-medium text-soft transition-colors hover:border-brand-600 hover:text-brand-700"
+                  className="border border-zinc-200 px-3 py-1.5 text-[11px] font-medium text-zinc-600 transition-colors hover:border-zinc-950 hover:text-zinc-950"
                 >
                   {tag}
                 </Link>
@@ -251,27 +252,27 @@ export default async function JournalArticlePage({ params }: PageProps) {
             </div>
           )}
 
-          <div className={`${PROSE} mt-8 border-t border-line pt-8`}>
+          <div className={`${PROSE} mt-8 border-t border-zinc-100 pt-8`}>
             <JournalShare slug={post.slug} title={post.title} />
           </div>
         </article>
 
         {/* ─── Prev / Next ──────────────────────────────────────────── */}
         {(prevPost || nextPost) && (
-          <nav className="border-t border-line">
+          <nav className="border-t border-zinc-100">
             <div className="mx-auto grid max-w-[1440px] grid-cols-1 md:grid-cols-2">
               {prevPost ? (
                 <Link
                   href={`/journal/${prevPost.slug}`}
-                  className="group border-b border-line px-6 py-10 transition-colors hover:bg-[#fafafa] md:border-b-0 md:border-r md:px-12 md:py-12"
+                  className="group border-b border-zinc-100 px-6 py-10 transition-colors hover:bg-[#fafafa] md:border-b-0 md:border-r md:px-12 md:py-12"
                 >
-                  <span className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.2em] text-faint">
+                  <span className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-400">
                     <ArrowLeft className="h-3 w-3" /> Previous
                   </span>
-                  <p className="mt-3 text-[11px] uppercase tracking-[0.15em] text-soft">
+                  <p className="mt-3 text-[11px] uppercase tracking-[0.15em] text-zinc-500">
                     {formatJournalDate(prevPost.publishedAt || prevPost.createdAt)}
                   </p>
-                  <p className="mt-2 text-lg font-bold leading-snug tracking-tight text-foreground transition-colors group-hover:text-soft md:text-xl">
+                  <p className="mt-2 text-lg font-bold leading-snug tracking-tight text-zinc-950 transition-colors group-hover:text-zinc-600 md:text-xl">
                     {prevPost.title}
                   </p>
                 </Link>
@@ -284,13 +285,13 @@ export default async function JournalArticlePage({ params }: PageProps) {
                   href={`/journal/${nextPost.slug}`}
                   className="group px-6 py-10 text-right transition-colors hover:bg-[#fafafa] md:px-12 md:py-12"
                 >
-                  <span className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.2em] text-faint">
+                  <span className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-400">
                     Next <ArrowRight className="h-3 w-3" />
                   </span>
-                  <p className="mt-3 text-[11px] uppercase tracking-[0.15em] text-soft">
+                  <p className="mt-3 text-[11px] uppercase tracking-[0.15em] text-zinc-500">
                     {formatJournalDate(nextPost.publishedAt || nextPost.createdAt)}
                   </p>
-                  <p className="mt-2 text-lg font-bold leading-snug tracking-tight text-foreground transition-colors group-hover:text-soft md:text-xl">
+                  <p className="mt-2 text-lg font-bold leading-snug tracking-tight text-zinc-950 transition-colors group-hover:text-zinc-600 md:text-xl">
                     {nextPost.title}
                   </p>
                 </Link>
@@ -301,11 +302,11 @@ export default async function JournalArticlePage({ params }: PageProps) {
 
         {/* ─── Related ──────────────────────────────────────────────── */}
         {relatedPosts.length > 0 && (
-          <section className="border-t border-line bg-[#fafafa] px-6 py-14 md:px-12 md:py-20">
+          <section className="border-t border-zinc-100 bg-[#fafafa] px-6 py-14 md:px-12 md:py-20">
             <div className="mx-auto max-w-[1440px]">
               <div className="mb-10 flex items-center gap-4">
-                <h2 className="text-[11px] font-bold uppercase tracking-[0.2em] text-foreground">Keep Reading</h2>
-                <div className="h-px flex-1 bg-line" />
+                <h2 className="text-[11px] font-bold uppercase tracking-[0.2em] text-zinc-950">Keep Reading</h2>
+                <div className="h-px flex-1 bg-zinc-200" />
               </div>
               <div className="grid grid-cols-1 gap-x-8 gap-y-12 sm:grid-cols-2 lg:grid-cols-3">
                 {relatedPosts.map((item) => (
@@ -317,9 +318,9 @@ export default async function JournalArticlePage({ params }: PageProps) {
         )}
 
         {/* ─── Newsletter ───────────────────────────────────────────── */}
-        <section className="border-t border-line bg-white px-6 py-16 text-center md:px-12 md:py-20">
-          <h2 className="text-2xl font-extrabold uppercase tracking-tight md:text-3xl">Never miss a story</h2>
-          <p className="mx-auto mt-3 max-w-md text-sm text-soft">
+        <section className="border-t border-zinc-100 bg-white px-6 py-16 text-center md:px-12 md:py-20">
+          <h2 className="text-2xl font-black uppercase tracking-tight md:text-3xl">Never miss a story</h2>
+          <p className="mx-auto mt-3 max-w-md text-sm text-zinc-600">
             New guides, fabric notes and early access to drops — straight to your inbox.
           </p>
           <div className="mx-auto mt-7 max-w-md">

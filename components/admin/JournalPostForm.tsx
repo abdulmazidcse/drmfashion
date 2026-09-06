@@ -327,7 +327,7 @@ export default function JournalPostForm({
                   type="text"
                   value={values.metaKeywords}
                   onChange={(e) => set("metaKeywords", e.target.value)}
-                  placeholder="french terry, fabric guide, autumn edit"
+                  placeholder="french terry, fabric guide, tall fashion"
                   className={inputClass}
                 />
               </div>

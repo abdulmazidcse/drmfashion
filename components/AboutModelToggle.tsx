@@ -12,48 +12,48 @@ interface Model {
 
 const menModels: Model[] = [
   {
-    name: "Short",
+    name: "Regular Tall",
     height: "6'3\" (190 cm)",
     weight: "185 lbs (84 kg)",
-    size: "Wearing Medium, short length",
+    size: "Wearing Size Medium Tall (MT)",
     image: "https://placehold.co/600x800/e2e8f0/64748b.png?text=Store+Image"
   },
   {
-    name: "Regular",
+    name: "Tall",
     height: "6'6\" (198 cm)",
     weight: "210 lbs (95 kg)",
-    size: "Wearing Large, regular length",
+    size: "Wearing Size Large Tall (LT)",
     image: "https://placehold.co/600x800/e2e8f0/64748b.png?text=Store+Image"
   },
   {
-    name: "Long",
+    name: "Extra Tall",
     height: "6'10\" (208 cm)",
     weight: "235 lbs (106 kg)",
-    size: "Wearing XL, long length",
+    size: "Wearing Size XL Tall (XLT)",
     image: "https://placehold.co/600x800/e2e8f0/64748b.png?text=Store+Image"
   }
 ]
 
 const womenModels: Model[] = [
   {
-    name: "Short",
+    name: "Regular Tall",
     height: "5'10\" (178 cm)",
     weight: "145 lbs (66 kg)",
-    size: "Wearing Medium, short length",
+    size: "Wearing Size Medium Tall (MT)",
     image: "https://placehold.co/600x800/e2e8f0/64748b.png?text=Store+Image"
   },
   {
-    name: "Regular",
+    name: "Tall",
     height: "6'1\" (185 cm)",
     weight: "165 lbs (75 kg)",
-    size: "Wearing Large, regular length",
+    size: "Wearing Size Large Tall (LT)",
     image: "https://placehold.co/600x800/e2e8f0/64748b.png?text=Store+Image"
   },
   {
-    name: "Long",
+    name: "Extra Tall",
     height: "6'4\" (193 cm)",
     weight: "180 lbs (82 kg)",
-    size: "Wearing XL, long length",
+    size: "Wearing Size XL Tall (XLT)",
     image: "https://placehold.co/600x800/e2e8f0/64748b.png?text=Store+Image"
   }
 ]
@@ -63,16 +63,16 @@ export default function AboutModelToggle() {
   const models = gender === "men" ? menModels : womenModels
 
   return (
-    <div className="w-full bg-cream p-6 md:p-10 border border-line/50 flex flex-col items-center">
+    <div className="w-full bg-zinc-50 p-6 md:p-10 border border-zinc-200/50 flex flex-col items-center">
       {/* Gender Toggles */}
-      <div className="flex items-center gap-2 mb-8 bg-line/60 p-1 rounded-xl">
+      <div className="flex items-center gap-2 mb-8 bg-zinc-200/40 p-1 rounded-sm">
         <button
           type="button"
           onClick={() => setGender("men")}
-          className={`px-8 py-2.5 text-[10px] font-extrabold uppercase tracking-[0.14em] transition-all rounded-xl cursor-pointer ${
+          className={`px-8 py-2.5 text-[10px] font-black uppercase tracking-widest transition-all rounded-sm cursor-pointer ${
             gender === "men"
-              ? "bg-brand-ink text-white shadow-sm"
-              : "text-soft hover:text-brand-700"
+              ? "bg-zinc-950 text-white shadow-sm"
+              : "text-zinc-500 hover:text-zinc-950"
           }`}
         >
           Men Fit
@@ -80,10 +80,10 @@ export default function AboutModelToggle() {
         <button
           type="button"
           onClick={() => setGender("women")}
-          className={`px-8 py-2.5 text-[10px] font-extrabold uppercase tracking-[0.14em] transition-all rounded-xl cursor-pointer ${
+          className={`px-8 py-2.5 text-[10px] font-black uppercase tracking-widest transition-all rounded-sm cursor-pointer ${
             gender === "women"
-              ? "bg-brand-ink text-white shadow-sm"
-              : "text-soft hover:text-brand-700"
+              ? "bg-zinc-950 text-white shadow-sm"
+              : "text-zinc-500 hover:text-zinc-950"
           }`}
         >
           Women Fit
@@ -95,7 +95,7 @@ export default function AboutModelToggle() {
         {models.map((model, idx) => (
           <div key={idx} className="flex flex-col items-center text-center group">
             {/* Image Box */}
-            <div className="aspect-[3/4] w-full overflow-hidden bg-line border border-line/40 mb-4 relative">
+            <div className="aspect-[3/4] w-full overflow-hidden bg-zinc-200 border border-zinc-200/40 mb-4 relative">
               <img
                 src={model.image}
                 alt={model.name}
@@ -104,13 +104,13 @@ export default function AboutModelToggle() {
             </div>
             
             {/* Specs */}
-            <h4 className="text-[12px] font-extrabold uppercase tracking-wider text-foreground mb-1">
+            <h4 className="text-[12px] font-black uppercase tracking-wider text-zinc-950 mb-1">
               {model.name}
             </h4>
-            <p className="text-[10px] font-bold text-faint uppercase tracking-[0.14em] mb-1">
+            <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1">
               {model.height} &bull; {model.weight}
             </p>
-            <p className="text-[10px] text-soft font-medium italic">
+            <p className="text-[10px] text-zinc-500 font-medium italic">
               {model.size}
             </p>
           </div>

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react"
 import Link from "next/link"
-import { Edit, Trash2, Layers, Image, CheckCircle, HelpCircle, Loader2, Eye, X, AlertTriangle, Gift } from "lucide-react"
+import { Edit, Trash2, Layers, Image, CheckCircle, HelpCircle, Loader2, Eye, EyeOff, X, AlertTriangle, Gift, MoreVertical } from "lucide-react"
 import api from "@/lib/axios"
 import { useCurrency } from "@/providers/CurrencyProvider"
 import Swal from "sweetalert2";
@@ -11,10 +11,19 @@ import { Input } from "@/components/ui/input"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table"
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu"
 
 type Product = {
   id: string
   title: string
+  /** Nullable: products created before the field existed have no code. */
+  productCode?: string | null
   thumbnail: string
   basePrice: number
   category?: {
@@ -26,7 +35,8 @@ type Product = {
     id: string
     name: string
   } | null
-  sizeChart?: string | null
+  sizeChart?: { id: string; name: string } | null
+  published?: boolean
   variants?: Array<{
     id: string
     stock: number
@@ -70,6 +80,9 @@ export default function ProductTable({ categorySlug }: { categorySlug?: string }
   // DELETE MODAL STATE
   const [deleteProductId, setDeleteProductId] = useState<string | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
+
+  // PUBLISH TOGGLE STATE
+  const [togglingId, setTogglingId] = useState<string | null>(null)
 
   // SEARCH & FILTER STATE
   const [searchQuery, setSearchQuery] = useState("")
@@ -155,14 +168,47 @@ export default function ProductTable({ categorySlug }: { categorySlug?: string }
     }
   }
 
+  // CONFIRM AND TOGGLE PUBLISH STATUS
+  async function togglePublished(product: Product) {
+    const next = product.published === false
+    const result = await Swal.fire({
+      text: next
+        ? `Publish "${product.title}"? It will become visible on the storefront.`
+        : `Unpublish "${product.title}"? It will be hidden from the storefront.`,
+      icon: "question",
+      showCancelButton: true,
+      confirmButtonText: next ? "Yes, Publish" : "Yes, Unpublish",
+      cancelButtonText: "Cancel",
+      confirmButtonColor: "#18181b",
+    })
+    if (!result.isConfirmed) return
+
+    try {
+      setTogglingId(product.id)
+      await api.patch(`/admin/products/${product.id}`, { published: next })
+      setProducts((prev) =>
+        prev.map((p) => (p.id === product.id ? { ...p, published: next } : p))
+      )
+    } catch (error: any) {
+      console.log("Status toggle failed:", error)
+      Swal.fire({ text: error.response?.data?.message || "Failed to update product status.", confirmButtonColor: "#18181b", icon: "error" })
+    } finally {
+      setTogglingId(null)
+    }
+  }
+
   // CONFIRM AND DELETE PRODUCT
   async function confirmDeleteProduct() {
     if (!deleteProductId) return
     try {
       setIsDeleting(true)
-      await api.delete(`/admin/products/${deleteProductId}`)
+      const res = await api.delete(`/admin/products/${deleteProductId}`)
       await fetchProducts()
       setDeleteProductId(null)
+      // A product with order history can't be fully removed — say what happened.
+      if (res.data?.hardDeleted === false && res.data?.message) {
+        Swal.fire({ text: res.data.message, confirmButtonColor: "#18181b", icon: "info" })
+      }
     } catch (error) {
       console.log("Delete failed:", error)
       Swal.fire({ text: "Failed to delete product. It may have active constraints.", confirmButtonColor: "#18181b", icon: "error" })
@@ -242,8 +288,10 @@ export default function ProductTable({ categorySlug }: { categorySlug?: string }
               <TableHeader>
                 <TableRow className="text-muted-foreground text-xs uppercase tracking-widest">
                   <TableHead className="pl-4 font-semibold">Product Info</TableHead>
+                  <TableHead className="font-semibold">Product Code</TableHead>
                   <TableHead className="font-semibold hidden md:table-cell">Inventory status</TableHead>
                   <TableHead className="font-semibold">Base Price</TableHead>
+                  <TableHead className="font-semibold">Status</TableHead>
                   <TableHead className="font-semibold text-right pr-4">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -306,6 +354,18 @@ export default function ProductTable({ categorySlug }: { categorySlug?: string }
                       </div>
                     </TableCell>
 
+                    {/* PRODUCT CODE CELL — titles are deliberately not unique,
+                        so this is what identifies a product to staff. */}
+                    <TableCell className="py-4">
+                      {product.productCode ? (
+                        <span className="font-mono text-xs text-foreground whitespace-nowrap">
+                          {product.productCode}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">—</span>
+                      )}
+                    </TableCell>
+
                     {/* INVENTORY CELL */}
                     <TableCell className="py-4 hidden md:table-cell">
                       {categorySlug === 'gift-cards' || product.category?.slug === 'gift-cards' || product.category?.name === 'Gift Cards' ? (
@@ -336,37 +396,77 @@ export default function ProductTable({ categorySlug }: { categorySlug?: string }
                       {formatBasePrice(product.basePrice)}
                     </TableCell>
 
-                    {/* ACTIONS CELL */}
+                    {/* STATUS CELL — click flips published after a confirm;
+                        unpublished products are hidden from the storefront. */}
+                    <TableCell className="py-4">
+                      <button
+                        type="button"
+                        onClick={() => togglePublished(product)}
+                        disabled={togglingId === product.id}
+                        title={product.published === false ? "Click to publish" : "Click to unpublish"}
+                        className="cursor-pointer disabled:cursor-wait disabled:opacity-60"
+                      >
+                        {togglingId === product.id ? (
+                          <Badge variant="outline" className="text-[9px] uppercase tracking-wider text-muted-foreground gap-1">
+                            <Loader2 size={9} className="animate-spin" />
+                            Saving
+                          </Badge>
+                        ) : product.published === false ? (
+                          <Badge variant="outline" className="text-[9px] uppercase tracking-wider border-zinc-300 bg-zinc-100 text-zinc-500 gap-1 hover:bg-zinc-200 transition">
+                            <EyeOff size={9} />
+                            Unpublished
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline" className="text-[9px] uppercase tracking-wider border-emerald-200 bg-emerald-50 text-emerald-600 gap-1 hover:bg-emerald-100 transition">
+                            <CheckCircle size={9} />
+                            Published
+                          </Badge>
+                        )}
+                      </button>
+                    </TableCell>
+
+                    {/* ACTIONS CELL — three-dot menu */}
                     <TableCell className="py-4 text-right pr-4">
-                      <div className="inline-flex gap-2 items-center">
-                        {/* VIEW DETAILS ACTION */}
-                        <Button
-                          variant="outline"
-                          size="icon"
-                          onClick={() => showDetails(product.id)}
-                        >
-                          <Eye size={14} />
-                        </Button>
-
-                        {/* EDIT ACTION */}
-                        <Button asChild variant="outline" size="icon">
-                          <Link
-                            href={`/admin/products/${product.id}/edit`}
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="outline" size="icon">
+                            <MoreVertical size={14} />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => showDetails(product.id)}>
+                            <Eye size={14} />
+                            View Details
+                          </DropdownMenuItem>
+                          <DropdownMenuItem asChild>
+                            <Link href={`/admin/products/${product.id}/edit`}>
+                              <Edit size={14} />
+                              Edit
+                            </Link>
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => togglePublished(product)}>
+                            {product.published === false ? (
+                              <>
+                                <CheckCircle size={14} />
+                                Publish
+                              </>
+                            ) : (
+                              <>
+                                <EyeOff size={14} />
+                                Unpublish
+                              </>
+                            )}
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            variant="destructive"
+                            onClick={() => setDeleteProductId(product.id)}
                           >
-                            <Edit size={14} />
-                          </Link>
-                        </Button>
-
-                        {/* DELETE ACTION */}
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => setDeleteProductId(product.id)}
-                          className="text-muted-foreground hover:text-destructive"
-                        >
-                          <Trash2 size={14} />
-                        </Button>
-                      </div>
+                            <Trash2 size={14} />
+                            Delete
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </TableCell>
                   </TableRow>
                 )
@@ -525,13 +625,11 @@ export default function ProductTable({ categorySlug }: { categorySlug?: string }
                       )}
                     </div>
 
-                    {/* SIZE CHART PREVIEW */}
+                    {/* SIZE CHART */}
                     {selectedProduct.sizeChart && (
                       <div className="space-y-2">
-                        <h4 className="text-[9px] font-medium text-muted-foreground uppercase tracking-widest">Size Chart Guide</h4>
-                        <div className="aspect-[4/3] w-full rounded-lg overflow-hidden border border-border bg-muted relative group">
-                          <img src={selectedProduct.sizeChart} alt="Size Chart Guide" className="w-full h-full object-contain" />
-                        </div>
+                        <h4 className="text-[9px] font-medium text-muted-foreground uppercase tracking-widest">Size Chart</h4>
+                        <p className="text-xs font-medium">{selectedProduct.sizeChart.name}</p>
                       </div>
                     )}
 
@@ -582,6 +680,11 @@ export default function ProductTable({ categorySlug }: { categorySlug?: string }
                   <span>Customer <strong>Reviews</strong> and <strong>Inventory Logs</strong></span>
                 </li>
               </ul>
+
+              <p className="text-[11px] text-muted-foreground leading-relaxed">
+                If this product appears in any past <strong>order</strong>, those records are kept — the product is
+                hidden instead, and its code and SKUs are freed for reuse.
+              </p>
             </div>
 
             {/* Action Buttons */}

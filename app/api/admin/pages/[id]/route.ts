@@ -20,10 +20,18 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
-    const { title, slug, content, published } = await req.json()
+    const { title, slug, content, published, metaTitle, metaDescription, metaKeywords } = await req.json()
     const page = await prisma.page.update({
       where: { id },
-      data: { title, slug, content, published }
+      data: {
+        title,
+        slug,
+        content,
+        published,
+        metaTitle: String(metaTitle || "").trim() || null,
+        metaDescription: String(metaDescription || "").trim() || null,
+        metaKeywords: String(metaKeywords || "").trim() || null,
+      }
     })
 
     revalidatePath("/")

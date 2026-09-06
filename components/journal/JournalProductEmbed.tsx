@@ -33,7 +33,7 @@ export default function JournalProductEmbed({
           <ProductCard key={product.id} product={product} idPrefix="journal" showBadges={false} />
         ))}
       </div>
-      {caption && <p className="mt-5 text-center text-[13px] leading-relaxed text-soft">{caption}</p>}
+      {caption && <p className="mt-5 text-center text-[13px] leading-relaxed text-zinc-500">{caption}</p>}
     </div>
   )
 }

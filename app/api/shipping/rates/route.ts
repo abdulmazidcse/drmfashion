@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getShippingRates } from "@/lib/ups";
+import { getSettings } from "@/lib/settings";
+import { warehouseFromSettings } from "@/lib/warehouse";
+import { upsConfigFromSettings } from "@/lib/upsConfig";
 
 export async function POST(req: NextRequest) {
   try {
@@ -13,6 +16,15 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const settings = await getSettings();
+    const config = upsConfigFromSettings(settings);
+
+    // Switched off in Admin: answer plainly rather than as an error, so the
+    // checkout simply omits the UPS section.
+    if (!config.enabled) {
+      return NextResponse.json({ success: true, rates: [], isMock: false, disabled: true });
+    }
+
     const rates = await getShippingRates(
       {
         city,
@@ -20,10 +32,14 @@ export async function POST(req: NextRequest) {
         countryCode: countryCode || "US",
         addressLine: addressLine || undefined,
       },
-      totalWeight || 2.0
+      totalWeight || 2.0,
+      warehouseFromSettings(settings),
+      config
     );
 
-    return NextResponse.json({ success: true, rates });
+    // `isMock` is false only when real UPS credentials answered. The checkout UI
+    // labels mock rates rather than passing them off as live quotes.
+    return NextResponse.json({ success: true, rates, isMock: !config.isConfigured });
   } catch (error: any) {
     console.error("[SHIPPING_RATES_POST_ERROR]", error);
     return NextResponse.json(

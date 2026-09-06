@@ -12,13 +12,15 @@ import {
   X,
   Check,
   Tag,
-  CornerDownRight
+  CornerDownRight,
+  Ruler
 } from "lucide-react"
 import api from "@/lib/axios"
 import Swal from "sweetalert2";
 import { confirmDelete } from "@/lib/confirmDelete"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent } from "@/components/ui/card"
 import ParentCategorySelect, { type ParentCategoryOption } from "@/components/admin/categories/ParentCategorySelect"
@@ -33,18 +35,36 @@ type Category = {
   name: string
   slug: string
   image?: string
+  bannerImage?: string
+  imageAlt?: string
+  bannerImageAlt?: string
+  imageCaption?: string
+  bannerImageCaption?: string
   description?: string
   parentId?: string | null
   children?: Category[]
   isTrending?: boolean
+  howToMeasure?: string | null
+  howToMeasureImage?: string | null
+  metaTitle?: string | null
+  metaDescription?: string | null
+  metaKeywords?: string | null
 }
 
 type FormValues = {
   name: string
   slug: string
   image: string
+  bannerImage: string
+  imageAlt: string
+  bannerImageAlt: string
+  imageCaption: string
+  bannerImageCaption: string
   parentId: string
   isTrending: boolean
+  metaTitle: string
+  metaDescription: string
+  metaKeywords: string
 }
 
 function slugify(str: string) {
@@ -98,6 +118,24 @@ export default function CategoriesPage() {
   const [editFile, setEditFile] = useState<File | null>(null)
   const [editPreview, setEditPreview] = useState<string | null>(null)
 
+  // The banner is a separate upload: a 5:7 tile and a 3:1 header cannot be the
+  // same photo without one of them being cropped past usefulness.
+  const [addBannerFile, setAddBannerFile] = useState<File | null>(null)
+  const [addBannerPreview, setAddBannerPreview] = useState<string | null>(null)
+  const [editBannerFile, setEditBannerFile] = useState<File | null>(null)
+  const [editBannerPreview, setEditBannerPreview] = useState<string | null>(null)
+
+
+  const [addHowTo, setAddHowTo] = useState("")
+  const [editHowTo, setEditHowTo] = useState("")
+  // The numbered body illustration next to the guide copy.
+  const [addHowToImageFile, setAddHowToImageFile] = useState<File | null>(null)
+  const [addHowToImagePreview, setAddHowToImagePreview] = useState<string | null>(null)
+  const [addHowToImageUrl, setAddHowToImageUrl] = useState("")
+  const [editHowToImageFile, setEditHowToImageFile] = useState<File | null>(null)
+  const [editHowToImagePreview, setEditHowToImagePreview] = useState<string | null>(null)
+  const [editHowToImageUrl, setEditHowToImageUrl] = useState("")
+
   const [description, setDescription] = useState("")
   const [editDescription, setEditDescription] = useState("")
 
@@ -105,6 +143,23 @@ export default function CategoriesPage() {
   const editForm = useForm<FormValues>()
 
   const MAX_FILE_SIZE = 1 * 1024 * 1024; // 1MB
+
+  /**
+   * Clear the image on a category that already has one.
+   *
+   * The form field has to be blanked too, not just the preview: submit reads
+   * `data.image`, so leaving it set would silently put the old URL back.
+   * The API stores an empty string as null.
+   */
+  function clearImage(
+    setFile: (f: File | null) => void,
+    setPreview: (s: string | null) => void,
+    setFormValue: (v: string) => void
+  ) {
+    setFile(null)
+    setPreview(null)
+    setFormValue("")
+  }
 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>, setFile: (f: File | null) => void, setPreview: (s: string | null) => void) {
     const file = e.target.files?.[0]
@@ -137,11 +192,19 @@ export default function CategoriesPage() {
       if (addFile) {
         imageUrl = await uploadImage(addFile)
       }
-      const payload = { ...data, image: imageUrl, parentId: data.parentId || null, description }
+      let bannerUrl = data.bannerImage || ""
+      if (addBannerFile) {
+        bannerUrl = await uploadImage(addBannerFile)
+      }
+      const howToMeasureImage = addHowToImageFile ? await uploadImage(addHowToImageFile) : addHowToImageUrl
+      const payload = { ...data, image: imageUrl, bannerImage: bannerUrl, howToMeasure: addHowTo, howToMeasureImage, parentId: data.parentId || null, description }
       await api.post("/admin/categories", payload)
       reset()
       setAddFile(null)
       setAddPreview(null)
+      setAddBannerFile(null)
+      setAddBannerPreview(null)
+      setAddHowTo("")
       setDescription("")
       setShowAddModal(false)
       fetchCategories()
@@ -157,20 +220,34 @@ export default function CategoriesPage() {
       if (editFile) {
         imageUrl = await uploadImage(editFile)
       }
-      const payload = { ...data, image: imageUrl, parentId: data.parentId || null, description: editDescription }
+      let bannerUrl = data.bannerImage || ""
+      if (editBannerFile) {
+        bannerUrl = await uploadImage(editBannerFile)
+      }
+      const howToMeasureImage = editHowToImageFile ? await uploadImage(editHowToImageFile) : editHowToImageUrl
+      const payload = { ...data, image: imageUrl, bannerImage: bannerUrl, howToMeasure: editHowTo, howToMeasureImage, parentId: data.parentId || null, description: editDescription }
       await api.patch(`/admin/categories/${editingCategory.id}`, payload)
       setEditingCategory(null)
       setEditFile(null)
       setEditPreview(null)
+      setEditBannerFile(null)
+      setEditBannerPreview(null)
+      setEditHowTo("")
       fetchCategories()
     } catch (error: any) { Swal.fire({ text: error.response?.data?.message || "Failed to update category.", confirmButtonColor: "#18181b", icon: "error" }) }
     finally { setEditSubmitting(false) }
   }
 
   function openAdd() {
-    reset({ name: "", slug: "", image: "", parentId: "", isTrending: false })
+    reset({ name: "", slug: "", image: "", bannerImage: "", imageAlt: "", bannerImageAlt: "", imageCaption: "", bannerImageCaption: "", parentId: "", isTrending: false, metaTitle: "", metaDescription: "", metaKeywords: "" })
+    setAddHowToImageFile(null)
+    setAddHowToImagePreview(null)
+    setAddHowToImageUrl("")
     setAddFile(null)
     setAddPreview(null)
+    setAddBannerFile(null)
+    setAddBannerPreview(null)
+    setAddHowTo("")
     setDescription("")
     setShowAddModal(true)
   }
@@ -179,8 +256,14 @@ export default function CategoriesPage() {
     setEditingCategory(cat)
     setEditFile(null)
     setEditPreview(cat.image || null)
+    setEditBannerFile(null)
+    setEditBannerPreview(cat.bannerImage || null)
+    setEditHowTo(cat.howToMeasure || "")
+    setEditHowToImageFile(null)
+    setEditHowToImagePreview(cat.howToMeasureImage || null)
+    setEditHowToImageUrl(cat.howToMeasureImage || "")
     setEditDescription(cat.description || "")
-    editForm.reset({ name: cat.name, slug: cat.slug, image: cat.image || "", parentId: cat.parentId || "", isTrending: cat.isTrending || false })
+    editForm.reset({ name: cat.name, slug: cat.slug, image: cat.image || "", bannerImage: cat.bannerImage || "", imageAlt: cat.imageAlt || "", bannerImageAlt: cat.bannerImageAlt || "", imageCaption: cat.imageCaption || "", bannerImageCaption: cat.bannerImageCaption || "", parentId: cat.parentId || "", isTrending: cat.isTrending || false, metaTitle: cat.metaTitle || "", metaDescription: cat.metaDescription || "", metaKeywords: cat.metaKeywords || "" })
   }
 
   async function handleDelete(id: string) {
@@ -223,9 +306,101 @@ export default function CategoriesPage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label>Image (Max 1MB)</Label>
+                <Label>Card Image (Max 1MB)</Label>
+                <p className="text-xs text-muted-foreground">The portrait card in the homepage grids (Trending, Summer) and the category lists. About 700×980.</p>
                 <Input type="file" accept="image/*" onChange={(e) => handleFileChange(e, setAddFile, setAddPreview)} className="file:text-foreground file:font-medium" />
-                {addPreview && <img src={addPreview} alt="Preview" className="mt-3 h-16 w-16 object-cover rounded-md border border-border shadow-sm" />}
+                {addPreview && (
+                  <div className="mt-3 flex items-center gap-3">
+                    <img src={addPreview} alt="Preview" className="h-16 w-16 object-cover rounded-md border border-border shadow-sm" />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => clearImage(setAddFile, setAddPreview, (v) => setValue("image", v))}
+                      className="text-muted-foreground hover:text-destructive"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" /> Remove
+                    </Button>
+                  </div>
+                )}
+                <div className="pt-1">
+                  <Label className="text-xs font-normal text-muted-foreground">Alt text (for SEO and screen readers)</Label>
+                  <Input
+                    {...register("imageAlt")}
+                    placeholder="Empty falls back to “Category name category”"
+                    className="mt-1.5"
+                  />
+                </div>
+                <div className="pt-1">
+                  <Label className="text-xs font-normal text-muted-foreground">Caption (shown under the image)</Label>
+                  <Input
+                    {...register("imageCaption")}
+                    placeholder="Optional — leave empty to show no caption"
+                    className="mt-1.5"
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label>Banner Image (Optional)</Label>
+                <p className="text-xs text-muted-foreground">Wide artwork across the top of the category page. About 1920×600. Leave empty to reuse the card image.</p>
+                <Input type="file" accept="image/*" onChange={(e) => handleFileChange(e, setAddBannerFile, setAddBannerPreview)} className="file:text-foreground file:font-medium" />
+                {addBannerPreview && (
+                  <div className="mt-3 flex items-center gap-3">
+                    <img src={addBannerPreview} alt="Preview" className="h-16 w-24 object-cover rounded-md border border-border shadow-sm" />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => clearImage(setAddBannerFile, setAddBannerPreview, (v) => setValue("bannerImage", v))}
+                      className="text-muted-foreground hover:text-destructive"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" /> Remove
+                    </Button>
+                  </div>
+                )}
+                <div className="pt-1">
+                  <Label className="text-xs font-normal text-muted-foreground">Alt text (for SEO and screen readers)</Label>
+                  <Input
+                    {...register("bannerImageAlt")}
+                    placeholder="Empty falls back to “Category name category banner”"
+                    className="mt-1.5"
+                  />
+                </div>
+                <div className="pt-1">
+                  <Label className="text-xs font-normal text-muted-foreground">Caption (shown under the image)</Label>
+                  <Input
+                    {...register("bannerImageCaption")}
+                    placeholder="Optional — leave empty to show no caption"
+                    className="mt-1.5"
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label>How To Measure</Label>
+                <p className="text-xs text-muted-foreground">
+                  The measuring guide in the size popup. Inherited the same way, and separately from the chart — leave it
+                  empty to use the parent category&apos;s guide.
+                </p>
+                <RichTextEditor initialContent={addHowTo} onChange={setAddHowTo} />
+              </div>
+              <div className="space-y-2">
+                <Label>How To Measure Figure (Optional)</Label>
+                <p className="text-xs text-muted-foreground">The numbered body illustration shown beside the guide. Portrait PNG/SVG on white, about 600×1100. Number the points in the same order as the steps above. Inherited by child categories; leave empty to use the built-in drawing.</p>
+                <Input type="file" accept="image/*" onChange={(e) => handleFileChange(e, setAddHowToImageFile, setAddHowToImagePreview)} className="file:text-foreground file:font-medium" />
+                {addHowToImagePreview && (
+                  <div className="mt-3 flex items-center gap-3">
+                    <img src={addHowToImagePreview} alt="How to measure figure preview" className="h-28 w-20 object-contain rounded-md border border-border bg-white shadow-sm" />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => clearImage(setAddHowToImageFile, setAddHowToImagePreview, setAddHowToImageUrl)}
+                      className="text-muted-foreground hover:text-destructive"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" /> Remove
+                    </Button>
+                  </div>
+                )}
               </div>
               <div>
                 <label className="flex items-center gap-2 cursor-pointer">
@@ -236,6 +411,24 @@ export default function CategoriesPage() {
               <div className="space-y-2">
                 <Label>Description</Label>
                 <RichTextEditor initialContent={description} onChange={setDescription} />
+              </div>
+              <div className="space-y-3 pt-2 border-t border-border">
+                <p className="text-xs font-semibold text-foreground pt-3">SEO</p>
+                <p className="text-xs text-muted-foreground">
+                  Shown by search engines for this category page. Leave empty to fall back to the name and description above.
+                </p>
+                <div className="space-y-2">
+                  <Label>Meta Title</Label>
+                  <Input {...register("metaTitle")} placeholder="e.g. Tall Men's Jeans — 36&quot; & 38&quot; Inseams" />
+                </div>
+                <div className="space-y-2">
+                  <Label>Meta Description</Label>
+                  <Textarea rows={3} {...register("metaDescription")} placeholder="120–160 characters." />
+                </div>
+                <div className="space-y-2">
+                  <Label>Meta Keywords</Label>
+                  <Input {...register("metaKeywords")} placeholder="tall jeans, long inseam, 36 inseam" className="font-mono text-xs" />
+                </div>
               </div>
               <div className="flex gap-3 pt-1">
                 <Button type="button" variant="outline" size="lg" onClick={() => setShowAddModal(false)} className="flex-1">Cancel</Button>
@@ -281,9 +474,105 @@ export default function CategoriesPage() {
                 )}
               </div>
               <div className="space-y-2">
-                <Label>Image (Max 1MB)</Label>
+                <Label>Card Image (Max 1MB)</Label>
+                <p className="text-xs text-muted-foreground">The portrait card in the homepage grids (Trending, Summer) and the category lists. About 700×980.</p>
                 <Input type="file" accept="image/*" onChange={(e) => handleFileChange(e, setEditFile, setEditPreview)} className="file:text-foreground file:font-medium" />
-                {editPreview && <img src={editPreview} alt="Preview" className="mt-3 h-16 w-16 object-cover rounded-md border border-border shadow-sm" />}
+                {editPreview ? (
+                  <div className="mt-3 flex items-center gap-3">
+                    <img src={editPreview} alt="Preview" className="h-16 w-16 object-cover rounded-md border border-border shadow-sm" />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => clearImage(setEditFile, setEditPreview, (v) => editForm.setValue("image", v))}
+                      className="text-muted-foreground hover:text-destructive"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" /> Remove
+                    </Button>
+                  </div>
+                ) : (
+                  <p className="text-xs text-muted-foreground">
+                    No image — this category shows a placeholder in the homepage grids.
+                  </p>
+                )}
+                <div className="pt-1">
+                  <Label className="text-xs font-normal text-muted-foreground">Alt text (for SEO and screen readers)</Label>
+                  <Input
+                    {...editForm.register("imageAlt")}
+                    placeholder="Empty falls back to “Category name category”"
+                    className="mt-1.5"
+                  />
+                </div>
+                <div className="pt-1">
+                  <Label className="text-xs font-normal text-muted-foreground">Caption (shown under the image)</Label>
+                  <Input
+                    {...editForm.register("imageCaption")}
+                    placeholder="Optional — leave empty to show no caption"
+                    className="mt-1.5"
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label>Banner Image (Optional)</Label>
+                <p className="text-xs text-muted-foreground">Wide artwork across the top of the category page. About 1920×600. Leave empty to reuse the card image.</p>
+                <Input type="file" accept="image/*" onChange={(e) => handleFileChange(e, setEditBannerFile, setEditBannerPreview)} className="file:text-foreground file:font-medium" />
+                {editBannerPreview && (
+                  <div className="mt-3 flex items-center gap-3">
+                    <img src={editBannerPreview} alt="Preview" className="h-16 w-24 object-cover rounded-md border border-border shadow-sm" />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => clearImage(setEditBannerFile, setEditBannerPreview, (v) => editForm.setValue("bannerImage", v))}
+                      className="text-muted-foreground hover:text-destructive"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" /> Remove
+                    </Button>
+                  </div>
+                )}
+                <div className="pt-1">
+                  <Label className="text-xs font-normal text-muted-foreground">Alt text (for SEO and screen readers)</Label>
+                  <Input
+                    {...editForm.register("bannerImageAlt")}
+                    placeholder="Empty falls back to “Category name category banner”"
+                    className="mt-1.5"
+                  />
+                </div>
+                <div className="pt-1">
+                  <Label className="text-xs font-normal text-muted-foreground">Caption (shown under the image)</Label>
+                  <Input
+                    {...editForm.register("bannerImageCaption")}
+                    placeholder="Optional — leave empty to show no caption"
+                    className="mt-1.5"
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label>How To Measure</Label>
+                <p className="text-xs text-muted-foreground">
+                  The measuring guide in the size popup. Inherited the same way, and separately from the chart — leave it
+                  empty to use the parent category&apos;s guide.
+                </p>
+                <RichTextEditor initialContent={editHowTo} onChange={setEditHowTo} />
+              </div>
+              <div className="space-y-2">
+                <Label>How To Measure Figure (Optional)</Label>
+                <p className="text-xs text-muted-foreground">The numbered body illustration shown beside the guide. Portrait PNG/SVG on white, about 600×1100. Number the points in the same order as the steps above. Inherited by child categories; leave empty to use the built-in drawing.</p>
+                <Input type="file" accept="image/*" onChange={(e) => handleFileChange(e, setEditHowToImageFile, setEditHowToImagePreview)} className="file:text-foreground file:font-medium" />
+                {editHowToImagePreview && (
+                  <div className="mt-3 flex items-center gap-3">
+                    <img src={editHowToImagePreview} alt="How to measure figure preview" className="h-28 w-20 object-contain rounded-md border border-border bg-white shadow-sm" />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => clearImage(setEditHowToImageFile, setEditHowToImagePreview, setEditHowToImageUrl)}
+                      className="text-muted-foreground hover:text-destructive"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" /> Remove
+                    </Button>
+                  </div>
+                )}
               </div>
               <div>
                 <label className="flex items-center gap-2 cursor-pointer">
@@ -294,6 +583,24 @@ export default function CategoriesPage() {
               <div className="space-y-2">
                 <Label>Description</Label>
                 <RichTextEditor initialContent={editDescription} onChange={setEditDescription} />
+              </div>
+              <div className="space-y-3 pt-2 border-t border-border">
+                <p className="text-xs font-semibold text-foreground pt-3">SEO</p>
+                <p className="text-xs text-muted-foreground">
+                  Shown by search engines for this category page. Leave empty to fall back to the name and description above.
+                </p>
+                <div className="space-y-2">
+                  <Label>Meta Title</Label>
+                  <Input {...editForm.register("metaTitle")} placeholder="e.g. Tall Men's Jeans — 36&quot; & 38&quot; Inseams" />
+                </div>
+                <div className="space-y-2">
+                  <Label>Meta Description</Label>
+                  <Textarea rows={3} {...editForm.register("metaDescription")} placeholder="120–160 characters." />
+                </div>
+                <div className="space-y-2">
+                  <Label>Meta Keywords</Label>
+                  <Input {...editForm.register("metaKeywords")} placeholder="tall jeans, long inseam, 36 inseam" className="font-mono text-xs" />
+                </div>
               </div>
               <div className="flex gap-3 pt-1">
                 <Button type="button" variant="outline" size="lg" onClick={() => setEditingCategory(null)} className="flex-1">Cancel</Button>

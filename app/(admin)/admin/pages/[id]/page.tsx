@@ -6,6 +6,7 @@ import Link from "next/link"
 import dynamic from "next/dynamic"
 import { ArrowLeft, Save, Loader2, Eye, ExternalLink, LayoutTemplate } from "lucide-react"
 import Swal from "sweetalert2"
+import PageSeoFields from "@/components/admin/PageSeoFields"
 
 const PageBuilder = dynamic(() => import("@/components/admin/PageBuilder"), { 
   ssr: false,
@@ -29,6 +30,9 @@ export default function EditPage() {
   const [slug, setSlug] = useState("")
   const [content, setContent] = useState("")
   const [published, setPublished] = useState(true)
+  const [metaTitle, setMetaTitle] = useState("")
+  const [metaDescription, setMetaDescription] = useState("")
+  const [metaKeywords, setMetaKeywords] = useState("")
   const [hasUnsaved, setHasUnsaved] = useState(false)
 
   useEffect(() => { fetchPage() }, [])
@@ -51,6 +55,10 @@ export default function EditPage() {
       setSlug(data.slug)
       setContent(data.content)
       setPublished(data.published)
+      // Columns are nullable — coerce to "" so the inputs stay controlled.
+      setMetaTitle(data.metaTitle ?? "")
+      setMetaDescription(data.metaDescription ?? "")
+      setMetaKeywords(data.metaKeywords ?? "")
     } catch {
       Swal.fire({ text: "Failed to load page data", confirmButtonColor: "#18181b", icon: "error" })
       router.push("/admin/pages")
@@ -78,7 +86,7 @@ export default function EditPage() {
       const res = await fetch(`/api/admin/pages/${params.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title, slug, content, published }),
+        body: JSON.stringify({ title, slug, content, published, metaTitle, metaDescription, metaKeywords }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.message)
@@ -161,6 +169,18 @@ export default function EditPage() {
             </div>
           </div>
         </div>
+
+        {/* SEO */}
+        <PageSeoFields
+          title={title}
+          slug={slug}
+          metaTitle={metaTitle}
+          metaDescription={metaDescription}
+          metaKeywords={metaKeywords}
+          onMetaTitleChange={v => { setMetaTitle(v); setHasUnsaved(true) }}
+          onMetaDescriptionChange={v => { setMetaDescription(v); setHasUnsaved(true) }}
+          onMetaKeywordsChange={v => { setMetaKeywords(v); setHasUnsaved(true) }}
+        />
 
         {/* Page Builder */}
         <PageBuilder initialContent={content} onChange={handleContentChange} />

@@ -90,6 +90,10 @@ export async function sendShippingUpdateEmail(to: string, data: {
   orderId: string
   status: string
   trackingNote?: string
+  carrier?: string | null
+  trackingNumber?: string | null
+  trackingUrl?: string | null
+  estimatedDeliveryAt?: Date | string | null
 }) {
   const storeName = await getStoreName()
   const statusMessages: Record<string, { emoji: string; heading: string; body: string }> = {
@@ -100,6 +104,22 @@ export async function sendShippingUpdateEmail(to: string, data: {
   }
   
   const msg = statusMessages[data.status] || { emoji: "📦", heading: `Order status updated to ${data.status}`, body: "" }
+
+  // "Track your package" — only on the shipped mail, and only when there is
+  // something to show. The button needs a resolved URL; the rest is plain text.
+  const estimated = data.estimatedDeliveryAt ? new Date(data.estimatedDeliveryAt) : null
+  const estimatedLabel = estimated && !Number.isNaN(estimated.getTime())
+    ? estimated.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" })
+    : null
+  const hasTracking = Boolean(data.carrier || data.trackingNumber || data.trackingUrl || estimatedLabel)
+  const trackingBlock = data.status === "SHIPPED" && hasTracking ? `
+      <div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:6px;padding:16px 20px;margin-bottom:24px;text-align:left;">
+        <p style="margin:0 0 10px;font-size:12px;color:#0369a1;text-transform:uppercase;letter-spacing:0.1em;font-weight:700;">Track your package</p>
+        ${data.carrier ? `<p style="margin:0 0 4px;font-size:13px;color:#333;"><span style="color:#888;">Carrier:</span> <strong>${data.carrier}</strong></p>` : ""}
+        ${data.trackingNumber ? `<p style="margin:0 0 4px;font-size:13px;color:#333;"><span style="color:#888;">Tracking number:</span> <strong style="font-family:monospace;">${data.trackingNumber}</strong></p>` : ""}
+        ${estimatedLabel ? `<p style="margin:0 0 4px;font-size:13px;color:#333;"><span style="color:#888;">Estimated delivery:</span> <strong>${estimatedLabel}</strong></p>` : ""}
+        ${data.trackingUrl ? `<a href="${data.trackingUrl}" style="display:inline-block;margin-top:12px;background:#09090b;color:#fff;text-decoration:none;padding:12px 24px;font-size:12px;font-weight:700;letter-spacing:0.15em;text-transform:uppercase;border-radius:4px;">Track Package</a>` : ""}
+      </div>` : ""
 
   const html = `
 <!DOCTYPE html>
@@ -117,6 +137,7 @@ export async function sendShippingUpdateEmail(to: string, data: {
         <p style="margin:0;font-size:12px;color:#888;text-transform:uppercase;letter-spacing:0.1em;">Order ID</p>
         <p style="margin:4px 0 0;font-size:14px;color:#09090b;font-weight:700;font-family:monospace;">#${data.orderId.slice(-8).toUpperCase()}</p>
       </div>
+      ${trackingBlock}
       ${data.trackingNote ? `<p style="font-size:13px;color:#555;background:#fffbeb;border:1px solid #fef08a;border-radius:6px;padding:12px 16px;text-align:left;">${data.trackingNote}</p>` : ""}
     </div>
     <div style="background:#f9f9f9;padding:20px;text-align:center;border-top:1px solid #eee;">
@@ -172,6 +193,9 @@ export async function sendReturnStatusEmail(to: string, data: {
   orderId: string
   returnStatus: string
   note?: string
+  refundAmount?: number
+  refundMethod?: string
+  currencySymbol?: string
 }) {
   const storeName = await getStoreName()
   const msgs: Record<string, { emoji: string; heading: string; body: string }> = {
@@ -180,6 +204,13 @@ export async function sendReturnStatusEmail(to: string, data: {
     REFUNDED: { emoji: "💰", heading: "Your refund has been processed!", body: "Your refund has been issued. It may take 3-5 business days to reflect in your account." },
   }
   const msg = msgs[data.returnStatus] || { emoji: "🔄", heading: "Return request status updated", body: "" }
+
+  const refundLine =
+    data.returnStatus === "REFUNDED" && typeof data.refundAmount === "number"
+      ? `Refund of ${data.currencySymbol || "$"}${data.refundAmount.toFixed(2)} via ${
+          data.refundMethod === "stripe" ? "your original card (Stripe)" : "manual payment"
+        } has been issued.`
+      : ""
 
   const html = `
 <!DOCTYPE html>
@@ -193,6 +224,7 @@ export async function sendReturnStatusEmail(to: string, data: {
       <div style="font-size:48px;margin-bottom:16px;">${msg.emoji}</div>
       <h2 style="margin:0 0 12px;color:#09090b;font-size:20px;">${msg.heading}</h2>
       <p style="color:#666;font-size:14px;margin:0 0 24px;">Hi ${data.customerName}, ${msg.body}</p>
+      ${refundLine ? `<p style="font-size:14px;color:#09090b;font-weight:600;margin:0 0 24px;">${refundLine}</p>` : ""}
       ${data.note ? `<p style="font-size:13px;color:#555;background:#f9f9f9;border-radius:6px;padding:12px 16px;text-align:left;">${data.note}</p>` : ""}
     </div>
     <div style="background:#f9f9f9;padding:20px;text-align:center;border-top:1px solid #eee;">
@@ -295,6 +327,45 @@ export async function sendPasswordResetOtpEmail(to: string, data: {
     from: FROM_EMAIL,
     to,
     subject: `${data.otp} is your ${storeName} password reset code`,
+    html,
+  })
+}
+
+export async function sendEmailVerificationOtpEmail(to: string, data: {
+  name: string
+  otp: string
+  expiresInMinutes: number
+}) {
+  const storeName = await getStoreName()
+  const html = `
+<!DOCTYPE html>
+<html>
+<body style="margin:0;padding:0;background:#f9f9f9;font-family:'Helvetica Neue',Arial,sans-serif;">
+  <div style="max-width:600px;margin:40px auto;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,0.08);">
+    <div style="background:#09090b;padding:32px 40px;text-align:center;">
+      <h1 style="margin:0;color:#fff;font-size:22px;letter-spacing:0.3em;font-weight:900;">${storeName}</h1>
+    </div>
+    <div style="padding:40px;text-align:center;">
+      <div style="font-size:48px;margin-bottom:16px;">✉️</div>
+      <h2 style="margin:0 0 12px;color:#09090b;font-size:20px;">Confirm your email</h2>
+      <p style="color:#666;font-size:14px;margin:0 0 24px;">Hi ${data.name}, enter the code below to finish setting up your ${storeName} account.</p>
+      <div style="display:inline-block;background:#f4f4f5;border:1px solid #e4e4e7;border-radius:8px;padding:18px 32px;margin-bottom:24px;">
+        <span style="font-size:34px;font-weight:900;letter-spacing:0.4em;color:#09090b;font-family:monospace;">${data.otp}</span>
+      </div>
+      <p style="font-size:13px;color:#888;margin:0 0 8px;">This code expires in <strong>${data.expiresInMinutes} minutes</strong>.</p>
+      <p style="font-size:12px;color:#aaa;margin:0;">If you did not create an account, you can safely ignore this email.</p>
+    </div>
+    <div style="background:#f9f9f9;padding:20px;text-align:center;border-top:1px solid #eee;">
+      <p style="margin:0;font-size:11px;color:#aaa;">&copy; ${new Date().getFullYear()} ${storeName}. All rights reserved.</p>
+    </div>
+  </div>
+</body>
+</html>`
+
+  return resend.emails.send({
+    from: FROM_EMAIL,
+    to,
+    subject: `${data.otp} is your ${storeName} verification code`,
     html,
   })
 }

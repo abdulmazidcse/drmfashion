@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
+import PromoBanners from "@/components/PromoBanners";
 import ShopProductList from "@/components/ShopProductList";
 import { getStoreName } from "@/lib/settings";
 import { swatchStyle } from "@/lib/colorStyle";
@@ -47,6 +48,9 @@ export async function generateMetadata({ searchParams }: ShopPageProps): Promise
       return {
         title: `Shop ${category.name} | ${storeName}`,
         description: `Explore our premium collection of ${category.name}. High-end contemporary fashion tailored for modern individuals.`,
+        // Filter/sort params produce endless URL variants of the same listing,
+        // so every one of them points back at the bare category listing.
+        alternates: { canonical: `/shop?category=${category.slug}` },
       };
     }
   }
@@ -54,6 +58,7 @@ export async function generateMetadata({ searchParams }: ShopPageProps): Promise
   return {
     title: `Shop All Collections | ${storeName}`,
     description: `Explore the full ${storeName} collection. High-end contemporary fashion tailored for modern individuals.`,
+    alternates: { canonical: "/shop" },
   };
 }
 
@@ -226,12 +231,12 @@ export default async function ShopPage({ searchParams }: ShopPageProps) {
   });
 
   return (
-    <div className="flex flex-col min-h-screen">
+    <div className="flex flex-col min-h-screen bg-white text-zinc-950 font-sans antialiased">
 
       <Header />
 
       {/* HERO BANNER */}
-      <section className="relative w-full h-[280px] sm:h-[360px] flex items-center justify-center overflow-hidden bg-brand-ink">
+      <section className="relative w-full h-[280px] sm:h-[360px] flex items-center justify-center overflow-hidden bg-zinc-950">
         {activeCategory?.image ? (
           <img
             src={activeCategory.image}
@@ -239,36 +244,38 @@ export default async function ShopPage({ searchParams }: ShopPageProps) {
             className="absolute inset-0 w-full h-full object-cover opacity-40"
           />
         ) : (
-          <div className="absolute inset-0 w-full h-full bg-brand-ink-soft" />
+          <div className="absolute inset-0 w-full h-full bg-zinc-900" />
         )}
         <div className="relative z-10 text-center text-white px-6">
-          <span className="text-[10px] font-bold tracking-[0.3em] uppercase text-faint mb-3 block">
+          <span className="text-[10px] font-bold tracking-[0.3em] uppercase text-zinc-300 mb-3 block">
             {activeCategory ? activeCategory.name : "The Full Collection"}
           </span>
           <h1 className="text-4xl sm:text-6xl font-extrabold tracking-tight uppercase mb-4 leading-none">
             {activeCategory ? activeCategory.name : "Shop All"}
           </h1>
-          <p className="text-faint text-sm font-light max-w-lg mx-auto">
+          <p className="text-zinc-300 text-sm font-light max-w-lg mx-auto">
             {products.length} {products.length === 1 ? "item" : "items"} available
             {query ? ` for "${query}"` : ""}
           </p>
         </div>
       </section>
 
-      <main className="max-w-7xl mx-auto px-6 py-12 w-full flex-1">
+      <PromoBanners position="shop_top" />
+
+      <main className="max-w-[1600px] mx-auto px-6 py-12 w-full flex-1">
 
         {/* BREADCRUMB */}
-        <div className="text-[10px] text-faint font-bold uppercase tracking-[0.14em] mb-8 flex items-center gap-2">
-          <Link href="/" className="hover:text-foreground transition-colors">Home</Link>
+        <div className="text-[10px] text-zinc-400 font-bold uppercase tracking-widest mb-8 flex items-center gap-2">
+          <Link href="/" className="hover:text-zinc-800 transition-colors">Home</Link>
           <ChevronRight className="w-3 h-3" />
           {activeCategory ? (
             <>
-              <Link href="/shop" className="hover:text-foreground transition-colors">Shop</Link>
+              <Link href="/shop" className="hover:text-zinc-800 transition-colors">Shop</Link>
               <ChevronRight className="w-3 h-3" />
-              <span className="text-soft">{activeCategory.name}</span>
+              <span className="text-zinc-700">{activeCategory.name}</span>
             </>
           ) : (
-            <span className="text-soft">Shop All</span>
+            <span className="text-zinc-700">Shop All</span>
           )}
         </div>
 
@@ -276,11 +283,11 @@ export default async function ShopPage({ searchParams }: ShopPageProps) {
 
           {/* SIDEBAR FILTERS */}
           <aside className="w-full lg:w-64 flex-shrink-0">
-            <div className="sticky top-24 space-y-8 max-h-[calc(100vh-8rem)] overflow-y-auto pr-2 pb-8 scrollbar-thin scrollbar-thumb-line">
+            <div className="sticky top-24 space-y-8 max-h-[calc(100vh-8rem)] overflow-y-auto pr-2 pb-8 scrollbar-thin scrollbar-thumb-zinc-200">
 
               {/* Search */}
               <div>
-                <h3 className="text-[10px] font-extrabold tracking-[0.14em] uppercase text-foreground mb-3">Search</h3>
+                <h3 className="text-[10px] font-black tracking-widest uppercase text-zinc-950 mb-3">Search</h3>
                 <form method="GET" action="/shop" className="relative">
                   {categorySlug && <input type="hidden" name="category" value={categorySlug} />}
                   {sort !== "newest" && <input type="hidden" name="sort" value={sort} />}
@@ -289,9 +296,9 @@ export default async function ShopPage({ searchParams }: ShopPageProps) {
                     name="query"
                     defaultValue={query}
                     placeholder="Search products…"
-                    className="w-full border border-line px-4 py-2.5 text-xs bg-white focus:outline-none focus:border-aqua-400 focus:ring-0 transition-all pr-10"
+                    className="w-full border border-zinc-200 px-4 py-2.5 text-xs bg-white focus:outline-none focus:border-zinc-950 focus:ring-1 focus:ring-zinc-950 transition-all pr-10"
                   />
-                  <button type="submit" className="absolute right-3 top-1/2 -translate-y-1/2 text-faint hover:text-foreground transition-colors">
+                  <button type="submit" className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-800 transition-colors">
                     <Search className="w-4 h-4" />
                   </button>
                 </form>
@@ -299,19 +306,19 @@ export default async function ShopPage({ searchParams }: ShopPageProps) {
 
               {/* Categories */}
               <div>
-                <h3 className="text-[10px] font-extrabold tracking-[0.14em] uppercase text-foreground mb-3">Categories</h3>
+                <h3 className="text-[10px] font-black tracking-widest uppercase text-zinc-950 mb-3">Categories</h3>
                 <ul className="space-y-1">
                   <li>
                     <Link
                       href="/shop"
                       className={`flex items-center justify-between text-xs py-2 px-3 transition-all border-l-2 ${
                         !categorySlug
-                          ? "border-brand-600 bg-cream text-foreground font-bold"
-                          : "border-transparent text-soft hover:text-brand-700 hover:border-brand-300"
+                          ? "border-zinc-950 bg-zinc-50 text-zinc-950 font-bold"
+                          : "border-transparent text-zinc-500 hover:text-zinc-950 hover:border-zinc-300"
                       }`}
                     >
                       <span className="uppercase tracking-wider">All Products</span>
-                      <span className="text-faint text-[10px]">{products.length > 0 && !categorySlug ? products.length : ""}</span>
+                      <span className="text-zinc-400 text-[10px]">{products.length > 0 && !categorySlug ? products.length : ""}</span>
                     </Link>
                   </li>
                   {categories.map((cat) => {
@@ -325,12 +332,12 @@ export default async function ShopPage({ searchParams }: ShopPageProps) {
                         href={`/shop?category=${cat.slug}${sort !== "newest" ? `&sort=${sort}` : ""}${query ? `&query=${query}` : ""}`}
                         className={`flex items-center justify-between text-xs py-2 px-3 transition-all border-l-2 ${
                           categorySlug === cat.slug || isExpanded
-                            ? "border-brand-600 bg-cream text-foreground font-bold"
-                            : "border-transparent text-soft hover:text-brand-700 hover:border-brand-300"
+                            ? "border-zinc-950 bg-zinc-50 text-zinc-950 font-bold"
+                            : "border-transparent text-zinc-500 hover:text-zinc-950 hover:border-zinc-300"
                         }`}
                       >
                         <span className="uppercase tracking-wider">{cat.name}</span>
-                        <span className="text-faint text-[10px]">{cat.totalProducts}</span>
+                        <span className="text-zinc-400 text-[10px]">{cat.totalProducts}</span>
                       </Link>
                       {/* Subcategories */}
                       {isExpanded && cat.children.length > 0 && (
@@ -342,7 +349,7 @@ export default async function ShopPage({ searchParams }: ShopPageProps) {
                               <Link
                                 href={`/shop?category=${sub.slug}`}
                                 className={`text-[10px] uppercase tracking-wider py-1 px-3 block transition-colors ${
-                                  isSubActive ? "text-foreground font-bold" : "text-faint hover:text-foreground"
+                                  isSubActive ? "text-zinc-950 font-bold" : "text-zinc-400 hover:text-zinc-800"
                                 }`}
                               >
                                 {sub.name}
@@ -358,7 +365,7 @@ export default async function ShopPage({ searchParams }: ShopPageProps) {
 
               {/* Sort */}
               <div>
-                <h3 className="text-[10px] font-extrabold tracking-[0.14em] uppercase text-foreground mb-3 flex items-center gap-1.5">
+                <h3 className="text-[10px] font-black tracking-widest uppercase text-zinc-950 mb-3 flex items-center gap-1.5">
                   <ArrowUpDown className="w-3 h-3" /> Sort By
                 </h3>
                 <ul className="space-y-1">
@@ -368,12 +375,12 @@ export default async function ShopPage({ searchParams }: ShopPageProps) {
                         href={`/shop?sort=${opt.value}${categorySlug ? `&category=${categorySlug}` : ""}${query ? `&query=${query}` : ""}`}
                         className={`flex items-center gap-2 text-xs py-2 px-3 transition-all border-l-2 ${
                           sort === opt.value
-                            ? "border-brand-600 bg-cream text-foreground font-bold"
-                            : "border-transparent text-soft hover:text-brand-700 hover:border-brand-300"
+                            ? "border-zinc-950 bg-zinc-50 text-zinc-950 font-bold"
+                            : "border-transparent text-zinc-500 hover:text-zinc-950 hover:border-zinc-300"
                         }`}
                       >
                         <span className="w-1.5 h-1.5 rounded-full border border-current flex-shrink-0 flex items-center justify-center">
-                          {sort === opt.value && <span className="w-1 h-1 rounded-full bg-brand-ink block" />}
+                          {sort === opt.value && <span className="w-1 h-1 rounded-full bg-zinc-950 block" />}
                         </span>
                         {opt.label}
                       </Link>
@@ -385,7 +392,7 @@ export default async function ShopPage({ searchParams }: ShopPageProps) {
               {/* Colors */}
               {availableColors.length > 0 && (
                 <div>
-                  <h3 className="text-[10px] font-extrabold tracking-[0.14em] uppercase text-foreground mb-3">Colors</h3>
+                  <h3 className="text-[10px] font-black tracking-widest uppercase text-zinc-950 mb-3">Colors</h3>
                   <div className="flex flex-wrap gap-2">
                     {availableColors.map((c) => {
                       const isSelected = color === c.name;
@@ -400,7 +407,7 @@ export default async function ShopPage({ searchParams }: ShopPageProps) {
                             ...(isSelected ? {} : { color: c.name }),
                           }).toString()}`}
                           className={`w-6 h-6 rounded-full border transition-all cursor-pointer ${
-                            isSelected ? "border-brand-600 scale-110 shadow-sm" : "border-line hover:scale-105"
+                            isSelected ? "border-zinc-950 scale-110 shadow-sm" : "border-zinc-200 hover:scale-105"
                           }`}
                           style={swatchStyle(c)}
                           title={c.name}
@@ -414,7 +421,7 @@ export default async function ShopPage({ searchParams }: ShopPageProps) {
               {/* Sizes */}
               {availableSizes.length > 0 && (
                 <div>
-                  <h3 className="text-[10px] font-extrabold tracking-[0.14em] uppercase text-foreground mb-3 mt-8">Sizes</h3>
+                  <h3 className="text-[10px] font-black tracking-widest uppercase text-zinc-950 mb-3 mt-8">Sizes</h3>
                   <div className="flex flex-wrap gap-2">
                     {availableSizes.map((s) => {
                       const isSelected = size === s.name;
@@ -428,8 +435,8 @@ export default async function ShopPage({ searchParams }: ShopPageProps) {
                             ...(color ? { color } : {}),
                             ...(isSelected ? {} : { size: s.name }),
                           }).toString()}`}
-                          className={`px-3 py-1 text-[10px] font-bold uppercase transition-all border rounded-xl cursor-pointer ${
-                            isSelected ? "bg-brand-600 rounded-full text-white border-brand-600" : "bg-white text-soft border-line hover:border-brand-300"
+                          className={`px-3 py-1 text-[10px] font-bold uppercase transition-all border rounded-sm cursor-pointer ${
+                            isSelected ? "bg-zinc-950 text-white border-zinc-950" : "bg-white text-zinc-700 border-zinc-200 hover:border-zinc-400"
                           }`}
                         >
                           {s.name}
@@ -442,7 +449,7 @@ export default async function ShopPage({ searchParams }: ShopPageProps) {
 
               {/* Price Range */}
               <div>
-                <h3 className="text-[10px] font-extrabold tracking-[0.14em] uppercase text-foreground mb-3 mt-8">Price Range</h3>
+                <h3 className="text-[10px] font-black tracking-widest uppercase text-zinc-950 mb-3 mt-8">Price Range</h3>
                 <form method="GET" action="/shop" className="flex items-center gap-2">
                   {categorySlug && <input type="hidden" name="category" value={categorySlug} />}
                   {sort !== "newest" && <input type="hidden" name="sort" value={sort} />}
@@ -456,18 +463,18 @@ export default async function ShopPage({ searchParams }: ShopPageProps) {
                     defaultValue={minPrice}
                     placeholder="Min"
                     min="0"
-                    className="w-full border border-line px-3 py-2 text-xs bg-white focus:outline-none focus:border-aqua-400 focus:ring-0 transition-all"
+                    className="w-full border border-zinc-200 px-3 py-2 text-xs bg-white focus:outline-none focus:border-zinc-950 focus:ring-1 focus:ring-zinc-950 transition-all"
                   />
-                  <span className="text-faint">-</span>
+                  <span className="text-zinc-400">-</span>
                   <input
                     type="number"
                     name="maxPrice"
                     defaultValue={maxPrice}
                     placeholder="Max"
                     min="0"
-                    className="w-full border border-line px-3 py-2 text-xs bg-white focus:outline-none focus:border-aqua-400 focus:ring-0 transition-all"
+                    className="w-full border border-zinc-200 px-3 py-2 text-xs bg-white focus:outline-none focus:border-zinc-950 focus:ring-1 focus:ring-zinc-950 transition-all"
                   />
-                  <button type="submit" className="bg-brand-600 rounded-full text-white p-2 hover:bg-brand-700 transition-colors">
+                  <button type="submit" className="bg-zinc-950 text-white p-2 hover:bg-zinc-800 transition-colors">
                     <ChevronRight className="w-4 h-4" />
                   </button>
                 </form>
@@ -476,7 +483,7 @@ export default async function ShopPage({ searchParams }: ShopPageProps) {
               {/* Active Filters */}
               {(categorySlug || query || size || color || minPrice !== undefined || maxPrice !== undefined) && (
                 <div>
-                  <h3 className="text-[10px] font-extrabold tracking-[0.14em] uppercase text-foreground mb-3">Active Filters</h3>
+                  <h3 className="text-[10px] font-black tracking-widest uppercase text-zinc-950 mb-3">Active Filters</h3>
                   <div className="flex flex-wrap gap-2">
                     {categorySlug && (
                       <Link
@@ -488,7 +495,7 @@ export default async function ShopPage({ searchParams }: ShopPageProps) {
                           ...(minPrice !== undefined ? { minPrice: minPrice.toString() } : {}),
                           ...(maxPrice !== undefined ? { maxPrice: maxPrice.toString() } : {}),
                         }).toString()}`}
-                        className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider bg-brand-600 rounded-full text-white px-3 py-1.5 hover:bg-brand-700 transition-colors"
+                        className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider bg-zinc-950 text-white px-3 py-1.5 hover:bg-zinc-700 transition-colors"
                       >
                         {activeCategory?.name || categorySlug} ✕
                       </Link>
@@ -503,7 +510,7 @@ export default async function ShopPage({ searchParams }: ShopPageProps) {
                           ...(minPrice !== undefined ? { minPrice: minPrice.toString() } : {}),
                           ...(maxPrice !== undefined ? { maxPrice: maxPrice.toString() } : {}),
                         }).toString()}`}
-                        className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider bg-brand-600 rounded-full text-white px-3 py-1.5 hover:bg-brand-700 transition-colors"
+                        className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider bg-zinc-950 text-white px-3 py-1.5 hover:bg-zinc-700 transition-colors"
                       >
                         "{query}" ✕
                       </Link>
@@ -518,7 +525,7 @@ export default async function ShopPage({ searchParams }: ShopPageProps) {
                           ...(minPrice !== undefined ? { minPrice: minPrice.toString() } : {}),
                           ...(maxPrice !== undefined ? { maxPrice: maxPrice.toString() } : {}),
                         }).toString()}`}
-                        className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider bg-brand-600 rounded-full text-white px-3 py-1.5 hover:bg-brand-700 transition-colors"
+                        className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider bg-zinc-950 text-white px-3 py-1.5 hover:bg-zinc-700 transition-colors"
                       >
                         Color: {color} ✕
                       </Link>
@@ -533,7 +540,7 @@ export default async function ShopPage({ searchParams }: ShopPageProps) {
                           ...(minPrice !== undefined ? { minPrice: minPrice.toString() } : {}),
                           ...(maxPrice !== undefined ? { maxPrice: maxPrice.toString() } : {}),
                         }).toString()}`}
-                        className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider bg-brand-600 rounded-full text-white px-3 py-1.5 hover:bg-brand-700 transition-colors"
+                        className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider bg-zinc-950 text-white px-3 py-1.5 hover:bg-zinc-700 transition-colors"
                       >
                         Size: {size} ✕
                       </Link>
@@ -547,7 +554,7 @@ export default async function ShopPage({ searchParams }: ShopPageProps) {
                           ...(color ? { color } : {}),
                           ...(size ? { size } : {}),
                         }).toString()}`}
-                        className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider bg-brand-600 rounded-full text-white px-3 py-1.5 hover:bg-brand-700 transition-colors"
+                        className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider bg-zinc-950 text-white px-3 py-1.5 hover:bg-zinc-700 transition-colors"
                       >
                         Price: {minPrice !== undefined ? `$${minPrice}` : "$0"} - {maxPrice !== undefined ? `$${maxPrice}` : "Max"} ✕
                       </Link>
@@ -560,7 +567,7 @@ export default async function ShopPage({ searchParams }: ShopPageProps) {
                           ...(size ? { size } : {}),
                           ...(color ? { color } : {}),
                         }).toString()}`}
-                        className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider bg-brand-600 rounded-full text-white px-3 py-1.5 hover:bg-brand-700 transition-colors"
+                        className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider bg-zinc-950 text-white px-3 py-1.5 hover:bg-zinc-700 transition-colors"
                       >
                         &quot;{query}&quot; ✕
                       </Link>
@@ -573,7 +580,7 @@ export default async function ShopPage({ searchParams }: ShopPageProps) {
                           ...(query ? { query } : {}),
                           ...(color ? { color } : {}),
                         }).toString()}`}
-                        className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider bg-brand-600 rounded-full text-white px-3 py-1.5 hover:bg-brand-700 transition-colors"
+                        className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider bg-zinc-950 text-white px-3 py-1.5 hover:bg-zinc-700 transition-colors"
                       >
                         Size: {size} ✕
                       </Link>
@@ -586,7 +593,7 @@ export default async function ShopPage({ searchParams }: ShopPageProps) {
                           ...(query ? { query } : {}),
                           ...(size ? { size } : {}),
                         }).toString()}`}
-                        className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider bg-brand-600 rounded-full text-white px-3 py-1.5 hover:bg-brand-700 transition-colors"
+                        className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider bg-zinc-950 text-white px-3 py-1.5 hover:bg-zinc-700 transition-colors"
                       >
                         Color: {color} ✕
                       </Link>
@@ -602,11 +609,11 @@ export default async function ShopPage({ searchParams }: ShopPageProps) {
           <div className="flex-1 min-w-0">
 
             {/* Top bar */}
-            <div className="flex items-center justify-between mb-6 pb-4 border-b border-line">
-              <p className="text-xs text-faint font-light">
-                Showing <span className="font-bold text-soft">{products.length}</span> products
+            <div className="flex items-center justify-between mb-6 pb-4 border-b border-zinc-100">
+              <p className="text-xs text-zinc-400 font-light">
+                Showing <span className="font-bold text-zinc-700">{products.length}</span> products
               </p>
-              <div className="flex items-center gap-2 text-[10px] text-faint uppercase tracking-[0.14em]">
+              <div className="flex items-center gap-2 text-[10px] text-zinc-400 uppercase tracking-widest">
                 <SlidersHorizontal className="w-3.5 h-3.5" />
                 <span>Filters active</span>
               </div>
@@ -614,12 +621,12 @@ export default async function ShopPage({ searchParams }: ShopPageProps) {
 
             {products.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-32 text-center">
-                <div className="w-16 h-16 rounded-full bg-cream flex items-center justify-center mb-6">
-                  <ShoppingBag className="w-7 h-7 text-faint" />
+                <div className="w-16 h-16 rounded-full bg-zinc-100 flex items-center justify-center mb-6">
+                  <ShoppingBag className="w-7 h-7 text-zinc-400" />
                 </div>
                 <h3 className="text-lg font-bold uppercase tracking-wide mb-2">No Products Found</h3>
-                <p className="text-faint text-sm font-light mb-6">Try adjusting your filters or search term.</p>
-                <Link href="/shop" className="bg-brand-600 rounded-full text-white px-8 py-3 text-xs font-bold tracking-[0.14em] uppercase hover:bg-brand-700 transition-colors">
+                <p className="text-zinc-400 text-sm font-light mb-6">Try adjusting your filters or search term.</p>
+                <Link href="/shop" className="bg-zinc-950 text-white px-8 py-3 text-xs font-bold tracking-widest uppercase hover:bg-zinc-800 transition-colors">
                   Clear All Filters
                 </Link>
               </div>

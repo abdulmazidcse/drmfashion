@@ -34,15 +34,15 @@ const VARIANT_STYLES = {
   // Original: bare black glyphs, no container.
   classic: {
     wrap: "gap-7",
-    link: "text-foreground hover:text-soft transition-colors",
+    link: "text-zinc-950 hover:text-zinc-600 transition-colors",
     icon: "w-7 h-7",
   },
   // Open Grid: outlined circles that invert to solid on hover — the only
   // moment of feedback in an otherwise very quiet footer.
   open: {
-    wrap: "gap-3.5",
-    link: "sg-icon w-[42px] h-[42px] text-soft hover:bg-brand-600 hover:border-brand-600 hover:text-white transition-colors",
-    icon: "w-[18px] h-[18px]",
+    wrap: "gap-4",
+    link: "w-12 h-12 rounded-full border border-zinc-200 text-zinc-500 flex items-center justify-center hover:bg-zinc-950 hover:border-zinc-950 hover:text-white transition-colors",
+    icon: "w-7 h-7",
   },
 } as const;
 
