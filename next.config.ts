@@ -57,10 +57,24 @@ const nextConfig: NextConfig = {
     proxyClientMaxBodySize: 100 * 1024 * 1024,
   } as any,
   async rewrites() {
+    const storage = `${process.env.MINIO_ENDPOINT || "https://storage.tallplus.co"}/${process.env.MINIO_BUCKET_NAME || "fashion-store-bucket"}`;
+
     return [
+      // The single place the storage host is resolved. Uploads store the
+      // bucket-relative `/media/<key>` (see app/api/upload), so moving to a new
+      // bucket, domain or CDN is an env-var change here rather than a rewrite
+      // of every image column in the database. `:path*` keeps the whole key,
+      // so objects in a folder ("/media/products/x.jpg") resolve too.
+      {
+        source: "/media/:path*",
+        destination: `${storage}/:path*`,
+      },
+      // Legacy: rows written before the switch that hold "/products/<file>".
+      // Those objects really do live under a "products/" key prefix, hence the
+      // extra segment. Kept so old rows keep resolving.
       {
         source: "/products/:path*",
-        destination: `${process.env.MINIO_ENDPOINT || "https://storage.tallplus.co"}/${process.env.MINIO_BUCKET_NAME || "fashion-store-bucket"}/products/:path*`,
+        destination: `${storage}/products/:path*`,
       },
     ];
   }

@@ -10,6 +10,37 @@ export function stripScriptTags(html: string | null | undefined): string {
   return html.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "");
 }
 
+/**
+ * Public path prefix for objects that live in the MinIO/S3 bucket.
+ *
+ * Uploads used to be stored as `https://storage.tallplus.co/<bucket>/<key>`,
+ * which meant the storage host was written into ~600 rows across eleven
+ * columns: changing the domain, the bucket, or http→https required a database
+ * migration (`scripts/fix-image-urls.ts`) rather than an env var. What goes in
+ * the database now is the bucket-relative `/media/<key>`, and the rewrite in
+ * `next.config.ts` maps that onto whatever `MINIO_ENDPOINT` currently is.
+ */
+export const BUCKET_URL_PREFIX = "/media";
+
+/** Public URL for a bucket object key. */
+export function bucketMediaUrl(key: string): string {
+  return `${BUCKET_URL_PREFIX}/${String(key).replace(/^\/+/, "")}`;
+}
+
+/**
+ * Rewrite a legacy absolute bucket URL to its `/media/<key>` form. Anything
+ * else — a relative path, a third-party URL, a data URI — is returned as-is,
+ * so this is safe to run over a column of mixed values.
+ */
+export function toBucketMediaUrl(url: string | null | undefined): string {
+  if (!url) return "";
+  const value = url.toString().trim();
+  const bucketName = process.env.MINIO_BUCKET_NAME || "fashion-store-bucket";
+  const absolute = new RegExp(`^https?://[^/]+/${bucketName}/(.+)$`, "i");
+  const match = value.match(absolute);
+  return match ? bucketMediaUrl(match[1]) : value;
+}
+
 export function formatImageUrl(url: string | null | undefined): string {
   if (!url) return "";
 
@@ -45,6 +76,11 @@ export function formatImageUrl(url: string | null | undefined): string {
     }
   } else {
     resolvedUrl = resolvedUrl.replace("http://localhost:9000", endpoint);
+  }
+
+  // Canonical stored form: already endpoint-independent, the rewrite resolves it.
+  if (resolvedUrl.startsWith(`${BUCKET_URL_PREFIX}/`)) {
+    return resolvedUrl;
   }
 
   if (resolvedUrl.startsWith("http://") || resolvedUrl.startsWith("https://") || resolvedUrl.startsWith("//")) {
