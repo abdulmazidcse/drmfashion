@@ -5,6 +5,7 @@ import { getAdminPayload } from "@/lib/auth"
 import { parseCustomMeasurementInput } from "@/lib/measurement"
 import { normalizeProductCode } from "@/lib/productCode"
 import { invalidateProductCaches } from "@/lib/productCache"
+import { normalizeVariantInput, describeWriteError } from "@/lib/variantInput"
 
 export async function POST(
   req: NextRequest
@@ -45,6 +46,14 @@ export async function POST(
       tags,
       modelWearsProductId,
     } = body
+
+    // Variant rows are coerced and checked before anything is written. A blank
+    // stock box reaches Prisma as NaN otherwise, which fails as an un-coded
+    // validation error — see lib/variantInput.ts.
+    const variantInput = normalizeVariantInput(variants)
+    if (!variantInput.ok) {
+      return NextResponse.json({ message: variantInput.message }, { status: 400 })
+    }
 
     // Deleting a product only sets deletedAt — the row, and its code, stay. The
     // unique index covers those rows too, so they are checked here as well;
@@ -120,7 +129,7 @@ export async function POST(
           },
 
           variants: {
-            create: variants,
+            create: variantInput.variants,
           },
         },
 
@@ -143,17 +152,10 @@ export async function POST(
       product
     )
   } catch (error) {
-    console.log(error)
-
-    return NextResponse.json(
-      {
-        message:
-          "Something went wrong",
-      },
-      {
-        status: 500,
-      }
-    )
+    console.error("[PRODUCT_POST]", error)
+    // Same reasoning as the update route: name the actual problem.
+    const { message, status } = describeWriteError(error)
+    return NextResponse.json({ message }, { status })
   }
 }
 

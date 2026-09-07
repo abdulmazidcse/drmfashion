@@ -1,12 +1,11 @@
 import { NextRequest, NextResponse } from "next/server"
 import { revalidatePath } from "next/cache"
 import { prisma } from "@/lib/prisma"
-import { Prisma } from "@prisma/client"
 import { getAdminPayload } from "@/lib/auth"
 import { parseCustomMeasurementInput } from "@/lib/measurement"
 import { normalizeProductCode } from "@/lib/productCode"
 import { invalidateProductCaches } from "@/lib/productCache"
-import { readVariantImages, writeVariantImage } from "@/lib/imageMeta"
+import { normalizeVariantInput, describeWriteError } from "@/lib/variantInput"
 
 type Params = {
   params: Promise<{
@@ -106,6 +105,14 @@ export async function PUT(
       )
     }
 
+    // Variant rows are coerced and checked up front. A blank stock box used to
+    // reach Prisma as NaN, which fails as an un-coded validation error and got
+    // reported as a flat "Something went wrong" — see lib/variantInput.ts.
+    const variantInput = normalizeVariantInput(variants)
+    if (!variantInput.ok) {
+      return NextResponse.json({ message: variantInput.message }, { status: 400 })
+    }
+
     // Deleting a product only sets deletedAt — the row, and its code, stay. The
     // unique index covers those rows too, so they are checked here as well;
     // otherwise the clash surfaces as an unexplained 500 from Postgres.
@@ -165,22 +172,21 @@ export async function PUT(
       });
 
       const claimed = new Set<string>();
-      const incoming = (variants || []).map((v: any) => {
-        const sku = v.sku || `SKU-${Date.now()}-${Math.round(Math.random() * 1e9)}`;
+      const incoming = variantInput.variants.map((v) => {
         // Soft-deleted rows are never matched: they exist only to keep order
         // history intact and must not be silently resurrected.
         const match =
-          existingVariants.find(ev => !claimed.has(ev.id) && !ev.deletedAt && ev.sku === sku) ??
+          existingVariants.find(ev => !claimed.has(ev.id) && !ev.deletedAt && ev.sku === v.sku) ??
           existingVariants.find(
             ev =>
               !claimed.has(ev.id) &&
               !ev.deletedAt &&
               ev.size === v.size &&
               ev.color === v.color &&
-              (ev.length || null) === (v.length || null)
+              (ev.length || null) === v.length
           );
         if (match) claimed.add(match.id);
-        return { v, sku, match };
+        return { v, match };
       });
 
       // Rows no longer on the form. Order/purchase lines pin a variant row in
@@ -209,31 +215,16 @@ export async function PUT(
         }
       }
 
-      for (const { v, sku, match } of incoming) {
-        const variantData = {
-          sku,
-          size: v.size,
-          color: v.color,
-          length: v.length || null,
-          stock: parseInt(v.stock.toString()),
-          price: v.price ? parseFloat(v.price.toString()) : null,
-          image: v.image || null,
-          // URLs pass through untouched, as on create; alt/caption ride along.
-          // Cast because the column is Json: an entry is a string or an object
-          // depending on whether copy was written, which Prisma's input type
-          // cannot express as a union.
-          images: readVariantImages(v.images).map(writeVariantImage) as Prisma.InputJsonValue,
-        };
-
+      for (const { v, match } of incoming) {
         if (match) {
           await tx.productVariant.update({
             where: { id: match.id },
-            data: variantData
+            data: v
           });
         } else {
           await tx.productVariant.create({
             data: {
-              ...variantData,
+              ...v,
               productId: id
             }
           });
@@ -289,19 +280,12 @@ export async function PUT(
 
     return NextResponse.json(product)
   } catch (error) {
-    console.log("[PRODUCT_PUT]", error)
-    // SKUs are unique across the whole catalogue — surface a clash as what it
-    // is instead of a generic failure.
-    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
-      return NextResponse.json(
-        { message: "A SKU on this product is already used by another variant. Make every SKU unique and save again." },
-        { status: 400 }
-      )
-    }
-    return NextResponse.json(
-      { message: "Something went wrong during update" },
-      { status: 500 }
-    )
+    console.error("[PRODUCT_PUT]", error)
+    // Say what actually failed. A duplicate SKU, a stale category and a field
+    // sent in the wrong shape are three different problems with three different
+    // fixes, and the merchant is the one who has to make them.
+    const { message, status } = describeWriteError(error)
+    return NextResponse.json({ message }, { status })
   }
 }
 

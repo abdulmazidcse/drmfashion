@@ -433,7 +433,11 @@ export async function POST(req: NextRequest) {
             idempotency_key: `ord_${new Date().getTime()}_${Math.random().toString(36).slice(-6)}`,
             amount_money: {
               amount: squareAmount,
-              currency: "USD"
+              // The store's own currency, not a hardcoded one: `squareAmount`
+              // is the order total, and totals are held in the base currency.
+              // Square refuses a payment whose currency is not the merchant
+              // account's, and a mislabelled one would charge the wrong sum.
+              currency: baseCurrencyCode(settingsObj)
             },
             source_id: paymentDetails.paymentIntentId,
             location_id: squareLocationId || undefined
