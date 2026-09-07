@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { PutObjectCommand } from "@aws-sdk/client-s3";
 import { s3Client } from "@/lib/minio";
+import { bucketMediaUrl } from "@/lib/utils";
 import { writeFile, mkdir } from "fs/promises";
 import path from "path";
 
@@ -30,7 +31,6 @@ export async function POST(req: Request) {
     const ext = file.name.split(".").pop();
     const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${ext}`;
     const bucketName = process.env.MINIO_BUCKET_NAME || "fashion-store-bucket";
-    const endpoint = process.env.MINIO_ENDPOINT || "http://localhost:9000";
 
     let fileUrl = "";
     try {
@@ -43,8 +43,10 @@ export async function POST(req: Request) {
         })
       );
 
-      // Assuming public bucket policy
-      fileUrl = `${endpoint}/${bucketName}/${fileName}`;
+      // Store the object key, not `${endpoint}/${bucket}/…` — an absolute URL
+      // here pins every row to today's storage host. See the `/media` rewrite
+      // in next.config.ts, which resolves this at request time.
+      fileUrl = bucketMediaUrl(fileName);
     } catch (minioError) {
       console.warn("MinIO upload failed, falling back to local file upload:", minioError);
       // Fallback to local upload

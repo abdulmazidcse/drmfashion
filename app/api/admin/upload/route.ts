@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { PutObjectCommand } from "@aws-sdk/client-s3"
 import { s3Client } from "@/lib/minio"
+import { bucketMediaUrl } from "@/lib/utils"
 import { writeFile, mkdir } from "fs/promises"
 import path from "path"
 
@@ -62,7 +63,6 @@ export async function POST(req: NextRequest) {
     }
 
     const bucketName = process.env.MINIO_BUCKET_NAME || "fashion-store-bucket"
-    const endpoint = process.env.MINIO_ENDPOINT || "http://localhost:9000"
 
     const urls: string[] = []
 
@@ -78,7 +78,13 @@ export async function POST(req: NextRequest) {
           })
         )
 
-        urls.push(`${endpoint}/${bucketName}/${upload.filename}`)
+        // Only the object key is handed back — never `${endpoint}/${bucket}/…`.
+        // A stored absolute URL bakes today's storage host into every row, so
+        // moving buckets, adding a CDN or switching to https means rewriting
+        // the whole database (that is what `scripts/fix-image-urls.ts` was
+        // for). `/media/<key>` is resolved to the live endpoint at request
+        // time by the rewrite in next.config.ts instead.
+        urls.push(bucketMediaUrl(upload.filename))
       } catch (minioError) {
         console.warn("MinIO upload failed, falling back to local file upload:", minioError)
 
