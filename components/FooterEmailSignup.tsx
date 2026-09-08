@@ -9,14 +9,20 @@ const SHOP_FOR_OPTIONS = ["Women", "Men", "Both"];
 /**
  * Two renderings, one piece of logic.
  *
- * - "classic" — headline inside, radios above a bordered vertical stack.
- * - "open"    — form only (the headline sits opposite it in the Open Grid band),
- *               radios above a single inline row of outline-free fields.
+ * - "classic"   — headline inside, radios above a bordered vertical stack.
+ * - "open"      — form only (the headline sits opposite it in the Open Grid band),
+ *                 radios above a single inline row of outline-free fields.
+ * - "signature" — form only, as one pill-shaped field beside a copper pill
+ *                 button. The "I shop for" radios are dropped here rather than
+ *                 restyled: the reference is a single-input row, and a stack of
+ *                 radios above it is the one thing that would break that line.
+ *                 `shopFor` still posts its default, so the API contract and
+ *                 what the list receives are unchanged.
  */
 export default function FooterEmailSignup({
   variant = "open",
 }: {
-  variant?: "classic" | "open";
+  variant?: "classic" | "open" | "signature";
 }) {
   const [email, setEmail] = useState("");
   const [firstName, setFirstName] = useState("");
@@ -167,6 +173,43 @@ export default function FooterEmailSignup({
           {successPanel}
         </form>
       </div>
+    );
+  }
+
+  // ── Signature ────────────────────────────────────────────────────────────
+  if (variant === "signature") {
+    return (
+      <form onSubmit={handleSubmit} className="w-full">
+        <div className="flex flex-wrap gap-2.5">
+          <input
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="Enter your email address"
+            className="min-w-[200px] flex-1 rounded-full border-[1.5px] border-sig-line bg-sig-cream px-[22px] py-[15px] text-[15px] text-sig-ink outline-none transition-colors placeholder:text-sig-soft focus:border-sig-aqua-400 focus:bg-white"
+            required
+            disabled={disabled}
+          />
+          <button
+            type="submit"
+            disabled={disabled}
+            className="cursor-pointer rounded-full bg-sig-copper-600 px-[30px] py-[15px] text-sm font-bold text-white shadow-[0_10px_24px_-12px_rgba(160,99,47,0.85)] transition-all hover:-translate-y-px hover:bg-sig-copper-500 disabled:translate-y-0 disabled:cursor-not-allowed disabled:bg-sig-copper-300"
+          >
+            {status === "loading" ? "Please wait…" : status === "success" ? "Subscribed" : "Subscribe"}
+          </button>
+        </div>
+
+        {message && !successPanel && (
+          <span
+            className={`mt-3 block text-xs font-bold ${
+              status === "success" ? "text-sig-aqua-700" : "text-red-500"
+            }`}
+          >
+            {message}
+          </span>
+        )}
+        {successPanel}
+      </form>
     );
   }
 

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import HeroVideo from "./HeroVideo";
+import HeroHighlightCard, { type HeroHighlight } from "./HeroHighlightCard";
 
 interface SlideConfig {
   active?: boolean;
@@ -20,9 +21,20 @@ interface HomeHeroProps {
     men?: SlideConfig;
     women?: SlideConfig;
   } | null;
+  highlight?: HeroHighlight | null;
 }
 
-export default function HomeHero({ slides }: HomeHeroProps) {
+/**
+ * Signature hero — a single split card rather than the full-bleed dual panel
+ * this used to be.
+ *
+ * Both slides are still read from Settings and both still reach the visitor:
+ * the leading one supplies the copy and the media, and the second one's call to
+ * action becomes the ghost button beside the primary. So configuring the men's
+ * and women's slides in Admin still drives what is on screen — it just resolves
+ * to one card and two buttons instead of two half-width panels.
+ */
+export default function HomeHero({ slides, highlight }: HomeHeroProps) {
   const isMenActive = slides?.men?.active !== false;
   const isWomenActive = slides?.women?.active !== false;
 
@@ -63,59 +75,82 @@ export default function HomeHero({ slides }: HomeHeroProps) {
     activeSlides.push(menSlide, womenSlide);
   }
 
-  const isDual = activeSlides.length === 2;
+  const lead = activeSlides[0];
+  const secondary = activeSlides[1] ?? null;
 
   return (
-    <section className={`relative w-full ${isDual ? "aspect-[16/10] md:aspect-[21/9] min-h-[400px] md:min-h-[500px]" : "aspect-[16/9] min-h-[340px] md:min-h-[400px]"} overflow-hidden bg-at-ink`}>
-      {/* Absolute rather than `h-full`: the section gets its height from
-          aspect-ratio, then min-h stretches it, and a percentage height still
-          resolves against the aspect-ratio box — leaving the slides 219px tall
-          inside a 400px section on a phone and painting the shortfall in
-          bg-at-ink. Pinning to the section's edges makes the slides fill it
-          however that height was arrived at. */}
-      <div className={`absolute inset-0 grid ${isDual ? "grid-cols-2" : "grid-cols-1"}`}>
-        {/* pt on mobile keeps the centred copy clear of the header, which is
-            overlaid on the hero rather than sitting above it. Padding shrinks the
-            box being centred in, so the text settles below the header instead of
-            being pushed off-centre. */}
-        {activeSlides.map((slide, idx) => (
-          <div key={idx} className="relative h-full w-full overflow-hidden group border-r border-white/5 last:border-0 flex flex-col justify-center pt-14 md:pt-0">
-            {/* Background: optimised poster first, video attached later — see HeroVideo. */}
-            <div className="absolute inset-0 transition-transform duration-700 group-hover:scale-105">
-              <HeroVideo
-                src={slide.video}
-                poster={slide.poster}
-                alt={slide.posterAlt || slide.title}
-                priority={idx === 0}
-              />
-            </div>
-            {/* Overlay */}
-            <div className="absolute inset-0 bg-gradient-to-t from-at-ink/80 via-at-ink/30 to-at-ink/20 transition-opacity duration-500 group-hover:opacity-90" />
-            
-            {/* Content Overlay */}
-            <div className="relative z-10 flex flex-col items-center justify-center px-6 py-12 text-center md:py-16 w-full">
-              {slide.topBarTag && (
-                <span className="text-[9px] md:text-xs font-bold uppercase tracking-[0.2em] text-white/70 mb-2.5">
-                  {slide.topBarTag}
-                </span>
-              )}
-              <h2 className={`at-heading text-white font-extrabold uppercase tracking-tight ${isDual ? "text-base md:text-3xl lg:text-4xl" : "text-2xl md:text-5xl lg:text-6xl"}`}>
-                {slide.title}
-              </h2>
-              <p className={`mt-2.5 max-w-md text-white/80 leading-relaxed mx-auto font-light ${isDual ? "text-[9px] md:text-xs lg:text-sm" : "text-[11px] md:text-sm lg:text-base"}`}>
-                {slide.subtitle}
-              </p>
-              <div className="mt-6 md:mt-8">
+    <section className="bg-sig-cream pb-3 pt-8">
+      <div className="sig-wrap">
+        <div className="grid min-h-[520px] overflow-hidden rounded-[26px] bg-sig-card shadow-sig lg:grid-cols-[1fr_1.02fr] lg:rounded-sig-lg">
+
+          {/* ── Copy ── */}
+          <div className="flex flex-col justify-center px-7 py-12 sm:px-14 sm:py-16">
+            {lead.topBarTag && (
+              <span className="inline-flex w-fit items-center gap-2 rounded-full bg-sig-aqua-50 px-[15px] py-2 text-xs font-bold tracking-[0.02em] text-sig-aqua-700">
+                ◆ {lead.topBarTag}
+              </span>
+            )}
+
+            <h1 className="mb-[18px] mt-5 text-[38px] font-extrabold leading-[1.04] tracking-[-0.035em] text-sig-ink sm:text-[clamp(38px,4.4vw,60px)]">
+              {lead.title}
+            </h1>
+
+            <p className="max-w-[42ch] text-base leading-[1.75] text-sig-soft">
+              {lead.subtitle}
+            </p>
+
+            <div className="mt-8 flex flex-wrap gap-3">
+              <Link
+                href={lead.shopLink}
+                className="inline-flex items-center justify-center gap-2.5 rounded-full border-[1.5px] border-transparent bg-sig-copper-600 px-[30px] py-[15px] text-sm font-bold text-white shadow-[0_10px_24px_-12px_rgba(160,99,47,0.85)] transition-all duration-200 hover:-translate-y-px hover:bg-sig-copper-500"
+              >
+                {lead.buttonText} →
+              </Link>
+
+              {secondary && (
                 <Link
-                  href={slide.shopLink}
-                  className="inline-flex min-w-[130px] md:min-w-[170px] items-center justify-center rounded-at-btn bg-white px-5 py-2.5 md:px-6 md:py-3.5 text-[10px] md:text-[11px] font-bold uppercase tracking-[0.05em] text-at-ink transition-all duration-300 hover:bg-white/95 hover:scale-105 shadow-md"
+                  href={secondary.shopLink}
+                  className="inline-flex items-center justify-center gap-2.5 rounded-full border-[1.5px] border-sig-line bg-sig-card px-[30px] py-[15px] text-sm font-bold text-sig-ink transition-colors duration-200 hover:border-sig-copper-400 hover:text-sig-copper-700"
                 >
-                  {slide.buttonText}
+                  {secondary.buttonText}
                 </Link>
-              </div>
+              )}
+            </div>
+
+            {/* The same three promises the value-props strip further down the
+                page makes — repeated here because this is where the decision to
+                keep scrolling gets made. */}
+            <div className="mt-9 flex flex-wrap gap-x-[22px] gap-y-3 border-t border-sig-line pt-[26px]">
+              {[
+                { mark: "✓", text: "Free shipping over $150" },
+                { mark: "↺", text: "30-day easy returns" },
+                { mark: "★", text: "Secure checkout" },
+              ].map((item) => (
+                <div key={item.text} className="flex items-center gap-2.5 text-[13px] font-semibold text-sig-soft">
+                  <span className="grid h-[22px] w-[22px] place-items-center rounded-full bg-sig-aqua-50 text-[11px] font-extrabold text-sig-aqua-700">
+                    {item.mark}
+                  </span>
+                  {item.text}
+                </div>
+              ))}
             </div>
           </div>
-        ))}
+
+          {/* ── Media ── */}
+          <div className="relative min-h-[340px] lg:min-h-0">
+            <HeroVideo
+              src={lead.video}
+              poster={lead.poster}
+              alt={lead.posterAlt || lead.title}
+              priority
+            />
+
+            {/* Float card: a real product, passed down from the page's existing
+                best-seller query rather than fetched again here. */}
+            {highlight && <HeroHighlightCard highlight={highlight} />}
+          </div>
+
+        </div>
       </div>
     </section>
   );

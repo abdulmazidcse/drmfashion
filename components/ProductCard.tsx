@@ -175,6 +175,16 @@ export default function ProductCard({
 
   const activePrice = hasDiscount ? (discountPrice as number) : originalPrice;
 
+  // Rounded, and only trusted above zero: a rounding-to-0 discount would put a
+  // "-0%" chip on the card, which reads as broken rather than as a small saving.
+  const discountPercent = hasDiscount
+    ? Math.round(((originalPrice - (discountPrice as number)) / originalPrice) * 100)
+    : 0;
+
+  // The corner chip. One string so the four states below differ only in colour.
+  const chipClass =
+    "absolute top-3 left-3 z-10 select-none rounded-full px-3 py-1.5 text-[11px] font-extrabold text-white";
+
   // Each axis is filtered by the other, so the pair on screen is always one the
   // product is actually made in. Before either is chosen every value that
   // exists in *some* combination is offered; picking one narrows the other.
@@ -250,7 +260,7 @@ export default function ProductCard({
 
   return (
     <div
-      className="flex flex-col group bg-white border border-zinc-100/60 transition-all duration-300 rounded-sm overflow-hidden"
+      className="flex flex-col group bg-sig-card border border-sig-line rounded-sig overflow-hidden transition-all duration-300 hover:-translate-y-[5px] hover:border-sig-copper-200 hover:shadow-sig"
       id={`${idPrefix}-${product.id}`}
       // No `hovered` state here any more: it was write-only, so every pointer
       // enter/leave re-rendered the whole card (× up to 120 cards in a grid) to
@@ -258,7 +268,7 @@ export default function ProductCard({
       onMouseLeave={() => setShowQuickAdd(false)}
     >
       {/* ── Thumbnail ── */}
-      <div className="relative aspect-[3/4] bg-zinc-50 w-full overflow-hidden">
+      <div className="relative aspect-[4/5] bg-sig-copper-50 w-full overflow-hidden">
         <Link href={`/product/${product.slug}`} onClick={reportSelect} className="absolute inset-0 block z-0">
           <Image
             src={formatImageUrl(gallery[imageIndex] ?? product.thumbnail)}
@@ -275,7 +285,7 @@ export default function ProductCard({
             // grid rendered `loading="lazy"` — including the LCP element. Callers
             // now opt the first row in (see the grids in /shop, /men, /women, …).
             priority={priority}
-            className="object-cover group-hover:scale-[1.02] transition-transform duration-700 select-none"
+            className="object-cover group-hover:scale-[1.05] transition-transform duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] select-none"
           />
         </Link>
 
@@ -292,7 +302,7 @@ export default function ProductCard({
               discountPrice: product.discountPrice
             });
           }}
-          className="absolute top-3 right-3 z-10 p-2 rounded-full bg-white/80 hover:bg-white shadow-sm transition-all duration-200 cursor-pointer"
+          className="absolute top-2.5 right-2.5 z-10 grid h-9 w-9 place-items-center rounded-full bg-white/95 shadow-[0_4px_12px_rgba(0,0,0,0.08)] transition-all duration-200 hover:bg-white cursor-pointer"
           aria-label="Add to Wishlist"
         >
           <svg
@@ -300,41 +310,40 @@ export default function ProductCard({
             viewBox="0 0 24 24"
             fill={wishlisted ? "currentColor" : "none"}
             stroke="currentColor"
-            strokeWidth="1.5"
-            className={`w-4 h-4 transition-colors ${
-              wishlisted ? "text-zinc-950 fill-zinc-950" : "text-zinc-500 hover:text-zinc-950"
+            strokeWidth="1.8"
+            className={`w-[17px] h-[17px] transition-colors ${
+              wishlisted
+                ? "text-sig-copper-600 fill-sig-copper-600"
+                : "text-sig-soft group-hover:text-sig-copper-600"
             }`}
           >
             <path
               strokeLinecap="round"
               strokeLinejoin="round"
-              d="M17.593 3.322c1.1.128 1.907 1.077 1.907 2.185V21L12 17.25 4.5 21V5.507c0-1.108.806-2.057 1.907-2.185a48.507 48.507 0 0 1 11.186 0Z"
+              d="M12 20s-7-4.5-7-9a4 4 0 017-2.5A4 4 0 0119 11c0 4.5-7 9-7 9z"
             />
           </svg>
         </button>
 
         {/* Badges — featured takes priority over sale */}
+        {/* One chip, four states. Copper is the default; aqua marks stock
+            warnings and ink marks "featured", so the discount percentage — the
+            only one a shopper acts on — keeps the loudest colour. */}
         {isOutOfStock ? (
-          <span className="absolute top-3 left-3 bg-zinc-400 text-white text-[9px] font-bold tracking-widest uppercase px-2 py-1 select-none z-10">
-            Sold Out
-          </span>
+          <span className={`${chipClass} bg-sig-soft`}>Sold Out</span>
         ) : isLowStock ? (
-          <span className="absolute top-3 left-3 bg-amber-500 text-white text-[9px] font-bold tracking-widest uppercase px-2 py-1 select-none z-10">
-            Low Stock
-          </span>
-        ) : product.featured && !hasDiscount ? (
-          <span className="absolute top-3 left-3 bg-zinc-950 text-white text-[9px] font-bold tracking-widest uppercase px-2 py-1 select-none z-10">
-            Featured
-          </span>
+          <span className={`${chipClass} bg-sig-aqua-600`}>Low Stock</span>
         ) : hasDiscount ? (
-          <span className="absolute top-3 left-3 bg-red-600 text-white text-[9px] font-bold tracking-widest uppercase px-2 py-1 select-none z-10">
-            Sale
+          <span className={`${chipClass} bg-sig-copper-600`}>
+            {discountPercent > 0 ? `-${discountPercent}%` : "Sale"}
           </span>
+        ) : product.featured ? (
+          <span className={`${chipClass} bg-sig-ink`}>Featured</span>
         ) : null}
 
         {/* Flash Sale Timer */}
         {timeLeft && (
-          <div className="absolute bottom-3 left-3 right-3 bg-zinc-950/90 backdrop-blur-sm text-white text-[10px] font-bold tracking-wider text-center py-1.5 px-2 select-none z-10 rounded-sm flex items-center justify-center gap-1.5">
+          <div className="absolute bottom-3 left-3 right-3 bg-sig-ink/90 backdrop-blur-sm text-white text-[10px] font-bold tracking-wider text-center py-1.5 px-2 select-none z-10 rounded-full flex items-center justify-center gap-1.5">
             <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse"></span>
             Ends in {timeLeft}
           </div>
@@ -373,32 +382,18 @@ export default function ProductCard({
           </>
         )}
 
-        {/* Quick Add overlay button on hover */}
-        <button 
-          onMouseEnter={() => {
-            if (!isOutOfStock && !isGiftCard) {
-              setShowQuickAdd(true);
-            }
-          }}
-          onClick={(e) => {
-            e.preventDefault();
-            if (isGiftCard) {
-              handleAddToCart(uniqueSizes[0] || "", uniqueLengths[0] || "");
-            } else {
-              setShowQuickAdd(true);
-            }
-          }}
-          disabled={isOutOfStock}
-          className={`absolute bottom-6 left-6 right-6 py-4 bg-zinc-950/40 backdrop-blur-md text-white text-[12px] font-extrabold uppercase tracking-widest text-center transition-all duration-300 z-10 hover:bg-zinc-950 shadow-lg cursor-pointer disabled:cursor-not-allowed disabled:bg-zinc-400/80 ${
-            showQuickAdd ? 'opacity-0 translate-y-4 pointer-events-none' : 'opacity-0 translate-y-4 group-hover:opacity-100 group-hover:translate-y-0'
-          }`}
-        >
-          {added ? "Added!" : (isOutOfStock ? "Out of Stock" : (isGiftCard ? "Add to Cart" : "Quick Add"))}
-        </button>
+        {/* Sold-out notice. This slot used to hold a hover-only "Quick Add"
+            bar; the "+" chip in the price row has taken that over — one add
+            path, and one that works on touch, where there is no hover. */}
+        {isOutOfStock && (
+          <span className="absolute inset-x-6 bottom-6 z-10 select-none rounded-full bg-sig-ink/70 py-3 text-center text-[11px] font-extrabold uppercase tracking-widest text-white backdrop-blur-md">
+            Out of Stock
+          </span>
+        )}
 
         {/* ── Frosted size and length selector overlay ── */}
         <div 
-          className={`absolute bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md z-20 flex flex-col p-4 pt-8 border-t border-zinc-200/80 transition-all duration-300 ease-out transform shadow-[0_-10px_40px_rgba(0,0,0,0.05)] ${
+          className={`absolute bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md z-20 flex flex-col p-4 pt-8 border-t border-sig-line transition-all duration-300 ease-out transform shadow-[0_-10px_40px_rgba(0,0,0,0.05)] ${
             showQuickAdd ? 'translate-y-0 opacity-100' : 'translate-y-full opacity-0 pointer-events-none'
           }`}
         >
@@ -408,7 +403,7 @@ export default function ProductCard({
               e.preventDefault();
               setShowQuickAdd(false);
             }}
-            className="absolute top-2 right-3 text-zinc-400 hover:text-black font-bold text-sm cursor-pointer z-30 transition-colors"
+            className="absolute top-2 right-3 text-sig-soft hover:text-sig-ink font-bold text-sm cursor-pointer z-30 transition-colors"
             aria-label="Close selector"
           >
             ✕
@@ -417,7 +412,7 @@ export default function ProductCard({
           <div className="flex flex-col gap-4 mb-4">
             {/* SIZE row */}
             <div>
-              <p className="text-[9px] font-black text-zinc-500 tracking-widest uppercase mb-1 text-center">
+              <p className="text-[9px] font-black text-sig-soft tracking-widest uppercase mb-1 text-center">
                 SIZE
               </p>
               <div className="flex justify-center flex-wrap gap-1.5">
@@ -428,10 +423,10 @@ export default function ProductCard({
                       e.preventDefault();
                       setSelectedSize(size === selectedSize ? "" : size);
                     }}
-                    className={`px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider transition-all duration-200 border cursor-pointer rounded-sm ${
+                    className={`px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider transition-all duration-200 border cursor-pointer rounded-full ${
                       selectedSize === size
-                        ? "bg-zinc-950 text-white border-zinc-950 shadow-sm"
-                        : "bg-white/50 text-zinc-700 border-zinc-200 hover:border-zinc-700 hover:text-zinc-950"
+                        ? "bg-sig-copper-600 text-white border-sig-copper-600 shadow-sm"
+                        : "bg-white/50 text-sig-ink border-sig-line hover:border-sig-copper-400 hover:text-sig-copper-700"
                     }`}
                   >
                     {size}
@@ -453,10 +448,10 @@ export default function ProductCard({
                       e.preventDefault();
                       setSelectedLength(len === selectedLength ? "" : len);
                     }}
-                    className={`px-3.5 py-1 text-[10px] font-bold uppercase tracking-wider transition-all duration-200 border cursor-pointer rounded-sm ${
+                    className={`px-3.5 py-1 text-[10px] font-bold uppercase tracking-wider transition-all duration-200 border cursor-pointer rounded-full ${
                       selectedLength === len
-                        ? "bg-zinc-950 text-white border-zinc-950 shadow-sm"
-                        : "bg-white/50 text-zinc-700 border-zinc-200 hover:border-zinc-700 hover:text-zinc-950"
+                        ? "bg-sig-copper-600 text-white border-sig-copper-600 shadow-sm"
+                        : "bg-white/50 text-sig-ink border-sig-line hover:border-sig-copper-400 hover:text-sig-copper-700"
                     }`}
                   >
                     {len}
@@ -476,10 +471,10 @@ export default function ProductCard({
               }
             }}
             disabled={!selectedSize || !selectedLength}
-            className={`w-full py-2.5 text-[10px] font-black tracking-widest uppercase transition-all duration-300 text-center rounded-sm shadow-sm cursor-pointer ${
+            className={`w-full py-2.5 text-[10px] font-black tracking-widest uppercase transition-all duration-300 text-center rounded-full shadow-sm cursor-pointer ${
               selectedSize && selectedLength
-                ? "bg-zinc-900 text-white hover:bg-black active:scale-[0.98]"
-                : "bg-zinc-800/40 text-zinc-650 cursor-not-allowed"
+                ? "bg-sig-copper-600 text-white hover:bg-sig-copper-500 active:scale-[0.98]"
+                : "bg-sig-copper-100 text-sig-copper-400 cursor-not-allowed"
             }`}
           >
             {selectedSize && selectedLength ? "Add to Cart" : "Select Size & Length"}
@@ -488,19 +483,19 @@ export default function ProductCard({
       </div>
 
       {/* ── Info ── */}
-      <div className="py-4 px-4 sm:px-5 flex flex-col flex-1">
+      <div className="flex flex-1 flex-col px-4 pb-[19px] pt-4 sm:px-[17px]">
         {(() => {
           const name = typeof storeName !== 'undefined' ? storeName : "Store";
           return (
-            <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest block mb-1">
-              {product.brand?.name || name} / {product.category?.name || "CLOTHING"}
+            <span className="block text-[11px] font-bold uppercase tracking-[0.09em] text-sig-aqua-700">
+              {product.category?.name || product.brand?.name || name}
             </span>
           );
         })()}
 
         {/* Title */}
-        <h3 className="text-[13px] font-bold text-zinc-900 tracking-wide uppercase line-clamp-1 mb-1 leading-snug">
-          <Link href={`/product/${product.slug}`} onClick={reportSelect} className="hover:text-zinc-600 transition-colors">
+        <h3 className="mb-2 mt-[7px] text-[15px] font-bold leading-snug tracking-[-0.01em] text-sig-ink line-clamp-1">
+          <Link href={`/product/${product.slug}`} onClick={reportSelect} className="transition-colors hover:text-sig-copper-700">
             {product.title}
           </Link>
         </h3>
@@ -510,8 +505,8 @@ export default function ProductCard({
             `group-hover`, so the row never reflows and hovering costs no
             re-render — the card is rendered up to 120× in a grid. */}
         {colorOptions.length > 1 ? (
-          <div className="relative h-5 mb-1.5">
-            <span className="absolute inset-0 flex items-center text-xs text-zinc-400 font-medium select-none opacity-100 group-hover:opacity-0 transition-opacity duration-200">
+          <div className="relative mb-2.5 h-5">
+            <span className="absolute inset-0 flex items-center text-xs font-medium text-sig-soft select-none opacity-100 group-hover:opacity-0 transition-opacity duration-200">
               {colorLabel}
             </span>
             <div className="absolute inset-0 flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
@@ -531,7 +526,7 @@ export default function ProductCard({
                       if (i >= 0) setImageIndex(i);
                     }}
                     className={`h-5 shrink-0 rounded-full border p-[2px] transition-all duration-200 ${
-                      isActive ? "w-8 border-zinc-950" : "w-5 border-zinc-200 hover:border-zinc-400"
+                      isActive ? "w-8 border-sig-copper-600" : "w-5 border-sig-line hover:border-sig-copper-400"
                     } ${c.image ? "cursor-pointer" : "cursor-default opacity-50"}`}
                   >
                     {/* The painted chip itself. swatchStyle() handles SOLID,
@@ -548,30 +543,44 @@ export default function ProductCard({
             </div>
           </div>
         ) : (
-          <span className="text-xs text-zinc-400 font-medium mb-1.5 block select-none">
+          <span className="mb-2.5 block text-xs font-medium text-sig-soft select-none">
             {colorLabel}
           </span>
         )}
 
-        {/* Pricing */}
-        <div className="flex items-center gap-2 mb-1.5 select-none">
-          {hasDiscount ? (
-            <>
-              <span className="text-[13px] font-black text-red-600">
-                {formatPrice(discountPrice as number)}
-              </span>
-              <span className="text-[11px] text-zinc-400 line-through font-light">
-                {formatPrice(originalPrice)}
-              </span>
-            </>
-          ) : (
-            <span className="text-[13px] font-black text-zinc-900">
-              {formatPrice(originalPrice)}
+        {/* Price row. The trailing chip is the reference's "+" affordance: it
+            opens the same size/length selector the Quick Add overlay does, so
+            the card has one add path on touch, where there is no hover. */}
+        <div className="mt-auto flex items-center justify-between gap-2.5 select-none">
+          <div className="flex items-baseline">
+            <span className="text-[17px] font-extrabold text-sig-copper-700">
+              {formatPrice(activePrice)}
             </span>
+            {hasDiscount && (
+              <s className="ml-[7px] text-[13px] font-medium text-sig-copper-200">
+                {formatPrice(originalPrice)}
+              </s>
+            )}
+          </div>
+
+          {!isOutOfStock && (
+            <button
+              type="button"
+              aria-label={isGiftCard ? "Add to cart" : "Choose size and length"}
+              onClick={(e) => {
+                e.preventDefault();
+                if (isGiftCard) {
+                  handleAddToCart(uniqueSizes[0] || "", uniqueLengths[0] || "");
+                } else {
+                  setShowQuickAdd(true);
+                }
+              }}
+              className="grid h-[38px] w-[38px] shrink-0 cursor-pointer place-items-center rounded-full bg-sig-copper-50 text-[19px] font-bold leading-none text-sig-copper-700 transition-colors group-hover:bg-sig-copper-600 group-hover:text-white"
+            >
+              +
+            </button>
           )}
         </div>
-
-
       </div>
     </div>
   );

@@ -244,6 +244,13 @@ export default function HeaderClient({ menus, transparent = false }: { menus?: a
 
   const logoSrc = settings["brand_logo_url"] || "/logo.svg";
   const logoIsSvg = /\.svg(\?|$)/i.test(logoSrc);
+
+  // One round action chip. `grid` rather than `flex` so the callers that need
+  // to hide one on small screens can swap in `hidden sm:grid` without the
+  // display mode fighting the centring.
+  const sigIcon =
+    "grid h-10 w-10 shrink-0 place-items-center rounded-full border border-sig-line bg-sig-card text-sig-ink transition-colors hover:border-sig-copper-400 cursor-pointer lg:h-[42px] lg:w-[42px]";
+
   const [categories, setCategories] = useState<any[]>(menus || []);
   const [cartItemsCount, setCartItemsCount] = useState(0);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -445,7 +452,7 @@ export default function HeaderClient({ menus, transparent = false }: { menus?: a
   return (
     <>
       {/* 1. TOP UTILITY BAR */}
-      <div className="w-full bg-zinc-50 text-zinc-800 py-2 px-4 text-[10px] sm:text-[11px] font-medium tracking-wide border-b border-zinc-200 z-60 relative flex justify-between items-center">
+      <div className="w-full bg-sig-copper-50 text-sig-ink py-2 px-4 text-[10px] sm:text-[11px] font-medium tracking-wide border-b border-sig-line z-60 relative flex justify-between items-center">
         <div className="hidden md:flex flex-1"></div>
         <div className="flex-1 text-center whitespace-nowrap font-semibold text-[12px]">
           {brandSlogan}
@@ -504,39 +511,21 @@ export default function HeaderClient({ menus, transparent = false }: { menus?: a
         className={`sticky top-0 z-50 w-full transition-all duration-300 ${
           isOverlay
             ? "at-header-overlay bg-transparent"
-            : "bg-white border-b border-zinc-100"
+            : "bg-sig-cream/90 backdrop-blur-[14px] border-b border-sig-line"
         }`}
       >
-        {/* Slim constant-height bar (~56px), matching the reference's 50px header */}
-        <div className="max-w-[1600px] mx-auto px-6 lg:px-8 flex items-center justify-between min-h-14">
-          
+        {/* Signature bar: mark on the left, the nav as a floating pill centred
+            between them, and the actions as round chips on the right. */}
+        <div className="sig-wrap flex items-center gap-3 py-3 lg:gap-6">
+
           {/* Menu Icon (Mobile) */}
-          <button 
+          <button
             onClick={() => setIsMenuOpen(true)}
-            className="lg:hidden p-2 text-zinc-700 hover:text-black transition-colors cursor-pointer"
+            className="grid h-10 w-10 shrink-0 place-items-center rounded-full border border-sig-line bg-sig-card text-sig-ink transition-colors hover:border-sig-copper-400 cursor-pointer lg:hidden"
             aria-label="Open Menu"
           >
-            <Menu className="w-6 h-6" />
+            <Menu className="w-5 h-5" />
           </button>
-
-          {/* Navigation Links (Left side - to balance the layout like screenshot) */}
-          <nav className="hidden lg:flex items-center h-full space-x-4 xl:space-x-8 flex-1">
-            {categories.map((cat) => (
-              <div key={cat.id} className="group/cat h-full flex items-center">
-                <Link href={cat.url || `/category/${cat.slug}`} className="relative text-sm xl:text-base font-semibold text-zinc-500 hover:text-zinc-950 h-full flex items-center tracking-wide transition-colors whitespace-nowrap after:absolute after:bottom-0 after:left-0 after:h-px after:w-0 after:bg-zinc-950 after:transition-[width] after:duration-300 after:ease-out group-hover/cat:after:w-full">
-                  {cat.title || cat.name}
-                </Link>
-
-                {/* Dropdown Container */}
-                {cat.children && cat.children.length > 0 && (
-                  <div className="absolute left-0 top-full w-full bg-white shadow-xl opacity-0 invisible group-hover/cat:opacity-100 group-hover/cat:visible transition-all duration-200 z-[100] border-t border-zinc-100 pb-12 cursor-default max-h-[calc(100vh-110px)] overflow-y-auto scrollbar-thin">
-                    <MegaMenuContent category={cat} />
-                  </div>
-                )}
-              </div>
-            ))}
-
-          </nav>
 
           {/* Logo */}
           {/* `unoptimized` for SVG sources: next/image refuses to run SVG
@@ -551,38 +540,59 @@ export default function HeaderClient({ menus, transparent = false }: { menus?: a
               painted mid-page as you scroll — which is why the mark was showing
               up floating in the middle of pages on mobile. An in-flow image
               inside the sticky header does not hit that bug. */}
-          <div className="flex-1 flex justify-center">
-            <Link
-              href="/"
-              onClick={handleHomeClick}
-              className="hover:opacity-90 transition-opacity flex-shrink-0"
-            >
-              <Image
-                src={logoSrc}
-                alt={storeName}
-                width={144}
-                height={48}
-                className="h-12 w-auto max-w-[9rem] object-contain"
-                unoptimized={logoIsSvg}
-                priority
-              />
-            </Link>
-          </div>
+          <Link
+            href="/"
+            onClick={handleHomeClick}
+            className="hover:opacity-90 transition-opacity flex-shrink-0"
+          >
+            <Image
+              src={logoSrc}
+              alt={storeName}
+              width={144}
+              height={48}
+              className="h-10 w-auto max-w-[8rem] object-contain lg:h-12 lg:max-w-[9rem]"
+              unoptimized={logoIsSvg}
+              priority
+            />
+          </Link>
 
-          {/* Right Header Icons — bare 20px icons in a 16px-gap row, like the reference */}
-          <div className="flex items-center justify-end gap-4 flex-1">
-            {/* Reference pill: 40x150px, 2px radius, translucent over hero (see .at-search-pill) */}
+          {/* Nav pill. `mx-auto` on the middle flex child is what centres it
+              between the mark and the actions — the same trick the reference
+              uses — so it stays centred regardless of how wide the logo is.
+              The mega menu is still positioned against <header> (sticky counts
+              as positioned), so it spans the full width, not the pill. */}
+          <nav className="mx-auto hidden items-center gap-1 rounded-full border border-sig-line bg-sig-card p-1.5 lg:flex">
+            {categories.map((cat) => (
+              <div key={cat.id} className="group/cat flex items-center">
+                <Link
+                  href={cat.url || `/category/${cat.slug}`}
+                  className="whitespace-nowrap rounded-full px-4 py-2.5 text-sm font-semibold text-sig-soft transition-colors hover:bg-sig-copper-50 hover:text-sig-ink xl:px-[18px]"
+                >
+                  {cat.title || cat.name}
+                </Link>
+
+                {/* Dropdown Container */}
+                {cat.children && cat.children.length > 0 && (
+                  <div className="absolute left-0 top-full w-full bg-white shadow-xl opacity-0 invisible group-hover/cat:opacity-100 group-hover/cat:visible transition-all duration-200 z-[100] border-t border-sig-line pb-12 cursor-default max-h-[calc(100vh-110px)] overflow-y-auto scrollbar-thin">
+                    <MegaMenuContent category={cat} />
+                  </div>
+                )}
+              </div>
+            ))}
+          </nav>
+
+          {/* Right header actions — round chips, per the reference's 42px icons */}
+          <div className="ml-auto flex items-center justify-end gap-2 lg:ml-0">
             <button
               onClick={() => setIsSearchOpen(!isSearchOpen)}
-              className="at-search-pill flex items-center gap-[5px] text-zinc-600 hover:text-zinc-950 transition-colors cursor-pointer lg:h-10 lg:w-[150px] lg:justify-start lg:rounded-at-btn lg:bg-zinc-100 lg:p-2.5"
+              className={sigIcon}
               aria-label="Search"
             >
-              <Search className="w-5 h-5" />
-              <span className="hidden lg:inline text-[13px] font-semibold">Search</span>
+              <Search className="w-[19px] h-[19px]" />
             </button>
             <button
               onClick={() => router.push("/wishlist")}
-              className="hidden sm:flex items-center justify-center text-zinc-700 hover:text-zinc-950 transition-all cursor-pointer"
+              className={`${sigIcon} hidden sm:grid`}
               aria-label="Wishlist"
             >
               <svg
@@ -597,7 +607,7 @@ export default function HeaderClient({ menus, transparent = false }: { menus?: a
             </button>
             <button
               onClick={() => router.push("/account")}
-              className="flex items-center justify-center text-zinc-700 hover:text-zinc-950 transition-all cursor-pointer"
+              className={sigIcon}
               aria-label="Account"
             >
               <svg
@@ -616,7 +626,7 @@ export default function HeaderClient({ menus, transparent = false }: { menus?: a
             </button>
             <Link
               href="/cart"
-              className="flex items-center justify-center text-zinc-700 hover:text-zinc-950 transition-all relative"
+              className={`${sigIcon} relative`}
               aria-label="Cart"
             >
               <svg
@@ -632,7 +642,7 @@ export default function HeaderClient({ menus, transparent = false }: { menus?: a
                 />
               </svg>
               {cartItemsCount > 0 && (
-                <span className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-zinc-950 text-white text-[8px] font-black rounded-full flex items-center justify-center border border-white">
+                <span className="absolute -top-1 -right-1 grid h-[19px] min-w-[19px] place-items-center rounded-full border-2 border-sig-cream bg-sig-copper-600 px-1 text-[10px] font-extrabold text-white">
                   {cartItemsCount}
                 </span>
               )}

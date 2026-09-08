@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import FooterClassic from "./FooterClassic";
 import FooterOpenGrid from "./FooterOpenGrid";
+import FooterSignature from "./FooterSignature";
 import FooterSupportBubble from "./FooterSupportBubble";
 
 interface Category {
@@ -18,13 +19,14 @@ interface FooterProps {
 /**
  * ►► SWITCH THE STOREFRONT FOOTER HERE ◄◄
  *
- *   "open"    → FooterOpenGrid — current design, no rules anywhere
- *   "classic" → FooterClassic  — the original white footer
+ *   "signature" → FooterSignature — current design, copper/aqua on cream
+ *   "open"      → FooterOpenGrid  — the ruled-grid footer it replaced
+ *   "classic"   → FooterClassic   — the original white footer
  *
- * Both designs read the same props, so flipping this one value is the whole
- * change; no page that renders <Footer> needs touching.
+ * All three designs read the same props, so flipping this one value is the
+ * whole change; no page that renders <Footer> needs touching.
  */
-const FOOTER_DESIGN: "open" | "classic" = "open";
+const FOOTER_DESIGN: "signature" | "open" | "classic" = "signature";
 
 export default function Footer({ categories: initialCategories }: FooterProps) {
   const [fetched, setFetched] = useState<Category[]>([]);
@@ -62,7 +64,9 @@ export default function Footer({ categories: initialCategories }: FooterProps) {
 
   return (
     <>
-      {FOOTER_DESIGN === "open" ? (
+      {FOOTER_DESIGN === "signature" ? (
+        <FooterSignature categories={categories} />
+      ) : FOOTER_DESIGN === "open" ? (
         <FooterOpenGrid categories={categories} />
       ) : (
         <FooterClassic categories={categories} />

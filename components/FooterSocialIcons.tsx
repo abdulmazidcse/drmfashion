@@ -44,12 +44,19 @@ const VARIANT_STYLES = {
     link: "w-12 h-12 rounded-full border border-zinc-200 text-zinc-500 flex items-center justify-center hover:bg-zinc-950 hover:border-zinc-950 hover:text-white transition-colors",
     icon: "w-7 h-7",
   },
+  // Signature: the same outlined circle, sized down to the reference's 38px
+  // chip and filling copper rather than black on hover.
+  signature: {
+    wrap: "gap-2.5",
+    link: "w-[38px] h-[38px] rounded-full border border-sig-line text-sig-soft flex items-center justify-center hover:bg-sig-copper-600 hover:border-sig-copper-600 hover:text-white transition-colors",
+    icon: "w-[18px] h-[18px]",
+  },
 } as const;
 
 export default function FooterSocialIcons({
   variant = "open",
 }: {
-  variant?: "classic" | "open";
+  variant?: "classic" | "open" | "signature";
 }) {
   const { settings } = useSettings();
   const styles = VARIANT_STYLES[variant];

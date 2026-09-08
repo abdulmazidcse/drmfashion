@@ -13,7 +13,7 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-outfit);
+  --font-sans: var(--font-plus-jakarta-sans);
 
   /* shadcn/ui token → utility mappings (inline, so nothing is emitted to :root and
      the public site's own variables are never touched). Values live in `.admin`. */
@@ -284,7 +284,7 @@
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: var(--font-outfit), sans-serif;
+  font-family: var(--font-plus-jakarta-sans), sans-serif;
 }
 
 /* ─── CKEditor font sizes ────────────────────────────────────────────────────
@@ -526,8 +526,8 @@ body {
 .about-prose-invert b { font-weight: 700; }
 
 /* Custom Styling for React Quill Editor */
-.ql-container { min-height: 24rem; font-family: var(--font-outfit), sans-serif !important; font-size: 0.875rem !important; border-bottom-left-radius: 0.5rem; border-bottom-right-radius: 0.5rem; }
-.ql-toolbar { font-family: var(--font-outfit), sans-serif !important; border-top-left-radius: 0.5rem; border-top-right-radius: 0.5rem; background-color: #fcfcfc; }
+.ql-container { min-height: 24rem; font-family: var(--font-plus-jakarta-sans), sans-serif !important; font-size: 0.875rem !important; border-bottom-left-radius: 0.5rem; border-bottom-right-radius: 0.5rem; }
+.ql-toolbar { font-family: var(--font-plus-jakarta-sans), sans-serif !important; border-top-left-radius: 0.5rem; border-top-right-radius: 0.5rem; background-color: #fcfcfc; }
 .ql-editor { min-height: 24rem; }
 
 /* Custom Scrollbar Utilities */
@@ -676,7 +676,6 @@ body {
   --color-at-ink: #101010;
   --color-at-muted: #717171;
   --color-at-peach: #ffddbf;
-  --font-home: var(--font-roboto-flex), sans-serif;
   --text-at-subheading: 35px;
   --text-at-subheading--line-height: 1.15;
   --text-at-hero: 44px;
@@ -694,9 +693,11 @@ body {
   }
 }
 
-/* Headings use Roboto Flex width axis 105 (slightly extended) */
+/* Was Roboto Flex at width axis 105. That face is no longer loaded — the whole
+   storefront is Plus Jakarta Sans now — so the axis setting has been dropped
+   rather than left pointing at a font nothing serves. The weight is what these
+   headings actually read as. */
 .at-heading {
-  font-variation-settings: "wdth" 105;
   font-weight: 600;
 }
 
@@ -853,3 +854,72 @@ body {
    here any more — the rules that used to invert a fixed dark palette have gone.
    The panel still advertises which way it reads via data-color-panel, for
    anything that needs the hook. */
+
+/* ── "Signature" storefront design tokens (sig- namespaced) ────────────────
+   The direction the storefront is being moved to: a warm copper primary with
+   an aqua secondary on a cream ground, laid out as soft rounded cards rather
+   than the flat black-on-white rules of the older `at-` system.
+
+   Both namespaces are live on purpose. `sig-` covers the chrome (header,
+   footer, product card) and the homepage; `at-` still paints the pages that
+   have not been reworked yet, so nothing renders unstyled mid-migration.
+   ──────────────────────────────────────────────────────────────────────── */
+@theme {
+  --color-sig-copper-50: #fbf5ef;
+  --color-sig-copper-100: #f6e7d7;
+  --color-sig-copper-200: #ebcdae;
+  --color-sig-copper-300: #deaf81;
+  --color-sig-copper-400: #ce9159;
+  --color-sig-copper-500: #bc7a3f;
+  --color-sig-copper-600: #a0632f;
+  --color-sig-copper-700: #814e26;
+
+  --color-sig-aqua-50: #ecfdfd;
+  --color-sig-aqua-100: #cff7f9;
+  --color-sig-aqua-300: #63dde5;
+  --color-sig-aqua-400: #35c7d2;
+  --color-sig-aqua-500: #1ba9b6;
+  --color-sig-aqua-600: #148794;
+  --color-sig-aqua-700: #146b76;
+
+  /* Page ground vs. the cards that sit on it — the whole layout depends on
+     these two staying distinct, so never paint a card `sig-cream`. */
+  --color-sig-cream: #faf6f1;
+  --color-sig-card: #ffffff;
+  --color-sig-ink: #1c1a17;
+  --color-sig-soft: #6f6a63;
+  --color-sig-line: #eae2d8;
+
+  --radius-sig: 22px;
+  --radius-sig-lg: 34px;
+
+  /* Two shadows in one: a hairline contact shadow plus a wide, heavily
+     offset ambient one. The negative spread is what keeps it from reading as
+     a grey halo on the cream ground. */
+  --shadow-sig: 0 1px 2px rgba(28, 26, 23, 0.04), 0 18px 44px -28px rgba(28, 26, 23, 0.35);
+}
+
+/* Wordmark: copper gradient clipped to the text. Needs a real element with
+   text in it — `background-clip:text` has nothing to clip against otherwise. */
+.sig-wordmark {
+  background-image: linear-gradient(
+    100deg,
+    var(--color-sig-copper-300),
+    var(--color-sig-copper-500) 52%,
+    var(--color-sig-copper-700)
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* The page gutter every Signature section aligns to. */
+.sig-wrap {
+  width: 100%;
+  max-width: 1320px;
+  margin-inline: auto;
+  padding-inline: 20px;
+}
+@media (min-width: 640px) {
+  .sig-wrap { padding-inline: 28px; }
+}

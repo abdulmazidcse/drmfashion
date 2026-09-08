@@ -1,7 +1,6 @@
 import React from "react";
 import { prisma } from "@/lib/prisma";
 import { Metadata } from "next";
-import { Roboto_Flex } from "next/font/google";
 import { getCache, setCache } from "@/lib/redis";
 import { getSettings } from "@/lib/settings";
 import { formatImageUrl, formatProductUrls, footerCategories } from "@/lib/utils";
@@ -49,13 +48,6 @@ import {
   Truck
 } from "lucide-react";
 import ScrollReveal from "@/components/ScrollReveal";
-
-// Home-page-only typeface (site keeps Outfit); wdth axis powers .at-heading
-const robotoFlex = Roboto_Flex({
-  subsets: ["latin"],
-  variable: "--font-roboto-flex",
-  axes: ["wdth"],
-});
 
 export const revalidate = 300;
 
@@ -124,7 +116,7 @@ export default async function Home() {
     // them they touch name, slug, image, its alt text and the parent's
     // name/slug. Key bumped to v3 with imageAlt: a cache entry written before
     // it existed would tile without any alt at all.
-    fetchWithCache("home:trendingCategories:v3", async () => {
+    fetchWithCache("home:trendingCategories:v4", async () => {
       const raw = await prisma.category.findMany({
         where: { isTrending: true, deletedAt: null },
         select: {
@@ -132,7 +124,12 @@ export default async function Home() {
           slug: true,
           image: true,
           imageAlt: true,
-          parent: { select: { name: true, slug: true } }
+          parent: { select: { name: true, slug: true } },
+          // How many products the tile is offering, for its subtitle. A
+          // filtered relation count, so drafts and deleted rows are not
+          // advertised — the tile would otherwise promise more than the
+          // category page delivers.
+          _count: { select: { products: { where: { published: true, deletedAt: null } } } }
         },
         orderBy: { createdAt: "desc" },
         take: 24
@@ -542,7 +539,8 @@ export default async function Home() {
     // Resolved here rather than in the tile components: they are client
     // components, and the fallback only needs the category name they already have.
     alt: categoryImageAlt({ custom: c.imageAlt, name: c.name, kind: "tile" }),
-    href: `/category/${c.slug}`
+    href: `/category/${c.slug}`,
+    count: c._count?.products ?? 0
   });
   // Free-text block above the footer. Read through getSettings rather than a
   // cache key of its own — it is already memoised per request and the settings
@@ -565,7 +563,13 @@ export default async function Home() {
     ? await prisma.category
         .findMany({
           where: { slug: { in: FALLBACK_SLUGS }, deletedAt: null },
-          select: { slug: true, name: true, image: true, imageAlt: true },
+          select: {
+            slug: true,
+            name: true,
+            image: true,
+            imageAlt: true,
+            _count: { select: { products: { where: { published: true, deletedAt: null } } } },
+          },
         })
         .catch(() => [])
     : [];
@@ -580,6 +584,9 @@ export default async function Home() {
       image: category?.image ? formatImageUrl(category.image) : tile.image,
       alt: categoryImageAlt({ custom: category?.imageAlt, name: category?.name || tile.title, kind: "tile" }),
       href: category ? `/category/${category.slug}` : tile.search,
+      // 0 for a tile whose category this store never created — the subtitle
+      // hides itself rather than claiming "0 items".
+      count: category?._count?.products ?? 0,
     };
   };
 
@@ -611,8 +618,23 @@ export default async function Home() {
   // in `home_sections`. A block whose content is empty still belongs here — it
   // renders null, which is how "on but nothing to show" and "switched off" stay
   // two different things.
+  // The product on the hero's float card. Taken from the best-seller list the
+  // page already computed — the top seller if there is one, otherwise the newest
+  // product — so the card costs no extra query and is never empty on a store
+  // that has stock but no orders yet.
+  const heroHighlightSource = bestSellerProducts[0] ?? products[0] ?? null;
+  const heroHighlight = heroHighlightSource
+    ? {
+        title: heroHighlightSource.title,
+        slug: heroHighlightSource.slug,
+        thumbnail: heroHighlightSource.thumbnail,
+        price: heroHighlightSource.discountPrice ?? heroHighlightSource.basePrice,
+        note: bestSellerProducts.length > 0 ? "Best seller this month" : "New this week",
+      }
+    : null;
+
   const sectionNodes: Record<HomeSectionKey, React.ReactNode> = {
-    hero: <HomeHero slides={heroSlidesSetting} />,
+    hero: <HomeHero slides={heroSlidesSetting} highlight={heroHighlight} />,
 
     pillars: (
       <ScrollReveal>
@@ -770,18 +792,28 @@ export default async function Home() {
 
     "value-props": (
       <ScrollReveal>
-        <section className="w-full py-12 bg-zinc-900 text-white border-t border-zinc-800">
-          <div className="max-w-[1600px] mx-auto px-6 lg:px-8 grid grid-cols-2 md:grid-cols-4 gap-8 text-center">
+        <section className="bg-sig-cream pb-12 pt-2.5 lg:pb-[70px]">
+          <div className="sig-wrap grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {[
-              { icon: <Truck className="w-6 h-6 mx-auto mb-2 text-white" />, title: "Free Shipping", text: "On all orders over $150" },
-              { icon: <RotateCcw className="w-6 h-6 mx-auto mb-2 text-white" />, title: "30-Day Returns", text: "Hassle-free dynamic returns" },
-              { icon: <ShieldCheck className="w-6 h-6 mx-auto mb-2 text-white" />, title: "Secure Checkout", text: "100% encrypted checkout layers" },
-              { icon: <Sparkles className="w-6 h-6 mx-auto mb-2 text-white" />, title: "Elite Quality", text: "Carefully sourced dynamic luxury materials" }
+              { icon: Truck, title: "Free shipping", text: "On every order over $150, dispatched the same day." },
+              { icon: RotateCcw, title: "30-day returns", text: "Wrong fit? Send it back free, no restocking fee." },
+              { icon: ShieldCheck, title: "Secure checkout", text: "Every payment encrypted end to end." },
+              { icon: Sparkles, title: "Elite quality", text: "Carefully sourced materials, built to keep their shape." }
             ].map((item, idx) => (
-              <div key={idx} className="flex flex-col items-center">
-                {item.icon}
-                <h4 className="text-xs font-bold tracking-widest uppercase mb-1">{item.title}</h4>
-                <p className="text-[12px] text-zinc-400 font-light">{item.text}</p>
+              <div key={item.title} className="rounded-sig border border-sig-line bg-sig-card px-6 py-[26px]">
+                {/* Alternating accent, so the row reads as a set of four rather
+                    than four copies of the same card. */}
+                <div
+                  className={`mb-4 grid h-[46px] w-[46px] place-items-center rounded-[14px] ${
+                    idx % 2 === 0
+                      ? "bg-sig-copper-50 text-sig-copper-600"
+                      : "bg-sig-aqua-50 text-sig-aqua-700"
+                  }`}
+                >
+                  <item.icon className="h-5 w-5" />
+                </div>
+                <b className="mb-1.5 block text-[15px] font-extrabold text-sig-ink">{item.title}</b>
+                <p className="text-[13.5px] leading-[1.65] text-sig-soft">{item.text}</p>
               </div>
             ))}
           </div>
@@ -816,12 +848,14 @@ export default async function Home() {
   };
 
   return (
-    <div className="flex flex-col min-h-screen bg-white text-at-ink selection:bg-at-ink selection:text-white antialiased">
+    <div className="flex min-h-screen flex-col bg-sig-cream text-sig-ink antialiased selection:bg-sig-copper-600 selection:text-white">
 
-      <Header transparent />
+      {/* Solid, not `transparent`: the Signature hero is a card sitting on the
+          cream ground rather than a full-bleed image for the header to float
+          over, so an overlaid header would have nothing dark to read against. */}
+      <Header />
 
-      {/* Negative top margin = header height, so the hero sits under the transparent header */}
-      <main className={`${robotoFlex.variable} font-home w-full max-w-[2000px] mx-auto -mt-14`}>
+      <main className="w-full">
 
         {/* Order and visibility come from Settings → Homepage → Section Order.
             Video banners are emitted with the section they are anchored to, so

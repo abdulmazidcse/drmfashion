@@ -1,6 +1,6 @@
 import Link from "next/link";
 import Image from "next/image";
-import { Quote, Star } from "lucide-react";
+import { Star } from "lucide-react";
 import type { ReviewCardData } from "@/lib/reviews";
 
 // Fixed locale and UTC: this renders on the server, and letting the browser's
@@ -17,54 +17,73 @@ export function Stars({ rating, className = "" }: { rating: number; className?: 
       {[1, 2, 3, 4, 5].map((n) => (
         <Star
           key={n}
-          className={`h-3.5 w-3.5 ${n <= rating ? "fill-at-ink text-at-ink" : "text-at-ink/20"}`}
+          className={`h-3.5 w-3.5 ${
+            n <= rating
+              ? "fill-sig-copper-500 text-sig-copper-500"
+              : "text-sig-copper-200"
+          }`}
         />
       ))}
     </span>
   );
 }
 
+/** "Rafiul H." → "RH", for the avatar chip. */
+function initials(name: string) {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "?";
+  const first = parts[0][0];
+  const last = parts.length > 1 ? parts[parts.length - 1][0] : "";
+  return (first + last).toUpperCase();
+}
+
 /**
- * One review, sized by whatever lays it out — the homepage carousel gives it a
- * fixed-width snap track, the /reviews listing gives it a grid cell. Kept
- * presentational and server-safe so both can use the same markup.
+ * One review, sized by whatever lays it out — the homepage grid gives it a
+ * column, the /reviews listing gives it a grid cell. Kept presentational and
+ * server-safe so both can use the same markup.
  */
 export default function ReviewCard({
   review,
   clamp = true,
 }: {
   review: ReviewCardData;
-  /** The carousel needs every card the same height; the listing does not. */
+  /** The homepage grid needs every card the same height; the listing does not. */
   clamp?: boolean;
 }) {
   return (
-    <figure className="flex h-full flex-col justify-between border border-at-ink/10 bg-white p-6">
+    <figure className="flex h-full flex-col justify-between rounded-sig border border-sig-line bg-sig-card px-[26px] py-7">
       <div>
-        <div className="flex items-center justify-between">
-          <Stars rating={review.rating} />
-          <Quote className="h-5 w-5 text-at-peach" />
-        </div>
+        <Stars rating={review.rating} />
 
         <blockquote
-          className={`mt-4 text-[14px] leading-relaxed text-at-ink ${clamp ? "line-clamp-6" : ""}`}
+          className={`mt-4 text-[15px] leading-[1.75] text-sig-ink/90 ${clamp ? "line-clamp-6" : ""}`}
         >
           {review.comment}
         </blockquote>
       </div>
 
-      <figcaption className="mt-6">
-        <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.15em] text-at-muted">
-          <span className="text-at-ink">{review.authorName}</span>
-          <span className="h-3 w-px bg-at-ink/20" />
-          <span>{dateFmt.format(new Date(review.createdAt))}</span>
+      <figcaption className="mt-[22px] border-t border-sig-line pt-5">
+        <div className="flex items-center gap-3">
+          <span
+            aria-hidden="true"
+            className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-sig-copper-100 text-sm font-extrabold text-sig-copper-700"
+          >
+            {initials(review.authorName)}
+          </span>
+          <span className="min-w-0">
+            <b className="block text-sm font-bold text-sig-ink">{review.authorName}</b>
+            <span className="text-xs text-sig-soft">
+              Verified buyer · {dateFmt.format(new Date(review.createdAt))}
+            </span>
+          </span>
         </div>
 
         {review.product && (
           <Link
             href={`/product/${review.product.slug}`}
-            className="group mt-4 flex items-center gap-3 border-t border-at-ink/10 pt-4"
+            className="group mt-4 flex items-center gap-3 border-t border-sig-line pt-4"
           >
-            <span className="relative h-12 w-10 shrink-0 overflow-hidden bg-[#F0F0F0]">
+            <span className="relative h-12 w-10 shrink-0 overflow-hidden rounded-lg bg-sig-copper-50">
               <Image
                 src={review.product.thumbnail}
                 alt={review.product.title}
@@ -73,7 +92,7 @@ export default function ReviewCard({
                 className="object-cover"
               />
             </span>
-            <span className="at-link-underline line-clamp-2 text-[12px] uppercase leading-[15px] tracking-wider text-at-ink">
+            <span className="line-clamp-2 text-[13px] font-semibold leading-tight text-sig-soft transition-colors group-hover:text-sig-copper-700">
               {review.product.title}
             </span>
           </Link>

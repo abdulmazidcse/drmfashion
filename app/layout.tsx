@@ -1,23 +1,21 @@
 import type { Metadata } from "next";
-import { Outfit, Plus_Jakarta_Sans } from "next/font/google";
+import { Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
 import "./css/design-system.css";
 
-// No `weight` list on purpose: both are variable fonts, so omitting it makes
+// No `weight` list on purpose: it is a variable font, so omitting it makes
 // next/font fetch one variable woff2 covering the whole 100–900 range instead of
 // a separate static file per weight. Every `font-light`…`font-black` utility
 // still resolves — it just stops costing an extra render-blocking request each.
-const outfit = Outfit({
-  subsets: ["latin"],
-  variable: "--font-outfit",
-});
-
-// Admin dashboard only (see --font-admin in app/globals.css) — preload disabled
-// so storefront pages, which never apply this font, don't fetch it.
+//
+// One family for the whole app now. It was already the admin typeface
+// (--font-admin) and is the face the Signature storefront design is drawn in,
+// so the storefront's separate Outfit download bought nothing but a second
+// render-blocking request. `preload` is back on for the same reason: it is on
+// the critical path of every page rather than the dashboard's alone.
 const plusJakartaSans = Plus_Jakarta_Sans({
   subsets: ["latin"],
   variable: "--font-plus-jakarta-sans",
-  preload: false,
 });
 import { getStoreName, getSettings, getPublicSettings, baseCurrencyCode } from "@/lib/settings";
 import { siteUrl } from "@/lib/siteUrl";
@@ -107,7 +105,7 @@ export default async function RootLayout({
   const announcementBar = parseAnnouncementBar(settings[ANNOUNCEMENT_BAR_SETTING_KEY]);
 
   return (
-    <html lang="en" className={`${outfit.variable} ${plusJakartaSans.variable} h-full antialiased`}>
+    <html lang="en" className={`${plusJakartaSans.variable} h-full antialiased`}>
       <body className={`min-h-full flex flex-col font-sans`}>
         {gtmId && (
           <>

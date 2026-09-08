@@ -19,22 +19,27 @@
 
 export const HOME_SECTIONS_SETTING_KEY = "home_sections"
 
+// Order matters: this array *is* the default page order, and a section the
+// stored order has never seen is slotted back in at its position here. The
+// leading six are the Signature layout — hero, categories, best sellers, the
+// deal band, the promises, then the proof — and everything after them is the
+// material that layout has no slot of its own for.
 export const HOME_SECTIONS = [
-  { key: "hero", label: "Hero slider", hint: "The banner at the top of the page." },
+  { key: "hero", label: "Hero card", hint: "The split card at the top of the page." },
+  { key: "trending", label: "Shop by category", hint: "Men/Women category tiles." },
+  { key: "bestsellers", label: "This month's best sellers", hint: "Computed from orders this month." },
+  { key: "flash-sale", label: "Flash deal band", hint: "Countdown band. Has its own on/off in the Flash Sale tab." },
+  { key: "value-props", label: "Value proposition cards", hint: "Shipping / returns / secure checkout." },
+  { key: "reviews", label: "Customer reviews", hint: "Three review cards. Hidden until there is a review." },
   { key: "pillars", label: "Pillars carousel", hint: "Our Heights / Fit / Purpose / Product." },
-  { key: "flash-sale", label: "Flash sale", hint: "Countdown strip. Has its own on/off in the Flash Sale tab." },
   { key: "style", label: "Seasonal styles", hint: "Summer category tiles." },
   { key: "showcase", label: "Product showcase rows", hint: "The editorial strips you set up below." },
-  { key: "bestsellers", label: "This month's best sellers", hint: "Computed from orders this month." },
-  { key: "trending", label: "Trending tall categories", hint: "Men/Women category tiles." },
   { key: "reels", label: "Reels strip", hint: "Vertical clips." },
   { key: "icons", label: "Featured icons grid", hint: "Curated wall of product photography, Men/Women tabs." },
   { key: "brands", label: "Brand showcase", hint: "The dark panel listing brand logos." },
   { key: "new-arrivals", label: "New arrivals", hint: "Newest published products." },
   { key: "social-proof", label: "Social proof stats", hint: "Rating, reviews and customer counts. Hidden until there is a review." },
-  { key: "reviews", label: "Customer reviews", hint: "Quote carousel. Hidden until there is a review." },
   { key: "recently-viewed", label: "Recently viewed", hint: "Per-visitor, from their browser." },
-  { key: "value-props", label: "Value proposition banner", hint: "Shipping / returns / secure checkout icons." },
   { key: "journal", label: "From the journal", hint: "Three most recent posts." },
   { key: "description", label: "Store description", hint: "The rich text block above the footer." },
 ] as const
