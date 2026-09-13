@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import CollapsibleCard from "./CollapsibleCard"
+import MediaField from "./MediaField"
 import { useSettingsForm } from "./SettingsFormContext"
 
 export default function SeoTab() {
@@ -13,6 +14,8 @@ export default function SeoTab() {
     setSeoMetaTitle,
     seoMetaDescription,
     setSeoMetaDescription,
+    seoShareImage,
+    setSeoShareImage,
     googleSiteVerification,
     setGoogleSiteVerification,
     facebookDomainVerification,
@@ -72,6 +75,15 @@ export default function SeoTab() {
               <p className={helpText}>
                 * Aim for 120–160 characters.
               </p>
+            </div>
+
+            <div className="md:max-w-md">
+              <MediaField
+                label="Share Image"
+                hint="Shown when a link is shared on Facebook, Instagram, WhatsApp or X. 1200×630 (1.91:1), under 1 MB, with the important part in the centre — the edges get cropped. Empty falls back to the logo, which is not the right shape for this."
+                value={seoShareImage}
+                onChange={setSeoShareImage}
+              />
             </div>
           </div>
         </CollapsibleCard>

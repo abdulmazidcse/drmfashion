@@ -18,6 +18,7 @@ import { resolveTax, taxLineLabel, type TaxSettings } from "@/lib/tax";
 import Swal from "@/lib/swal";
 import {
   activeShippingMethods,
+  applyFreeShippingThreshold,
   defaultShippingMethod,
   type ShippingMethod,
 } from "@/lib/shipping";
@@ -58,14 +59,18 @@ interface QuickBuyProps {
   shipping: {
     enabled: boolean;
     methods: ShippingMethod[];
+    /** Base-currency subtotal above which shipping is free, or null. */
+    freeThreshold: number | null;
   };
   tax: TaxSettings;
+  /** Admin → Settings → Branding → Product Page. */
+  showLowStockNotice: boolean;
 }
 
 const uniq = (values: (string | null)[]) =>
   Array.from(new Set(values.filter((v): v is string => Boolean(v))));
 
-export default function QuickBuy({ product, payments, shipping, tax: taxSettings }: QuickBuyProps) {
+export default function QuickBuy({ product, payments, shipping, tax: taxSettings, showLowStockNotice }: QuickBuyProps) {
   const { formatPrice, selectedCurrency } = useCurrency();
 
   const colors = useMemo(() => uniq(product.variants.map((v) => v.color)), [product.variants]);
@@ -135,7 +140,11 @@ export default function QuickBuy({ product, payments, shipping, tax: taxSettings
   const shippingOptions = activeShippingMethods(shipping.methods);
   const selectedMethod =
     shippingOptions.find((m) => m.id === selectedMethodId) ?? defaultShippingMethod(shipping.methods);
-  const shippingFee = shipping.enabled ? selectedMethod?.price ?? 0 : 0;
+  const shippingFee = applyFreeShippingThreshold(
+    shipping.enabled ? selectedMethod?.price ?? 0 : 0,
+    subtotal,
+    shipping.freeThreshold
+  );
 
   // Destination-based, and after shipping because the fee may itself be taxed.
   const resolvedTax = resolveTax(taxSettings, {
@@ -412,7 +421,7 @@ export default function QuickBuy({ product, payments, shipping, tax: taxSettings
                 </button>
               </div>
               {errors.variant && <p className="mt-2 text-xs text-red-600">{errors.variant}</p>}
-              {variant && variant.stock > 0 && variant.stock <= 5 && (
+              {showLowStockNotice && variant && variant.stock > 0 && variant.stock <= 5 && (
                 <p className="mt-2 text-xs text-amber-600">Only {variant.stock} left in stock</p>
               )}
             </section>

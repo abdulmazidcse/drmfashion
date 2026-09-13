@@ -16,6 +16,7 @@ import {
 import { getCart } from "@/lib/cart";
 import { useCurrency, CONTINENTS } from "@/providers/CurrencyProvider";
 import { useSettings } from "@/providers/SettingsProvider";
+import SearchOverlay from "@/components/SearchOverlay";
 import { HELP_LINKS } from "@/lib/helpLinks";
 
 interface Category {
@@ -237,7 +238,16 @@ function MegaMenuContent({ category }: { category: any }) {
   );
 }
 
-export default function HeaderClient({ menus, transparent = false }: { menus?: any[]; transparent?: boolean }) {
+export default function HeaderClient({
+  menus,
+  transparent = false,
+  popularSearches: popularSearchesFromServer = [],
+}: {
+  menus?: any[];
+  transparent?: boolean;
+  /** Suggestions for the search panel, resolved server-side by `Header`. */
+  popularSearches?: string[];
+}) {
   const router = useRouter();
   const pathname = usePathname();
   const { storeName, settings } = useSettings();
@@ -255,7 +265,6 @@ export default function HeaderClient({ menus, transparent = false }: { menus?: a
   const [cartItemsCount, setCartItemsCount] = useState(0);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
   
   // Brand Settings. Read straight off the settings context — the root layout
   // already loaded these on the server. This used to be state filled by a
@@ -426,28 +435,21 @@ export default function HeaderClient({ menus, transparent = false }: { menus?: a
     setIsSearchOpen(false);
   }, [pathname]);
 
-  // Full-screen search overlay: Escape to close, lock body scroll while open
-  useEffect(() => {
-    if (!isSearchOpen) return;
-    const handleKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setIsSearchOpen(false);
-    };
-    window.addEventListener("keydown", handleKey);
-    document.body.style.overflow = "hidden";
-    return () => {
-      window.removeEventListener("keydown", handleKey);
-      document.body.style.overflow = "";
-    };
-  }, [isSearchOpen]);
-
-  const handleSearchSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (searchQuery.trim()) {
-      router.push(`/shop?query=${encodeURIComponent(searchQuery.trim())}`);
-      setIsSearchOpen(false);
-      setSearchQuery("");
-    }
-  };
+  /**
+   * Suggestions for the empty search panel.
+   *
+   * `search_popular_queries` (comma-separated) wins when an admin has set one;
+   * otherwise the curated terms `Header` passes down, already filtered to the
+   * ones the catalogue can answer. Either way these are phrases a shopper would
+   * type, not the category labels the panel used to offer.
+   */
+  const popularSearches = React.useMemo(() => {
+    const configured = (settings["search_popular_queries"] || "")
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+    return (configured.length > 0 ? configured : popularSearchesFromServer).slice(0, 6);
+  }, [settings, popularSearchesFromServer]);
 
   return (
     <>
@@ -653,34 +655,11 @@ export default function HeaderClient({ menus, transparent = false }: { menus?: a
 
       </header>
 
-      {/* Full-screen Search Overlay (reference: SearchDrawer — dark blurred backdrop, underline input) */}
+      {/* Full-screen search: live product previews beside the popular searches.
+          Its own component — the panel owns a debounce, a request-ordering
+          guard and four pieces of state that have nothing to do with the nav. */}
       {isSearchOpen && (
-        <div
-          className="fixed inset-0 z-100 flex items-start justify-center bg-at-ink/50 backdrop-blur-md pt-24 sm:pt-32 px-6 animate-in fade-in duration-200"
-          onClick={() => setIsSearchOpen(false)}
-        >
-          <button
-            onClick={() => setIsSearchOpen(false)}
-            className="fixed top-5 right-5 sm:top-6 sm:right-6 z-110 flex items-center justify-center w-10 h-10 bg-white text-zinc-950 hover:bg-zinc-100 transition-colors cursor-pointer"
-            aria-label="Close search"
-          >
-            <X className="w-5 h-5" />
-          </button>
-          <form
-            onSubmit={handleSearchSubmit}
-            onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-3xl"
-          >
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search for ..."
-              className="w-full bg-white/15 backdrop-blur-sm border-b border-white/60 focus:border-white text-white placeholder-white/70 text-xl sm:text-2xl font-light px-5 py-4 outline-none transition-colors"
-              autoFocus
-            />
-          </form>
-        </div>
+        <SearchOverlay onClose={() => setIsSearchOpen(false)} popular={popularSearches} />
       )}
 
       {/* Slide-out Mobile Navigation Drawer */}

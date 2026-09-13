@@ -6,6 +6,7 @@ import crypto from "crypto"
 import { sendOrderConfirmationEmail, sendAccountCreatedEmail } from "@/lib/email"
 import { baseCurrencyCode } from "@/lib/settings"
 import { resolveOrderShipping } from "@/lib/shippingServer"
+import { applyFreeShippingThreshold, freeShippingThresholdFromSettings } from "@/lib/shipping"
 import { resolveTax, taxSettingsFromSettings } from "@/lib/tax"
 import { postOrderEntry } from "@/lib/accounting"
 import {
@@ -341,7 +342,14 @@ export async function POST(req: NextRequest) {
         });
       }
       
-      const finalShippingFee = resolvedShipping.fee;
+      // Applied here rather than in resolveOrderShipping because it needs the
+      // subtotal the server recomputed from live prices — the browser's figure
+      // is never trusted to decide whether an order ships free.
+      const finalShippingFee = applyFreeShippingThreshold(
+        resolvedShipping.fee,
+        calculatedTotal,
+        freeShippingThresholdFromSettings(settingsObj)
+      );
 
       // Tax is by destination and comes from the same settings the storefront
       // displayed. It is worked out after shipping because the merchant can

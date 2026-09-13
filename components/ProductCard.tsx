@@ -62,6 +62,12 @@ interface ProductCardProps {
    * several times larger than the slot it lands in.
    */
   sizes?: string;
+  /**
+   * The colourway the shopper's search named, appended to the title as
+   * "… in Navy Blue". Only the search listing passes it — a card reached by
+   * browsing has no query behind it to answer.
+   */
+  matchedColor?: string | null;
 }
 
 export default function ProductCard({
@@ -72,6 +78,7 @@ export default function ProductCard({
   listId,
   listName,
   sizes = "(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw",
+  matchedColor = null,
 }: ProductCardProps) {
   const { formatPrice } = useCurrency();
   const { storeName } = useSettings();
@@ -493,10 +500,17 @@ export default function ProductCard({
           );
         })()}
 
-        {/* Title */}
-        <h3 className="mb-2 mt-[7px] text-[15px] font-bold leading-snug tracking-[-0.01em] text-sig-ink line-clamp-1">
+        {/* Title. With a colourway appended the name needs a second line —
+            clamped to one, "in Navy Blue" is exactly the part that falls off
+            the end of the titles long enough to need it. */}
+        <h3
+          className={`mb-2 mt-[7px] text-[15px] font-bold leading-snug tracking-[-0.01em] text-sig-ink ${
+            matchedColor ? "line-clamp-2" : "line-clamp-1"
+          }`}
+        >
           <Link href={`/product/${product.slug}`} onClick={reportSelect} className="transition-colors hover:text-sig-copper-700">
             {product.title}
+            {matchedColor ? ` in ${matchedColor}` : ""}
           </Link>
         </h3>
 

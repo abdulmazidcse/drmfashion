@@ -3,14 +3,21 @@
 import { useState, useEffect, useRef } from "react"
 import ProductCard from "@/components/ProductCard"
 import { trackViewItemList, type AnalyticsItem } from "@/lib/analytics"
+import { searchResultColor } from "@/lib/search"
 
 interface ShopProductListProps {
   initialProducts: any[]
+  /**
+   * What was searched for, when the listing is a search result. Cards then
+   * name the colourway the query asked for, the way the header's suggestion
+   * panel does. Empty while browsing a category, which leaves titles alone.
+   */
+  query?: string
 }
 
 const BATCH_SIZE = 8
 
-export default function ShopProductList({ initialProducts }: ShopProductListProps) {
+export default function ShopProductList({ initialProducts, query = "" }: ShopProductListProps) {
   const [visibleCount, setVisibleCount] = useState(BATCH_SIZE)
   const observerRef = useRef<HTMLDivElement | null>(null)
 
@@ -94,7 +101,14 @@ export default function ShopProductList({ initialProducts }: ShopProductListProp
               }
             >
               {/* First row only — opts these out of `loading="lazy"`. */}
-              <ProductCard product={product} idPrefix="shop" listId="shop" listName="Shop" priority={idx < 4} />
+              <ProductCard
+                product={product}
+                idPrefix="shop"
+                listId="shop"
+                listName="Shop"
+                priority={idx < 4}
+                matchedColor={query ? searchResultColor(query, product.variants ?? []) : null}
+              />
             </div>
           )
         })}

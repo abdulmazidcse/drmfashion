@@ -15,6 +15,7 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import PromoBanners from "@/components/PromoBanners";
 import ShopProductList from "@/components/ShopProductList";
+import { productSearchFilter } from "@/lib/search";
 import { getStoreName } from "@/lib/settings";
 import { swatchStyle } from "@/lib/colorStyle";
 import { fetchWithCache } from "@/lib/redis";
@@ -194,14 +195,9 @@ export default async function ShopPage({ searchParams }: ShopPageProps) {
       published: true,
       deletedAt: null,
       ...(categoryIds ? { categoryId: { in: categoryIds } } : {}),
-      ...(query
-        ? {
-            OR: [
-              { title: { contains: query } },
-              { description: { contains: query } },
-            ],
-          }
-        : {}),
+      // Shares its matcher with the header's suggestion panel, so "View All
+      // Results" lands on the same set the panel was previewing.
+      ...(productSearchFilter(query) ?? {}),
       ...(size || color
         ? {
             variants: {
@@ -631,7 +627,7 @@ export default async function ShopPage({ searchParams }: ShopPageProps) {
                 </Link>
               </div>
             ) : (
-              <ShopProductList initialProducts={products} />
+              <ShopProductList initialProducts={products} query={query} />
             )}
           </div>
         </div>

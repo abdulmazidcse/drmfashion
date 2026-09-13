@@ -1,7 +1,7 @@
 "use client"
 
 import { Fragment } from "react"
-import { Globe, Image as ImageIcon, MessageCircle, Plus, Ruler, Trash2 } from "lucide-react"
+import { Globe, Image as ImageIcon, MessageCircle, Package, Plus, Ruler, Trash2 } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import CollapsibleCard from "./CollapsibleCard"
@@ -40,6 +40,8 @@ export default function BrandTab() {
     setSocialTiktok,
     socialPinterest,
     setSocialPinterest,
+    lowStockNoticeEnabled,
+    setLowStockNoticeEnabled,
     heightsGuide,
     updateHeightsGuide,
     updateHeightsCell,
@@ -54,6 +56,8 @@ export default function BrandTab() {
     fieldLabel,
     helpText,
   } = useSettingsForm()
+
+  const lowStockNoticeOn = lowStockNoticeEnabled !== "false"
 
   return (
     <div className="space-y-6 animate-in fade-in-50 duration-200">
@@ -181,6 +185,32 @@ export default function BrandTab() {
                 * Usually the literal word &quot;default&quot; unless you created extra widgets.
               </p>
             </div>
+          </div>
+        </CollapsibleCard>
+
+        {/* PRODUCT PAGE */}
+        <CollapsibleCard
+          title="Product Page"
+          description="What shoppers are shown alongside the size and colour choices."
+          icon={Package}
+        >
+          <div className="flex items-start justify-between gap-6">
+            <div className="space-y-1">
+              <Label className={fieldLabel}>Low stock warning</Label>
+              <p className={helpText}>
+                * Shows &quot;Only N left — order soon&quot; in red once the chosen size has 5 or
+                fewer units. Turning this off hides the warning everywhere; &quot;Out of Stock&quot;
+                and the Notify Me form are unaffected.
+              </p>
+            </div>
+            <button
+              type="button"
+              aria-pressed={lowStockNoticeOn}
+              className={`relative mt-1 inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${lowStockNoticeOn ? "bg-primary" : "bg-muted-foreground/30"}`}
+              onClick={() => setLowStockNoticeEnabled(lowStockNoticeOn ? "false" : "true")}
+            >
+              <span className={`inline-block h-4 w-4 transform rounded-full bg-background transition-transform ${lowStockNoticeOn ? "translate-x-6" : "translate-x-1"}`} />
+            </button>
           </div>
         </CollapsibleCard>
 

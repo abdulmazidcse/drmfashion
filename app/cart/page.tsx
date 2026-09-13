@@ -17,8 +17,10 @@ import Header from "@/components/HeaderClient";
 import Footer from "@/components/Footer";
 import { useCurrency } from "@/providers/CurrencyProvider";
 import {
+  applyFreeShippingThreshold,
   DEFAULT_SHIPPING_METHODS,
   defaultShippingMethod,
+  freeShippingThresholdFromSettings,
   parseShippingMethods,
   type ShippingMethod,
 } from "@/lib/shipping";
@@ -42,6 +44,7 @@ export default function CartPage() {
   // The cart only previews a figure — the shopper picks the actual tier at
   // checkout, so this shows the cheapest one on offer.
   const [shippingMethods, setShippingMethods] = useState<ShippingMethod[]>(DEFAULT_SHIPPING_METHODS);
+  const [freeShippingThreshold, setFreeShippingThreshold] = useState<number | null>(null);
 
   // Hydrate from localStorage on mount
   useEffect(() => {
@@ -65,6 +68,7 @@ export default function CartPage() {
         if (data) {
           setShippingEnabled(data.shipping_enabled !== "false");
           setShippingMethods(parseShippingMethods(data.shipping_methods));
+          setFreeShippingThreshold(freeShippingThresholdFromSettings(data));
         }
       })
       .catch((err) => console.error("Failed to load settings", err));
@@ -200,7 +204,11 @@ export default function CartPage() {
   const subtotal = cartTotal(items);
   const discount = promoApplied ? Math.round(subtotal * (discountPercentage / 100)) : 0;
   const cheapestMethod = defaultShippingMethod(shippingMethods);
-  const shipping = shippingEnabled ? cheapestMethod?.price ?? 0 : 0;
+  const shipping = applyFreeShippingThreshold(
+    shippingEnabled ? cheapestMethod?.price ?? 0 : 0,
+    subtotal,
+    freeShippingThreshold
+  );
   const total = subtotal - discount + shipping;
   const count = cartCount(items);
 

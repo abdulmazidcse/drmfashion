@@ -26,7 +26,9 @@ import {
 import {
   DEFAULT_SHIPPING_METHODS,
   activeShippingMethods,
+  applyFreeShippingThreshold,
   defaultShippingMethod,
+  freeShippingThresholdFromSettings,
   parseShippingMethods,
   upsMethodId,
   type ShippingMethod,
@@ -44,6 +46,29 @@ const COUNTRY_METADATA = COUNTRIES.reduce((acc, c) => {
   acc[c.code] = c;
   return acc;
 }, {} as Record<string, typeof COUNTRIES[0]>);
+
+// US and Canada share +1, so the dial code alone can never tell them apart —
+// only the 3-digit area code can. These are the codes assigned to Canada; every
+// other NANP area code is treated as US.
+const CANADA_AREA_CODES = new Set([
+  "204", "226", "236", "249", "250", "263", "289", "306", "343", "354", "365",
+  "367", "368", "382", "387", "403", "416", "418", "428", "431", "437", "438",
+  "450", "468", "474", "506", "514", "519", "548", "579", "581", "584", "587",
+  "600", "604", "613", "639", "647", "672", "683", "705", "709", "742", "753",
+  "778", "780", "782", "807", "819", "825", "867", "873", "879", "902", "905"
+]);
+
+/** Given a NANP subscriber number (area code first), pick US or CA. */
+const nanpCountry = (nationalNumber: string) =>
+  CANADA_AREA_CODES.has(nationalNumber.replace(/\D/g, "").slice(0, 3)) ? "CA" : "US";
+
+// A real NANP number is NXX-NXX-XXXX: the area code and the exchange after it
+// both start 2-9. Numbers that fail this are never US/CA, whatever their length.
+const NANP_PATTERN = /^[2-9]\d{2}[2-9]\d{6}$/;
+
+/** Digits in a country's sample number, i.e. how long a local number looks there. */
+const localNumberLength = (countryCode: string) =>
+  COUNTRY_METADATA[countryCode]?.phonePlaceholder.replace(/\D/g, "").length ?? 0;
 
 const STEPS = ["Shipping", "Payment", "Confirm"];
 
@@ -86,6 +111,7 @@ export default function CheckoutPage() {
   const [shippingMethods, setShippingMethods] = useState<ShippingMethod[]>(DEFAULT_SHIPPING_METHODS);
   const [selectedMethodId, setSelectedMethodId] = useState("");
   const [shippingEnabled, setShippingEnabled] = useState(true);
+  const [freeShippingThreshold, setFreeShippingThreshold] = useState<number | null>(null);
   const [upsRates, setUpsRates] = useState<UpsRate[]>([]);
   const [upsRatesAreMock, setUpsRatesAreMock] = useState(false);
   const [fetchingRates, setFetchingRates] = useState(false);
@@ -257,23 +283,53 @@ export default function CheckoutPage() {
       for (const c of sortedCountries) {
         if (cleaned.startsWith(c.dialCode)) {
           const remainingPhone = cleaned.slice(c.dialCode.length).trim();
-          return { country: c.code, phone: remainingPhone };
+          const country = c.dialCode === "+1" ? nanpCountry(remainingPhone) : c.code;
+          return { country, phone: remainingPhone };
         }
       }
     }
 
     // 2. Check if starts with dial code without the "+" (e.g. "88017...", "91987...")
+    //
+    // Without a "+" there is nothing marking where a dial code ends, so a plain
+    // national number can look like one: Canadian 9029168446 "starts with" +90
+    // and used to be chopped into Turkey + 29168446. Two guards keep that from
+    // happening — the number must be longer than any plain national number
+    // (10 digits or fewer), and what is left after removing the dial code must
+    // itself still be a plausible subscriber number. Anything shorter is left
+    // exactly as typed with the country untouched.
+    const digits = cleaned.replace(/\D/g, "");
     const sortedCountries = [...COUNTRIES].sort((a, b) => b.dialCode.length - a.dialCode.length);
-    for (const c of sortedCountries) {
-      const dialWithoutPlus = c.dialCode.replace("+", "");
-      if (cleaned.startsWith(dialWithoutPlus)) {
-        // For US/CA, dialCode is "+1". Avoid matching single "1" unless it's followed by a 10 digit number.
-        const minLength = dialWithoutPlus.length + (c.code === "US" || c.code === "CA" ? 10 : 8);
-        if (cleaned.length >= minLength) {
-          const remainingPhone = cleaned.slice(dialWithoutPlus.length).trim();
-          return { country: c.code, phone: remainingPhone };
+    if (digits.length >= 11) {
+      for (const c of sortedCountries) {
+        const dialWithoutPlus = c.dialCode.replace("+", "");
+        if (digits.startsWith(dialWithoutPlus)) {
+          const remainingPhone = digits.slice(dialWithoutPlus.length);
+          if (remainingPhone.length >= 8 && remainingPhone.length <= 12) {
+            const country = c.dialCode === "+1" ? nanpCountry(remainingPhone) : c.code;
+            return { country, phone: remainingPhone };
+          }
         }
       }
+    }
+
+    // 2b. A bare 10-digit NANP number: no dial code to read, but the area code
+    // still says which side of the US/Canada border it is on. Two situations
+    // where that is worth acting on:
+    //   - a NANP country is already selected, so it is only US vs CA to settle;
+    //   - the selected country writes local numbers at a different length, so
+    //     what was typed cannot be a local number there (a 10-digit number
+    //     while Bangladesh is selected — BD numbers are 11 digits from 01).
+    // When the selected country's own numbers are also 10 digits the two are
+    // genuinely indistinguishable (an Indian mobile looks exactly like a NANP
+    // number), so that selection is left alone.
+    const inNanpZone = form.country === "US" || form.country === "CA";
+    if (digits.length === 10 && NANP_PATTERN.test(digits) && (inNanpZone || localNumberLength(form.country) !== 10)) {
+      const country = nanpCountry(digits);
+      if (country !== form.country) {
+        return { country, phone: val };
+      }
+      return null;
     }
 
     // 3. Local prefix matching (does not strip the prefix from the phone number)
@@ -401,6 +457,7 @@ export default function CheckoutPage() {
 
           // Shipping settings are now in the same public API call
           setShippingEnabled(data.shipping_enabled !== "false");
+          setFreeShippingThreshold(freeShippingThresholdFromSettings(data));
           setTaxSettings(taxSettingsFromSettings(data));
           const methods = parseShippingMethods(data.shipping_methods);
           setShippingMethods(methods);
@@ -581,7 +638,11 @@ export default function CheckoutPage() {
   const selectedMethod =
     [...availableMethods, ...upsAsMethods].find((m) => m.id === selectedMethodId) ??
     defaultShippingMethod(shippingMethods);
-  const shipping = shippingEnabled ? selectedMethod?.price ?? 0 : 0;
+  const shipping = applyFreeShippingThreshold(
+    shippingEnabled ? selectedMethod?.price ?? 0 : 0,
+    subtotal,
+    freeShippingThreshold
+  );
 
   const shippingDestination = {
     city: form.city,

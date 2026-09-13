@@ -16,6 +16,10 @@
 
 export const SHIPPING_METHODS_KEY = "shipping_methods"
 
+// Order value, in base currency, above which shipping stops being charged.
+// Edited in Admin → Settings → Shipping; advertised on the product page.
+export const FREE_SHIPPING_THRESHOLD_KEY = "shipping_free_threshold"
+
 export interface ShippingMethod {
   /** Stable slug stored on the order and sent by the browser. */
   id: string
@@ -96,6 +100,40 @@ export function shippingMethodsFromSettings(
   settings: Record<string, string> | undefined | null
 ): ShippingMethod[] {
   return parseShippingMethods(settings?.[SHIPPING_METHODS_KEY])
+}
+
+/**
+ * The free-shipping threshold, or null when there is none.
+ *
+ * Blank, zero and anything non-numeric all mean "no offer" — the storefront
+ * then says nothing rather than promising free shipping over nothing.
+ */
+export function parseFreeShippingThreshold(raw: unknown): number | null {
+  const n = Number(raw)
+  return Number.isFinite(n) && n > 0 ? round2(n) : null
+}
+
+export function freeShippingThresholdFromSettings(
+  settings: Record<string, string> | undefined | null
+): number | null {
+  return parseFreeShippingThreshold(settings?.[FREE_SHIPPING_THRESHOLD_KEY])
+}
+
+/**
+ * Zeroes a shipping fee once the order qualifies.
+ *
+ * `subtotal` is the merchandise total before coupons, reward points and tax —
+ * the same figure the cart shows as "Subtotal", so what the product page
+ * promises is what the server later applies. Every display path and both
+ * server money paths go through this, so they cannot drift apart.
+ */
+export function applyFreeShippingThreshold(
+  fee: number,
+  subtotal: number,
+  threshold: number | null
+): number {
+  if (threshold === null || fee <= 0) return fee
+  return subtotal >= threshold ? 0 : fee
 }
 
 export function activeShippingMethods(methods: ShippingMethod[]): ShippingMethod[] {

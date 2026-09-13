@@ -12,6 +12,7 @@ import { addToCart, getCart } from "@/lib/cart";
 import { toggleWishlist, isInWishlist } from "@/lib/wishlist";
 import { useSettings } from "@/providers/SettingsProvider";
 import { parseHeightsGuide, HEIGHTS_GUIDE_SETTING_KEY } from "@/lib/heightsGuide";
+import { freeShippingThresholdFromSettings } from "@/lib/shipping";
 import ProductCard from "./ProductCard";
 import Footer from "./Footer";
 import CustomMeasurementForm, { type CustomMeasurementState } from "./CustomMeasurementForm";
@@ -395,12 +396,10 @@ export default function ProductDetailsClient({ product, categories, relatedProdu
   const { formatPrice } = useCurrency();
   const { storeName, settings } = useSettings();
 
-  // `shipping_free_threshold` is held in the store's base currency, like every
-  // other amount, so formatPrice converts it the same way the product price is
-  // converted. A blank or non-numeric value means "not configured".
-  const rawFreeShipping = Number(settings.shipping_free_threshold);
-  const freeShippingThreshold =
-    Number.isFinite(rawFreeShipping) && rawFreeShipping > 0 ? rawFreeShipping : null;
+  // Held in the store's base currency, like every other amount, so formatPrice
+  // converts it the same way the product price is converted. Parsed through the
+  // shared helper so this promise and what checkout charges cannot disagree.
+  const freeShippingThreshold = freeShippingThresholdFromSettings(settings);
   const router = useRouter();
   // Brand-level, identical on every product — edited in Settings → Branding.
   const heightsGuide = useMemo(
@@ -1103,7 +1102,11 @@ export default function ProductDetailsClient({ product, categories, relatedProdu
   // Stock Alerts based on activeVariant
   const activeStock = activeVariant ? activeVariant.stock : 0;
   const isOutOfStock = activeStock === 0 && !!activeVariant;
-  const isLowStock = activeStock > 0 && activeStock <= 5;
+  // Scarcity messaging is a merchandising choice, not a fact the page needs —
+  // Admin → Settings → Branding → Product Page turns it off. "Out of Stock"
+  // deliberately stays outside this switch: it explains a disabled button.
+  const lowStockNoticeEnabled = settings.product_low_stock_notice_enabled !== "false";
+  const isLowStock = lowStockNoticeEnabled && activeStock > 0 && activeStock <= 5;
 
   /**
    * What the buy button is waiting for.

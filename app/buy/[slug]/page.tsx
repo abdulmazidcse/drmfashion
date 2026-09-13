@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { getSettings, getStoreName } from "@/lib/settings";
 import { formatImageUrl } from "@/lib/utils";
 import QuickBuy from "@/components/QuickBuy";
-import { shippingMethodsFromSettings } from "@/lib/shipping"
+import { freeShippingThresholdFromSettings, shippingMethodsFromSettings } from "@/lib/shipping"
 import { taxSettingsFromSettings } from "@/lib/tax";
 
 interface BuyPageProps {
@@ -76,8 +76,10 @@ export default async function BuyPage({ params }: BuyPageProps) {
       shipping={{
         enabled: settings.shipping_enabled !== "false",
         methods: shippingMethodsFromSettings(settings),
+        freeThreshold: freeShippingThresholdFromSettings(settings),
       }}
       tax={taxSettingsFromSettings(settings)}
+      showLowStockNotice={settings.product_low_stock_notice_enabled !== "false"}
     />
   );
 }

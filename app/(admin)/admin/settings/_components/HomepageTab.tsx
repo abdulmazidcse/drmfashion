@@ -732,6 +732,10 @@ export default function HomepageTab() {
     setSlideMenButtonText,
     slideMenShopLink,
     setSlideMenShopLink,
+    slideMenButtonText2,
+    setSlideMenButtonText2,
+    slideMenShopLink2,
+    setSlideMenShopLink2,
     slideMenTopBarTag,
     setSlideMenTopBarTag,
     slideWomenActive,
@@ -752,6 +756,10 @@ export default function HomepageTab() {
     setSlideWomenButtonText,
     slideWomenShopLink,
     setSlideWomenShopLink,
+    slideWomenButtonText2,
+    setSlideWomenButtonText2,
+    slideWomenShopLink2,
+    setSlideWomenShopLink2,
     slideWomenTopBarTag,
     setSlideWomenTopBarTag,
     activeCommunityEditTab,
@@ -990,6 +998,34 @@ export default function HomepageTab() {
                       />
                     </div>
 
+                    {/* MEN SECOND BUTTON */}
+                    <div className="space-y-3">
+                      <Label className={fieldLabel}>
+                        Second Button Text (optional)
+                      </Label>
+                      <Input
+                        type="text"
+                        value={slideMenButtonText2}
+                        onChange={(e) => setSlideMenButtonText2(e.target.value)}
+                        className="font-bold"
+                        placeholder="e.g. Shop Women"
+                      />
+                    </div>
+
+                    {/* MEN SECOND BUTTON LINK */}
+                    <div className="space-y-3">
+                      <Label className={fieldLabel}>
+                        Second Button Link
+                      </Label>
+                      <Input
+                        type="text"
+                        value={slideMenShopLink2}
+                        onChange={(e) => setSlideMenShopLink2(e.target.value)}
+                        className="font-mono"
+                        placeholder="/women"
+                      />
+                    </div>
+
                     {/* MEN IMAGE */}
                     <div className="space-y-3">
                       <Label className={fieldLabel}>
@@ -1211,6 +1247,34 @@ export default function HomepageTab() {
                         onChange={(e) => setSlideWomenShopLink(e.target.value)}
                         className="font-mono"
                         placeholder="/shop"
+                      />
+                    </div>
+
+                    {/* WOMEN SECOND BUTTON */}
+                    <div className="space-y-3">
+                      <Label className={fieldLabel}>
+                        Second Button Text (optional)
+                      </Label>
+                      <Input
+                        type="text"
+                        value={slideWomenButtonText2}
+                        onChange={(e) => setSlideWomenButtonText2(e.target.value)}
+                        className="font-bold"
+                        placeholder="e.g. Shop Men"
+                      />
+                    </div>
+
+                    {/* WOMEN SECOND BUTTON LINK */}
+                    <div className="space-y-3">
+                      <Label className={fieldLabel}>
+                        Second Button Link
+                      </Label>
+                      <Input
+                        type="text"
+                        value={slideWomenShopLink2}
+                        onChange={(e) => setSlideWomenShopLink2(e.target.value)}
+                        className="font-mono"
+                        placeholder="/men"
                       />
                     </div>
 

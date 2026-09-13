@@ -160,6 +160,9 @@ function useSettingsFormState() {
   const [allProducts, setAllProducts] = useState<any[]>([])
   const [productsLoaded, setProductsLoaded] = useState(false)
 
+  // Product page behaviour
+  const [lowStockNoticeEnabled, setLowStockNoticeEnabled] = useState("true")
+
   // Promo Popup (right-side drawer on the storefront — components/PromoDrawer.tsx)
   const [promoPopupEnabled, setPromoPopupEnabled] = useState("true")
   const [promoPopupHeading, setPromoPopupHeading] = useState("You just got")
@@ -183,6 +186,7 @@ function useSettingsFormState() {
   // SEO & Analytics state
   const [seoMetaTitle, setSeoMetaTitle] = useState("")
   const [seoMetaDescription, setSeoMetaDescription] = useState("")
+  const [seoShareImage, setSeoShareImage] = useState("")
   const [googleSiteVerification, setGoogleSiteVerification] = useState("")
   const [facebookDomainVerification, setfacebookDomainVerification] = useState("")
   const [gtmId, setGtmId] = useState("")
@@ -204,6 +208,8 @@ function useSettingsFormState() {
   const [slideMenVideoFallback, setSlideMenVideoFallback] = useState("/videos/fashion.mp4")
   const [slideMenButtonText, setSlideMenButtonText] = useState("Shop Men")
   const [slideMenShopLink, setSlideMenShopLink] = useState("/shop")
+  const [slideMenButtonText2, setSlideMenButtonText2] = useState("")
+  const [slideMenShopLink2, setSlideMenShopLink2] = useState("")
   const [slideMenTopBarTag, setSlideMenTopBarTag] = useState("Made for Tall")
 
   const [slideWomenActive, setSlideWomenActive] = useState(true)
@@ -216,6 +222,8 @@ function useSettingsFormState() {
   const [slideWomenVideoFallback, setSlideWomenVideoFallback] = useState("/videos/main-side-video.mp4")
   const [slideWomenButtonText, setSlideWomenButtonText] = useState("Shop Women")
   const [slideWomenShopLink, setSlideWomenShopLink] = useState("/shop")
+  const [slideWomenButtonText2, setSlideWomenButtonText2] = useState("")
+  const [slideWomenShopLink2, setSlideWomenShopLink2] = useState("")
   const [slideWomenTopBarTag, setSlideWomenTopBarTag] = useState("Made for Tall")
 
   // Free-text block rendered just above the storefront footer
@@ -634,6 +642,7 @@ function useSettingsFormState() {
 
           if (res.data.seo_meta_title !== undefined) setSeoMetaTitle(res.data.seo_meta_title)
           if (res.data.seo_meta_description !== undefined) setSeoMetaDescription(res.data.seo_meta_description)
+          if (res.data.seo_share_image !== undefined) setSeoShareImage(res.data.seo_share_image)
           if (res.data.google_site_verification !== undefined) setGoogleSiteVerification(res.data.google_site_verification)
           if (res.data.facebook_domain_verification !== undefined) setfacebookDomainVerification(res.data.facebook_domain_verification)
           if (res.data.gtm_id !== undefined) setGtmId(res.data.gtm_id)
@@ -651,6 +660,8 @@ function useSettingsFormState() {
               if (Array.isArray(parsed)) setFlashSaleProducts(parsed)
             } catch(e) {}
           }
+
+          if (res.data.product_low_stock_notice_enabled !== undefined) setLowStockNoticeEnabled(res.data.product_low_stock_notice_enabled)
 
           if (res.data.promo_popup_enabled !== undefined) setPromoPopupEnabled(res.data.promo_popup_enabled)
           if (res.data.promo_popup_heading !== undefined) setPromoPopupHeading(res.data.promo_popup_heading)
@@ -685,6 +696,8 @@ function useSettingsFormState() {
                 if (slides.men.videoFallback !== undefined) setSlideMenVideoFallback(slides.men.videoFallback)
                 if (slides.men.buttonText !== undefined) setSlideMenButtonText(slides.men.buttonText)
                 if (slides.men.shopLink !== undefined) setSlideMenShopLink(slides.men.shopLink)
+                if (slides.men.buttonText2 !== undefined) setSlideMenButtonText2(slides.men.buttonText2)
+                if (slides.men.shopLink2 !== undefined) setSlideMenShopLink2(slides.men.shopLink2)
                 if (slides.men.topBarTag !== undefined) setSlideMenTopBarTag(slides.men.topBarTag)
               }
 
@@ -698,6 +711,8 @@ function useSettingsFormState() {
                 if (slides.women.videoFallback !== undefined) setSlideWomenVideoFallback(slides.women.videoFallback)
                 if (slides.women.buttonText !== undefined) setSlideWomenButtonText(slides.women.buttonText)
                 if (slides.women.shopLink !== undefined) setSlideWomenShopLink(slides.women.shopLink)
+                if (slides.women.buttonText2 !== undefined) setSlideWomenButtonText2(slides.women.buttonText2)
+                if (slides.women.shopLink2 !== undefined) setSlideWomenShopLink2(slides.women.shopLink2)
                 if (slides.women.topBarTag !== undefined) setSlideWomenTopBarTag(slides.women.topBarTag)
               }
             } catch(e) {}
@@ -1007,6 +1022,7 @@ function useSettingsFormState() {
         payment_square_enabled: paymentSquareEnabled,
         seo_meta_title: seoMetaTitle,
         seo_meta_description: seoMetaDescription,
+        seo_share_image: seoShareImage,
         google_site_verification: googleSiteVerification,
         facebook_domain_verification: facebookDomainVerification,
         gtm_id: gtmId,
@@ -1018,6 +1034,7 @@ function useSettingsFormState() {
         flash_sale_description: flashSaleDescription,
         flash_sale_end_date: flashSaleEndDate,
         flash_sale_products: JSON.stringify(flashSaleProducts),
+        product_low_stock_notice_enabled: lowStockNoticeEnabled,
         promo_popup_enabled: promoPopupEnabled,
         promo_popup_heading: promoPopupHeading,
         promo_popup_highlight: promoPopupHighlight,
@@ -1047,6 +1064,8 @@ function useSettingsFormState() {
             videoFallback: slideMenVideoFallback,
             buttonText: slideMenButtonText,
             shopLink: slideMenShopLink,
+            buttonText2: slideMenButtonText2,
+            shopLink2: slideMenShopLink2,
             topBarTag: slideMenTopBarTag
           },
           women: {
@@ -1059,6 +1078,8 @@ function useSettingsFormState() {
             videoFallback: slideWomenVideoFallback,
             buttonText: slideWomenButtonText,
             shopLink: slideWomenShopLink,
+            buttonText2: slideWomenButtonText2,
+            shopLink2: slideWomenShopLink2,
             topBarTag: slideWomenTopBarTag
           }
         }),
@@ -1201,6 +1222,8 @@ function useSettingsFormState() {
     setAllProducts,
     productsLoaded,
     setProductsLoaded,
+    lowStockNoticeEnabled,
+    setLowStockNoticeEnabled,
     promoPopupEnabled,
     setPromoPopupEnabled,
     promoPopupHeading,
@@ -1241,6 +1264,8 @@ function useSettingsFormState() {
     setSeoMetaTitle,
     seoMetaDescription,
     setSeoMetaDescription,
+    seoShareImage,
+    setSeoShareImage,
     googleSiteVerification,
     setGoogleSiteVerification,
     facebookDomainVerification,
@@ -1275,6 +1300,10 @@ function useSettingsFormState() {
     setSlideMenButtonText,
     slideMenShopLink,
     setSlideMenShopLink,
+    slideMenButtonText2,
+    setSlideMenButtonText2,
+    slideMenShopLink2,
+    setSlideMenShopLink2,
     slideMenTopBarTag,
     setSlideMenTopBarTag,
     slideWomenActive,
@@ -1295,6 +1324,10 @@ function useSettingsFormState() {
     setSlideWomenButtonText,
     slideWomenShopLink,
     setSlideWomenShopLink,
+    slideWomenButtonText2,
+    setSlideWomenButtonText2,
+    slideWomenShopLink2,
+    setSlideWomenShopLink2,
     slideWomenTopBarTag,
     setSlideWomenTopBarTag,
     homeDescription,

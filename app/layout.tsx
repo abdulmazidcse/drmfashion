@@ -19,6 +19,8 @@ const plusJakartaSans = Plus_Jakarta_Sans({
 });
 import { getStoreName, getSettings, getPublicSettings, baseCurrencyCode } from "@/lib/settings";
 import { siteUrl } from "@/lib/siteUrl";
+import { formatImageUrl } from "@/lib/utils";
+import { absoluteImageUrl } from "@/lib/imageMeta";
 import { getExchangeRates } from "@/lib/exchangeRates";
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -36,6 +38,32 @@ export async function generateMetadata(): Promise<Metadata> {
     settings.seo_meta_description?.trim() ||
     `High-end contemporary fashion tailored for modern individuals. Shop the latest collections of premium apparel at ${storeName}.`;
 
+  /**
+   * The picture Facebook, Instagram, WhatsApp and the rest show when a link is
+   * shared. Without it a scraper falls back to the first <img> on the page —
+   * which here is the header's 40px country flag, blown up into the blurry
+   * banner that was appearing on every shared link that was not a product.
+   *
+   * Products, journal posts and CMS pages set their own; this is the default
+   * everything else inherits. `openGraph.url` is deliberately left out: set
+   * here it would be inherited, and every route would claim "/" as its address.
+   */
+  const configuredShare = absoluteImageUrl(
+    formatImageUrl(settings.seo_share_image?.trim() || ""),
+    siteUrl()
+  );
+  // Named here rather than left to the opengraph-image file convention, which
+  // only covers the segment it sits in: without this /shop, /men, /women and
+  // every category page shared with no picture at all.
+  const shareImage = configuredShare
+    ? { url: configuredShare }
+    : {
+        url: `${siteUrl()}/opengraph-image`,
+        width: 1200,
+        height: 630,
+        alt: `${storeName} share card`,
+      };
+
   return {
     // Required for Next to resolve the relative canonical/OG URLs each page
     // sets; without it no canonical tag is emitted at all.
@@ -48,6 +76,19 @@ export async function generateMetadata(): Promise<Metadata> {
     description,
     icons: {
       icon: favicon,
+    },
+    openGraph: {
+      type: "website",
+      title,
+      description,
+      siteName: storeName,
+      images: [shareImage],
+    },
+    twitter: {
+      card: "summary_large_image",
+      title,
+      description,
+      images: [shareImage],
     },
     verification: {
       google: googleVerify || undefined,

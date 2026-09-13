@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma"
 import { getAdminPayload } from "@/lib/auth"
 import { invalidateSettingsCache } from "@/lib/settings"
 import {
+  FREE_SHIPPING_THRESHOLD_KEY,
   SHIPPING_METHODS_KEY,
   parseShippingMethods,
   slugifyMethodId,
@@ -33,7 +34,17 @@ export async function GET(req: NextRequest) {
 
   try {
     const settings = await prisma.setting.findMany({
-      where: { key: { in: ["shipping_enabled", SHIPPING_METHODS_KEY, WAREHOUSE_KEY, ...UPS_KEYS] } },
+      where: {
+        key: {
+          in: [
+            "shipping_enabled",
+            SHIPPING_METHODS_KEY,
+            FREE_SHIPPING_THRESHOLD_KEY,
+            WAREHOUSE_KEY,
+            ...UPS_KEYS,
+          ],
+        },
+      },
     })
     const obj: Record<string, string> = {}
     settings.forEach(s => { obj[s.key] = s.value })
@@ -41,6 +52,9 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({
       shipping_enabled: obj["shipping_enabled"] ?? "true",
       shipping_methods: parseShippingMethods(obj[SHIPPING_METHODS_KEY]),
+      // A string so the form can hold "" for "not set" — the number input
+      // needs an empty value to render blank rather than a spurious 0.
+      shipping_free_threshold: obj[FREE_SHIPPING_THRESHOLD_KEY] ?? "",
       warehouse_address: parseWarehouse(obj[WAREHOUSE_KEY]),
       // Masked: the secret itself is never returned, only whether one exists.
       ...maskUpsConfig(upsConfigFromSettings(obj)),
@@ -114,9 +128,27 @@ export async function POST(req: NextRequest) {
       )
     }
 
+    // Blank means "no offer", same as 0 — both are stored as "0" so the
+    // storefront's one rule (> 0 or nothing is shown) covers every case.
+    const rawThreshold = body.shipping_free_threshold
+    const freeThreshold =
+      rawThreshold === "" || rawThreshold === null || rawThreshold === undefined
+        ? 0
+        : Number(rawThreshold)
+
+    if (!Number.isFinite(freeThreshold) || freeThreshold < 0) {
+      return NextResponse.json(
+        { message: "Free shipping threshold must be a number of 0 or more." },
+        { status: 400 }
+      )
+    }
+
+    const roundedThreshold = Math.round(freeThreshold * 100) / 100
+
     const updates: Array<{ key: string; value: string }> = [
       { key: "shipping_enabled", value: String(shipping_enabled ?? "true") },
       { key: SHIPPING_METHODS_KEY, value: JSON.stringify(methods) },
+      { key: FREE_SHIPPING_THRESHOLD_KEY, value: String(roundedThreshold) },
       { key: WAREHOUSE_KEY, value: JSON.stringify(parseWarehouse(warehouse_address)) },
       { key: "ups_enabled", value: String(body.ups_enabled === true || body.ups_enabled === "true") },
       { key: "ups_environment", value: body.ups_environment === "production" ? "production" : "sandbox" },
@@ -148,6 +180,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       success: true,
       shipping_methods: methods,
+      shipping_free_threshold: String(roundedThreshold),
       warehouse_address: parseWarehouse(warehouse_address),
       ...maskUpsConfig(upsConfigFromSettings(savedObj)),
     })

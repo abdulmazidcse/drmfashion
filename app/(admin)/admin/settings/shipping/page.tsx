@@ -14,7 +14,7 @@ import { Label } from "@/components/ui/label"
 import { Card, CardContent } from "@/components/ui/card"
 import { Switch } from "@/components/ui/switch"
 import { Separator } from "@/components/ui/separator"
-import { DEFAULT_SHIPPING_METHODS, type ShippingMethod } from "@/lib/shipping"
+import { DEFAULT_SHIPPING_METHODS, parseFreeShippingThreshold, type ShippingMethod } from "@/lib/shipping"
 import { DEFAULT_WAREHOUSE, isWarehouseComplete, type WarehouseAddress } from "@/lib/warehouse"
 import { COUNTRIES } from "@/lib/countries"
 import { regionLabelFor } from "@/lib/regions"
@@ -26,6 +26,9 @@ export default function ShippingSettingsPage() {
   const [saving, setSaving] = useState(false)
   const [enabled, setEnabled] = useState(true)
   const [methods, setMethods] = useState<ShippingMethod[]>(DEFAULT_SHIPPING_METHODS)
+  // Kept as a string: "" is a blank input, which is what "no offer" should
+  // look like. It is parsed on save and by the preview below.
+  const [freeThreshold, setFreeThreshold] = useState("")
   const [warehouse, setWarehouse] = useState<WarehouseAddress>(DEFAULT_WAREHOUSE)
   const [ups, setUps] = useState({
     enabled: false,
@@ -45,6 +48,9 @@ export default function ShippingSettingsPage() {
         setEnabled(data.shipping_enabled !== "false")
         if (Array.isArray(data.shipping_methods) && data.shipping_methods.length > 0) {
           setMethods(data.shipping_methods)
+        }
+        if (typeof data.shipping_free_threshold === "string") {
+          setFreeThreshold(data.shipping_free_threshold === "0" ? "" : data.shipping_free_threshold)
         }
         if (data.warehouse_address) setWarehouse(data.warehouse_address)
       setUps(u => ({
@@ -98,6 +104,7 @@ export default function ShippingSettingsPage() {
         body: JSON.stringify({
           shipping_enabled: String(enabled),
           shipping_methods: methods,
+          shipping_free_threshold: freeThreshold,
           warehouse_address: warehouse,
           ups_enabled: String(ups.enabled),
           ups_environment: ups.environment,
@@ -111,6 +118,9 @@ export default function ShippingSettingsPage() {
       // The server assigns ids and rounds prices — take its copy back so the
       // form matches what checkout will actually offer.
       if (Array.isArray(data.shipping_methods)) setMethods(data.shipping_methods)
+      if (typeof data.shipping_free_threshold === "string") {
+        setFreeThreshold(data.shipping_free_threshold === "0" ? "" : data.shipping_free_threshold)
+      }
       if (data.warehouse_address) setWarehouse(data.warehouse_address)
       setUps(u => ({
         ...u,
@@ -130,6 +140,7 @@ export default function ShippingSettingsPage() {
   if (loading) return <div className="flex h-64 items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>
 
   const activeMethods = methods.filter(m => m.active && m.name.trim())
+  const freeThresholdValue = parseFreeShippingThreshold(freeThreshold)
 
   return (
     <div className="max-w-3xl space-y-6">
@@ -252,6 +263,30 @@ export default function ShippingSettingsPage() {
                 </div>
               ))}
             </div>
+          </div>
+
+          <Separator />
+
+          {/* Free shipping threshold */}
+          <div className="space-y-2">
+            <Label htmlFor="shipping_free_threshold">
+              Free Shipping Threshold ({baseCurrency.symbol})
+            </Label>
+            <p className="text-xs text-muted-foreground">
+              Orders with a subtotal at or above this amount ship free, whichever method the
+              customer picks. Leave blank (or 0) to turn the offer off — product pages then stop
+              advertising it.
+            </p>
+            <Input
+              id="shipping_free_threshold"
+              type="number"
+              min="0"
+              step="0.01"
+              placeholder="No free shipping offer"
+              value={freeThreshold}
+              onChange={e => setFreeThreshold(e.target.value)}
+              className="max-w-xs"
+            />
           </div>
 
           <Separator />
@@ -462,6 +497,12 @@ export default function ShippingSettingsPage() {
                     </li>
                   ))}
                 </ul>
+              )}
+              {freeThresholdValue !== null && (
+                <p className="pt-1 font-medium">
+                  Free shipping on orders over {baseCurrency.symbol}
+                  {freeThresholdValue} — shown on every product page and applied at checkout.
+                </p>
               )}
               <p className="pt-1 text-blue-600/80">
                 Prices are in your base currency ({baseCurrency.code}) and are converted automatically for

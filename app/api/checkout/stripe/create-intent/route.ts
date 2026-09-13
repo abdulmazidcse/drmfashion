@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import Stripe from "stripe"
 import { resolveOrderShipping } from "@/lib/shippingServer"
+import { applyFreeShippingThreshold, freeShippingThresholdFromSettings } from "@/lib/shipping"
 import { resolveTax, taxSettingsFromSettings } from "@/lib/tax"
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "", {
@@ -88,14 +89,18 @@ export async function POST(req: NextRequest) {
 
     // Same resolution as /api/checkout, so the amount authorised here matches
     // the amount the order is later written for.
-    const finalShippingFee = (
-      await resolveOrderShipping({
-        settings: settingsObj,
-        shippingMethodId,
-        destination: shippingDestination,
-        items,
-      })
-    ).fee
+    const finalShippingFee = applyFreeShippingThreshold(
+      (
+        await resolveOrderShipping({
+          settings: settingsObj,
+          shippingMethodId,
+          destination: shippingDestination,
+          items,
+        })
+      ).fee,
+      calculatedTotal,
+      freeShippingThresholdFromSettings(settingsObj)
+    )
 
     const tax = resolveTax(taxSettingsFromSettings(settingsObj), {
       country: shippingDestination?.countryCode,

@@ -13,6 +13,9 @@ interface SlideConfig {
   subtitle?: string;
   shopLink?: string;
   buttonText?: string;
+  /** Optional second CTA. Both fields must be filled for it to render. */
+  shopLink2?: string;
+  buttonText2?: string;
   topBarTag?: string;
 }
 
@@ -29,10 +32,11 @@ interface HomeHeroProps {
  * this used to be.
  *
  * Both slides are still read from Settings and both still reach the visitor:
- * the leading one supplies the copy and the media, and the second one's call to
- * action becomes the ghost button beside the primary. So configuring the men's
- * and women's slides in Admin still drives what is on screen — it just resolves
- * to one card and two buttons instead of two half-width panels.
+ * the leading one supplies the copy and the media, and the ghost button beside
+ * the primary CTA carries either that slide's own second button or, with that
+ * left blank, the other slide's call to action. So configuring the men's and
+ * women's slides in Admin still drives what is on screen — it just resolves to
+ * one card and two buttons instead of two half-width panels.
  */
 export default function HomeHero({ slides, highlight }: HomeHeroProps) {
   const isMenActive = slides?.men?.active !== false;
@@ -51,6 +55,8 @@ export default function HomeHero({ slides, highlight }: HomeHeroProps) {
     subtitle: slides?.men?.subtitle || "Designed specifically for tall men. Proportions perfected.",
     buttonText: slides?.men?.buttonText || "Shop Men",
     shopLink: slides?.men?.shopLink || "/shop",
+    buttonText2: slides?.men?.buttonText2?.trim() || "",
+    shopLink2: slides?.men?.shopLink2?.trim() || "",
     topBarTag: slides?.men?.topBarTag || "Made for Tall"
   };
 
@@ -63,6 +69,8 @@ export default function HomeHero({ slides, highlight }: HomeHeroProps) {
     subtitle: slides?.women?.subtitle || "Tailored specifically for tall women. Modern style with perfect length.",
     buttonText: slides?.women?.buttonText || "Shop Women",
     shopLink: slides?.women?.shopLink || "/shop",
+    buttonText2: slides?.women?.buttonText2?.trim() || "",
+    shopLink2: slides?.women?.shopLink2?.trim() || "",
     topBarTag: slides?.women?.topBarTag || "Made for Tall"
   };
 
@@ -77,6 +85,19 @@ export default function HomeHero({ slides, highlight }: HomeHeroProps) {
 
   const lead = activeSlides[0];
   const secondary = activeSlides[1] ?? null;
+
+  /**
+   * The ghost button beside the primary CTA.
+   *
+   * The lead slide's own second button wins when Settings has both its label
+   * and its link — an explicit choice about where this card should send people
+   * second. With that left blank the slot falls back to what it has always
+   * shown: the other slide's call to action.
+   */
+  const ghostCta =
+    lead.buttonText2 && lead.shopLink2
+      ? { buttonText: lead.buttonText2, shopLink: lead.shopLink2 }
+      : secondary;
 
   return (
     <section className="bg-sig-cream pb-3 pt-8">
@@ -107,12 +128,12 @@ export default function HomeHero({ slides, highlight }: HomeHeroProps) {
                 {lead.buttonText} →
               </Link>
 
-              {secondary && (
+              {ghostCta && (
                 <Link
-                  href={secondary.shopLink}
+                  href={ghostCta.shopLink}
                   className="inline-flex items-center justify-center gap-2.5 rounded-full border-[1.5px] border-sig-line bg-sig-card px-[30px] py-[15px] text-sm font-bold text-sig-ink transition-colors duration-200 hover:border-sig-copper-400 hover:text-sig-copper-700"
                 >
-                  {secondary.buttonText}
+                  {ghostCta.buttonText}
                 </Link>
               )}
             </div>
