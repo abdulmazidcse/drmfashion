@@ -29,6 +29,22 @@ import {
   type HomeIconTile,
 } from "@/lib/homeIcons"
 import {
+  DEFAULT_TRUST_BADGES,
+  EMPTY_TRUST_BADGE,
+  MAX_TRUST_BADGES,
+  TRUST_BADGES_SETTING_KEY,
+  parseTrustBadges,
+  type TrustBadge,
+  type TrustBadgesConfig,
+} from "@/lib/trustBadges"
+import { DEFAULT_HERO_HIGHLIGHT, parseHeroHighlight } from "@/lib/heroHighlight"
+import {
+  DEFAULT_PROMO_BANNER,
+  PROMO_BANNER_SETTING_KEY,
+  parsePromoBanner,
+  type PromoBannerConfig,
+} from "@/lib/promoBanner"
+import {
   DEFAULT_ANNOUNCEMENT_BAR,
   EMPTY_ANNOUNCEMENT_SLIDE,
   ANNOUNCEMENT_BAR_SETTING_KEY,
@@ -198,6 +214,13 @@ function useSettingsFormState() {
   const [activeEditTab, setActiveEditTab] = useState<"men" | "women">("men")
   const [slideRotationInterval, setSlideRotationInterval] = useState("7000")
 
+  // The product card floating over the hero image. Blank id and blank note both
+  // mean "carry on choosing for me", which is what the card did before it was
+  // configurable at all.
+  const [heroHighlightActive, setHeroHighlightActive] = useState(DEFAULT_HERO_HIGHLIGHT.active)
+  const [heroHighlightProductId, setHeroHighlightProductId] = useState(DEFAULT_HERO_HIGHLIGHT.productId)
+  const [heroHighlightNote, setHeroHighlightNote] = useState(DEFAULT_HERO_HIGHLIGHT.note)
+
   const [slideMenActive, setSlideMenActive] = useState(true)
   const [slideMenTitle, setSlideMenTitle] = useState("FINALLY, CLOTHES THAT FIT.")
   const [slideMenSubtitle, setSlideMenSubtitle] = useState("Designed specifically for men up to 7'1\". Proportions perfected for vertical precision.")
@@ -362,6 +385,49 @@ function useSettingsFormState() {
       const tiles = [...prev[gender]]
       ;[tiles[index], tiles[target]] = [tiles[target], tiles[index]]
       return { ...prev, [gender]: tiles }
+    })
+  }
+
+  // The image pop-up banner (separate from the promo drawer above it)
+  const [promoBanner, setPromoBanner] = useState<PromoBannerConfig>(DEFAULT_PROMO_BANNER)
+
+  function updatePromoBanner(patch: Partial<PromoBannerConfig>) {
+    setPromoBanner(prev => ({ ...prev, ...patch }))
+  }
+
+  // The promises repeated under the hero and in the value-props strip
+  const [trustBadges, setTrustBadges] = useState<TrustBadgesConfig>(DEFAULT_TRUST_BADGES)
+
+  function updateTrustBadges(patch: Partial<TrustBadgesConfig>) {
+    setTrustBadges(prev => ({ ...prev, ...patch }))
+  }
+
+  function updateTrustBadge(index: number, patch: Partial<TrustBadge>) {
+    setTrustBadges(prev => ({
+      ...prev,
+      badges: prev.badges.map((b, i) => (i === index ? { ...b, ...patch } : b)),
+    }))
+  }
+
+  function addTrustBadge() {
+    setTrustBadges(prev =>
+      prev.badges.length >= MAX_TRUST_BADGES
+        ? prev
+        : { ...prev, badges: [...prev.badges, { ...EMPTY_TRUST_BADGE }] }
+    )
+  }
+
+  function removeTrustBadge(index: number) {
+    setTrustBadges(prev => ({ ...prev, badges: prev.badges.filter((_, i) => i !== index) }))
+  }
+
+  function moveTrustBadge(index: number, direction: -1 | 1) {
+    setTrustBadges(prev => {
+      const target = index + direction
+      if (target < 0 || target >= prev.badges.length) return prev
+      const badges = [...prev.badges]
+      ;[badges[index], badges[target]] = [badges[target], badges[index]]
+      return { ...prev, badges }
     })
   }
 
@@ -686,6 +752,11 @@ function useSettingsFormState() {
               const slides = JSON.parse(res.data.home_hero_slides)
               if (slides.rotationInterval !== undefined) setSlideRotationInterval(String(slides.rotationInterval))
 
+              const highlight = parseHeroHighlight(slides.highlight)
+              setHeroHighlightActive(highlight.active)
+              setHeroHighlightProductId(highlight.productId)
+              setHeroHighlightNote(highlight.note)
+
                if (slides.men) {
                 if (slides.men.active !== undefined) setSlideMenActive(!!slides.men.active)
                 if (slides.men.title !== undefined) setSlideMenTitle(slides.men.title)
@@ -784,6 +855,16 @@ function useSettingsFormState() {
           // survive a reload here, even though the storefront drops it.
           if (res.data[HOME_ICONS_SETTING_KEY]) {
             setHomeIcons(parseHomeIcons(res.data[HOME_ICONS_SETTING_KEY], { keepEmpty: true }))
+          }
+
+          if (res.data[PROMO_BANNER_SETTING_KEY]) {
+            setPromoBanner(parsePromoBanner(res.data[PROMO_BANNER_SETTING_KEY]))
+          }
+
+          // keepEmpty: a badge with no words typed into it yet must still be
+          // here after a reload, even though the storefront skips it.
+          if (res.data[TRUST_BADGES_SETTING_KEY]) {
+            setTrustBadges(parseTrustBadges(res.data[TRUST_BADGES_SETTING_KEY], { keepEmpty: true }))
           }
 
           // keepEmpty so a message the admin just added survives a reload
@@ -1054,6 +1135,11 @@ function useSettingsFormState() {
         promo_popup_frequency_days: promoPopupFrequencyDays,
         home_hero_slides: JSON.stringify({
           rotationInterval: Number(slideRotationInterval) || 7000,
+          highlight: {
+            active: heroHighlightActive,
+            productId: heroHighlightProductId,
+            note: heroHighlightNote,
+          },
           men: {
             active: slideMenActive,
             title: slideMenTitle,
@@ -1134,6 +1220,8 @@ function useSettingsFormState() {
         [HOME_SECTIONS_SETTING_KEY]: JSON.stringify(homeSections),
         [ANNOUNCEMENT_BAR_SETTING_KEY]: JSON.stringify(announcementBar),
         [HOME_ICONS_SETTING_KEY]: JSON.stringify(homeIcons),
+        [TRUST_BADGES_SETTING_KEY]: JSON.stringify(trustBadges),
+        [PROMO_BANNER_SETTING_KEY]: JSON.stringify(promoBanner),
         [HOME_SHOWCASE_SETTING_KEY]: JSON.stringify(homeShowcase),
         home_description: homeDescription,
         [HEIGHTS_GUIDE_SETTING_KEY]: JSON.stringify(heightsGuide)
@@ -1439,6 +1527,20 @@ function useSettingsFormState() {
     addHomeIconTile,
     removeHomeIconTile,
     moveHomeIconTile,
+    heroHighlightActive,
+    setHeroHighlightActive,
+    heroHighlightProductId,
+    setHeroHighlightProductId,
+    heroHighlightNote,
+    setHeroHighlightNote,
+    promoBanner,
+    updatePromoBanner,
+    trustBadges,
+    updateTrustBadges,
+    updateTrustBadge,
+    addTrustBadge,
+    removeTrustBadge,
+    moveTrustBadge,
     announcementBar,
     updateAnnouncementBar,
     updateAnnouncementSlide,

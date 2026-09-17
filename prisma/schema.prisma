@@ -149,6 +149,17 @@ model Category {
   description String?     @db.Text
   isTrending  Boolean     @default(false)
 
+  /// Where this category sits in a list. Every list on the storefront and in
+  /// the admin sorts on it first, falling back to `createdAt` so ties and
+  /// untouched categories keep the order they have always had. Lower comes
+  /// first; the default 0 means "not placed yet", which is why the fallback
+  /// matters rather than being decoration.
+  ///
+  /// Usually that list is one parent's children, but not always: the homepage's
+  /// "Shop by category" row is every isTrending category regardless of parent,
+  /// and there this number ranks the whole row.
+  sortOrder   Int         @default(0)
+
   /// Search-engine overrides for /category/[slug]. Empty falls back to the
   /// category name and description — see that page's generateMetadata.
   metaTitle       String?
@@ -172,6 +183,8 @@ model Category {
 
   createdAt   DateTime    @default(now())
   deletedAt   DateTime?
+
+  @@index([parentId, sortOrder])
 }
 
 /// A named, reusable size chart — "Men's Tops", "Women's Denim" — written once

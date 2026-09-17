@@ -285,6 +285,13 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-plus-jakarta-sans), sans-serif;
+  /* A backstop against one over-wide element scrolling the entire page
+     sideways on a phone. `clip`, never `hidden`: `hidden` would turn <body>
+     into a scroll container and break the sticky header, which is the bug
+     this kind of guard usually introduces. It is not a licence to stop sizing
+     things for mobile - an element wider than the viewport is still a bug, it
+     just no longer takes the whole page with it. */
+  overflow-x: clip;
 }
 
 /* ─── CKEditor font sizes ────────────────────────────────────────────────────

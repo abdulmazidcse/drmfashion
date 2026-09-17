@@ -192,7 +192,7 @@ export default async function CategoryPage({ params, searchParams }: CategoryPag
     prisma.category.findMany({
       where: { parentId: null },
       select: { id: true, name: true, slug: true },
-      orderBy: { createdAt: "asc" },
+      orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
     }),
   ]);
 

@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import CollapsibleCard from "./CollapsibleCard"
+import PromoBannerCard from "./PromoBannerCard"
 import { useSettingsForm } from "./SettingsFormContext"
 
 export default function PromoPopupTab() {
@@ -301,6 +302,10 @@ export default function PromoPopupTab() {
           <p className={helpText}>* Both links are appended to the consent text. Leave a field blank to omit that link.</p>
         </div>
       </CollapsibleCard>
+
+      {/* The image poster. Independent of the drawer above — different copy,
+          different dismissal window, and either can run on its own. */}
+      <PromoBannerCard />
     </div>
   )
 }

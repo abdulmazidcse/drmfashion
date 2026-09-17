@@ -116,6 +116,7 @@ import { organizationSchema, webSiteSchema } from "@/lib/structuredData";
 import JsonLd from "@/components/JsonLd";
 import { getStoreColors } from "@/lib/colors";
 import PromoDrawer from "@/components/PromoDrawer";
+import PromoBannerPopup from "@/components/PromoBannerPopup";
 import TawkChat from "@/components/TawkChat";
 import PageViewTracker from "@/components/PageViewTracker";
 import { Suspense } from "react";
@@ -162,10 +163,21 @@ export default async function RootLayout({
                 pages fire view_item on mount, which can beat the container
                 script; queueing into a plain array means GTM picks those up
                 when it loads instead of them being dropped. */}
-            <Script id="datalayer-init" strategy="beforeInteractive">
-              {`window.dataLayer = window.dataLayer || [];
-                window.__STORE_CURRENCY__ = ${JSON.stringify(baseCurrency)};`}
-            </Script>
+            {/* A plain tag, not <Script beforeInteractive>. next/script hoists a
+                beforeInteractive script into <head> of the server HTML, which
+                leaves nothing at this spot in <body> for React to hydrate
+                against; it then creates the element on the client instead,
+                where a script never executes, and React says so in the console.
+                Inline here it is part of the document React rendered, so
+                hydration matches it — and being at the top of <body> it still
+                runs during parse, long before hydration or the GTM loader. */}
+            <script
+              id="datalayer-init"
+              dangerouslySetInnerHTML={{
+                __html: `window.dataLayer = window.dataLayer || [];
+                window.__STORE_CURRENCY__ = ${JSON.stringify(baseCurrency)};`,
+              }}
+            />
 
             <Script id="gtm-container" strategy="afterInteractive">
               {`(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
@@ -192,10 +204,14 @@ export default async function RootLayout({
           </>
         )}
 
-        {/* Custom head scripts from settings — injected into <head> by next/script (beforeInteractive) */}
+        {/* Custom head scripts from settings. The tag is inline for the same
+            reason as the one above; the code inside still appends what it finds
+            to document.head, which is what "head scripts" actually means here. */}
         {settings.custom_head_scripts && (
-          <Script id="custom-head-scripts" strategy="beforeInteractive">
-            {`
+          <script
+            id="custom-head-scripts"
+            dangerouslySetInnerHTML={{
+              __html: `
               (function() {
                 const temp = document.createElement('div');
                 temp.innerHTML = \`${settings.custom_head_scripts.replace(/\\/g, '\\\\').replace(/`/g, '\\`').replace(/\$/g, '\\$')}\`;
@@ -212,8 +228,9 @@ export default async function RootLayout({
                   }
                 });
               })();
-            `}
-          </Script>
+            `,
+            }}
+          />
         )}
         {/* Site-wide identity. Emitted once here rather than per page so the
             graph has a single Organization and WebSite node to reference. */}
@@ -233,8 +250,11 @@ export default async function RootLayout({
               {children}
             </CurrencyProvider>
           </ColorsProvider>
-          {/* Storefront-only: the drawer opts itself out of /admin, auth and checkout. */}
+          {/* Storefront-only: both opt themselves out of /admin, auth and
+              checkout. They are independent — a store can run the campaign
+              poster without the email drawer, or either on its own. */}
           <PromoDrawer />
+          <PromoBannerPopup />
           <TawkChat />
         </SettingsProvider>
 

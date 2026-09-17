@@ -41,13 +41,14 @@ import {
 } from "@/lib/homeSections";
 import { categoryImageAlt } from "@/lib/imageMeta";
 import { FALLBACK_MEN, FALLBACK_WOMEN, FALLBACK_SLUGS, type FallbackTile } from "@/lib/homeTiles";
-import {
-  Sparkles,
-  ShieldCheck,
-  RotateCcw,
-  Truck
-} from "lucide-react";
+import { Sparkles, ShieldCheck } from "lucide-react";
 import ScrollReveal from "@/components/ScrollReveal";
+import TrustBadges from "@/components/TrustBadges";
+import {
+  HERO_HIGHLIGHT_BEST_SELLER_NOTE,
+  HERO_HIGHLIGHT_NEWEST_NOTE,
+  parseHeroHighlight,
+} from "@/lib/heroHighlight";
 
 export const revalidate = 300;
 
@@ -108,15 +109,17 @@ export default async function Home() {
       prisma.category.findMany({
         where: { parentId: null, deletedAt: null },
         select: { id: true, name: true, slug: true },
-        orderBy: { createdAt: "asc" },
+        orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
         take: 4
       })
     ),
     // Only the men/women heuristic and `toTile` below read these, and between
     // them they touch name, slug, image, its alt text and the parent's
-    // name/slug. Key bumped to v3 with imageAlt: a cache entry written before
-    // it existed would tile without any alt at all.
-    fetchWithCache("home:trendingCategories:v4", async () => {
+    // name/slug. The key carries a version because a cached entry outlives a
+    // change to this query: v3 added imageAlt, which an older entry tiled
+    // without, and v5 changed the sort, which an older entry would keep
+    // serving in the previous order for the rest of the hour.
+    fetchWithCache("home:trendingCategories:v5", async () => {
       const raw = await prisma.category.findMany({
         where: { isTrending: true, deletedAt: null },
         select: {
@@ -131,7 +134,10 @@ export default async function Home() {
           // category page delivers.
           _count: { select: { products: { where: { published: true, deletedAt: null } } } }
         },
-        orderBy: { createdAt: "desc" },
+        // Admin → Categories → Sort Order drives the row. `createdAt` only
+        // breaks ties, so a store that has never touched the numbers sees the
+        // newest-first order this always had.
+        orderBy: [{ sortOrder: "asc" }, { createdAt: "desc" }],
         take: 24
       });
       return raw.map(c => ({
@@ -618,20 +624,43 @@ export default async function Home() {
   // in `home_sections`. A block whose content is empty still belongs here — it
   // renders null, which is how "on but nothing to show" and "switched off" stay
   // two different things.
-  // The product on the hero's float card. Taken from the best-seller list the
-  // page already computed — the top seller if there is one, otherwise the newest
-  // product — so the card costs no extra query and is never empty on a store
+  // The product on the hero's float card (Settings → Homepage → Hero Slides).
+  const heroHighlightConfig = parseHeroHighlight(heroSlidesSetting?.highlight);
+
+  // A named product is looked up on its own, because the lists above are capped
+  // at 40 rows each and the one an admin picked is very often not among them.
+  // Only when one is named, and cached like everything else on this page, so the
+  // default path still costs no extra query.
+  const pickedHighlight =
+    heroHighlightConfig.active && heroHighlightConfig.productId
+      ? await fetchWithCache(`home:hero:highlight:${heroHighlightConfig.productId}`, async () => {
+          const raw = await prisma.product.findFirst({
+            where: { id: heroHighlightConfig.productId, published: true, deletedAt: null },
+            select: PRODUCT_CARD_SELECT,
+          });
+          return raw ? formatProductUrls(raw) : null;
+        })
+      : null;
+
+  // With nothing picked — or with a pick that has since been unpublished or
+  // deleted — the card falls back to what it always chose: the top seller if
+  // there is one, otherwise the newest product, so it is never empty on a store
   // that has stock but no orders yet.
-  const heroHighlightSource = bestSellerProducts[0] ?? products[0] ?? null;
-  const heroHighlight = heroHighlightSource
-    ? {
-        title: heroHighlightSource.title,
-        slug: heroHighlightSource.slug,
-        thumbnail: heroHighlightSource.thumbnail,
-        price: heroHighlightSource.discountPrice ?? heroHighlightSource.basePrice,
-        note: bestSellerProducts.length > 0 ? "Best seller this month" : "New this week",
-      }
-    : null;
+  const heroHighlightSource = pickedHighlight ?? bestSellerProducts[0] ?? products[0] ?? null;
+  const heroHighlight =
+    heroHighlightConfig.active && heroHighlightSource
+      ? {
+          title: heroHighlightSource.title,
+          slug: heroHighlightSource.slug,
+          thumbnail: heroHighlightSource.thumbnail,
+          price: heroHighlightSource.discountPrice ?? heroHighlightSource.basePrice,
+          note:
+            heroHighlightConfig.note.trim() ||
+            (bestSellerProducts.length > 0
+              ? HERO_HIGHLIGHT_BEST_SELLER_NOTE
+              : HERO_HIGHLIGHT_NEWEST_NOTE),
+        }
+      : null;
 
   const sectionNodes: Record<HomeSectionKey, React.ReactNode> = {
     hero: <HomeHero slides={heroSlidesSetting} highlight={heroHighlight} />,
@@ -790,34 +819,11 @@ export default async function Home() {
       </ScrollReveal>
     ),
 
+    // Same setting as the hero's chip row (Settings → Homepage → Trust
+    // Badges), so the store makes one set of promises rather than two.
     "value-props": (
       <ScrollReveal>
-        <section className="bg-sig-cream pb-12 pt-2.5 lg:pb-[70px]">
-          <div className="sig-wrap grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {[
-              { icon: Truck, title: "Free shipping", text: "On every order over $150, dispatched the same day." },
-              { icon: RotateCcw, title: "30-day returns", text: "Wrong fit? Send it back free, no restocking fee." },
-              { icon: ShieldCheck, title: "Secure checkout", text: "Every payment encrypted end to end." },
-              { icon: Sparkles, title: "Elite quality", text: "Carefully sourced materials, built to keep their shape." }
-            ].map((item, idx) => (
-              <div key={item.title} className="rounded-sig border border-sig-line bg-sig-card px-6 py-[26px]">
-                {/* Alternating accent, so the row reads as a set of four rather
-                    than four copies of the same card. */}
-                <div
-                  className={`mb-4 grid h-[46px] w-[46px] place-items-center rounded-[14px] ${
-                    idx % 2 === 0
-                      ? "bg-sig-copper-50 text-sig-copper-600"
-                      : "bg-sig-aqua-50 text-sig-aqua-700"
-                  }`}
-                >
-                  <item.icon className="h-5 w-5" />
-                </div>
-                <b className="mb-1.5 block text-[15px] font-extrabold text-sig-ink">{item.title}</b>
-                <p className="text-[13.5px] leading-[1.65] text-sig-soft">{item.text}</p>
-              </div>
-            ))}
-          </div>
-        </section>
+        <TrustBadges variant="cards" />
       </ScrollReveal>
     ),
 

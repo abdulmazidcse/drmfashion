@@ -16,7 +16,7 @@ export async function PATCH(
   try {
     const { id } = await params
     const body = await req.json()
-    const { name, slug, image, bannerImage, imageAlt, bannerImageAlt, imageCaption, bannerImageCaption, parentId, description, isTrending, howToMeasure, howToMeasureImage, metaTitle, metaDescription, metaKeywords } = body
+    const { name, slug, image, bannerImage, imageAlt, bannerImageAlt, imageCaption, bannerImageCaption, parentId, description, isTrending, sortOrder, howToMeasure, howToMeasureImage, metaTitle, metaDescription, metaKeywords } = body
 
     if (!name || !slug) {
       return NextResponse.json(
@@ -84,9 +84,17 @@ export async function PATCH(
     }
 
     const isTrendingBool = isTrending === true || String(isTrending).toLowerCase() === "true" || isTrending === "on"
+
+
+    // `undefined`, not 0, when there is no usable number: Prisma skips an
+    // undefined field, so a blank box or a caller that does not send one leaves
+    // the category where it is instead of shunting it to the top of its
+    // siblings. On create the column's own default takes over.
+    const parsedSortOrder = Number.parseInt(String(sortOrder ?? ""), 10)
+    const sortOrderValue = Number.isFinite(parsedSortOrder) ? parsedSortOrder : undefined
     const category = await prisma.category.update({
       where: { id },
-      data: { name, slug, image: image || null, bannerImage: bannerImage || null, imageAlt: String(imageAlt || "").trim() || null, bannerImageAlt: String(bannerImageAlt || "").trim() || null, imageCaption: String(imageCaption || "").trim() || null, bannerImageCaption: String(bannerImageCaption || "").trim() || null, parentId: parentId || null, description: description || null, isTrending: isTrendingBool, howToMeasure: String(howToMeasure || "").trim() || null, howToMeasureImage: String(howToMeasureImage || "").trim() || null, metaTitle: String(metaTitle || "").trim() || null, metaDescription: String(metaDescription || "").trim() || null, metaKeywords: String(metaKeywords || "").trim() || null },
+      data: { name, slug, image: image || null, bannerImage: bannerImage || null, imageAlt: String(imageAlt || "").trim() || null, bannerImageAlt: String(bannerImageAlt || "").trim() || null, imageCaption: String(imageCaption || "").trim() || null, bannerImageCaption: String(bannerImageCaption || "").trim() || null, parentId: parentId || null, description: description || null, isTrending: isTrendingBool, sortOrder: sortOrderValue, howToMeasure: String(howToMeasure || "").trim() || null, howToMeasureImage: String(howToMeasureImage || "").trim() || null, metaTitle: String(metaTitle || "").trim() || null, metaDescription: String(metaDescription || "").trim() || null, metaKeywords: String(metaKeywords || "").trim() || null },
     })
 
     await invalidateCategoryHomeCache()

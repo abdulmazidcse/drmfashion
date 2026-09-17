@@ -15,6 +15,7 @@ import MediaField from "./MediaField"
 import SectionOrderCard from "./SectionOrderCard"
 import IconsCard from "./IconsCard"
 import VideoBannersCard from "./VideoBannersCard"
+import TrustBadgesCard from "./TrustBadgesCard"
 import { useSettingsForm, type StyleSectionKey } from "./SettingsFormContext"
 import { MAX_HOME_REELS } from "@/lib/homeReels"
 import {
@@ -842,12 +843,28 @@ export default function HomepageTab() {
     setPillarCompareWomenBefore,
     pillarCompareWomenAfter,
     setPillarCompareWomenAfter,
+    heroHighlightActive,
+    setHeroHighlightActive,
+    heroHighlightProductId,
+    setHeroHighlightProductId,
+    heroHighlightNote,
+    setHeroHighlightNote,
+    allProducts,
+    productsLoaded,
     loading,
     homeDescription,
     setHomeDescription,
     handleFieldFileUpload,
     fieldLabel,
   } = useSettingsForm()
+
+  // Narrows the picker below. One box is enough — there is only one card.
+  const [highlightSearch, setHighlightSearch] = useState("")
+  const highlightQuery = highlightSearch.trim().toLowerCase()
+  const highlightChoices = highlightQuery
+    ? allProducts.filter(p => (p.title || "").toLowerCase().includes(highlightQuery))
+    : allProducts
+  const pickedHighlight = allProducts.find(p => p.id === heroHighlightProductId)
 
   return (
     <div className="space-y-6 animate-in fade-in-50 duration-200">
@@ -895,6 +912,102 @@ export default function HomepageTab() {
                 <p className="text-[10px] text-muted-foreground">
                   Time in milliseconds between auto-rotations (e.g. 7000 for 7 seconds). Set to 0 to disable auto-rotation.
                 </p>
+              </div>
+
+              <Separator />
+
+              {/* FLOATING PRODUCT CARD — one per hero, not per slide */}
+              <div className="space-y-4">
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <Label className={fieldLabel}>Floating Product Card</Label>
+                    <p className="text-[10px] text-muted-foreground mt-1">
+                      The small card over the hero image. Leave the picker empty and it keeps
+                      choosing on its own — this month&apos;s top seller, or the newest product on a
+                      store with no orders yet.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${heroHighlightActive ? 'bg-primary' : 'bg-muted-foreground/30'}`}
+                    onClick={() => setHeroHighlightActive(!heroHighlightActive)}
+                  >
+                    <span
+                      className={`inline-block h-4 w-4 transform rounded-full bg-background transition-transform ${heroHighlightActive ? 'translate-x-6' : 'translate-x-1'}`}
+                    />
+                  </button>
+                </div>
+
+                <div
+                  className={`space-y-4 transition-all ${heroHighlightActive ? '' : 'pointer-events-none opacity-50'}`}
+                >
+                  <div className="space-y-3">
+                    <Label className={fieldLabel}>Caption</Label>
+                    <Input
+                      type="text"
+                      value={heroHighlightNote}
+                      onChange={(e) => setHeroHighlightNote(e.target.value)}
+                      placeholder="Best seller this month"
+                    />
+                    <p className="text-[10px] text-muted-foreground">
+                      The line beside the price. Empty falls back to the automatic wording.
+                    </p>
+                  </div>
+
+                  <div className="space-y-3">
+                    <Label className={fieldLabel}>Product</Label>
+                    {heroHighlightProductId && (
+                      <div className="flex items-center gap-2 rounded-md border bg-muted pl-3 pr-1 py-1 text-xs font-bold w-fit">
+                        {pickedHighlight ? pickedHighlight.title : heroHighlightProductId}
+                        <button
+                          type="button"
+                          onClick={() => setHeroHighlightProductId("")}
+                          className="rounded-md p-1 hover:bg-muted-foreground/20"
+                          title="Back to automatic"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </div>
+                    )}
+                    <Input
+                      type="search"
+                      value={highlightSearch}
+                      onChange={(e) => setHighlightSearch(e.target.value)}
+                      placeholder="Search products…"
+                    />
+                    <div className="max-h-60 overflow-y-auto rounded-lg border bg-muted/50">
+                      {highlightChoices.length === 0 && (
+                        <div className="p-4 text-center text-xs text-muted-foreground">
+                          {productsLoaded ? "No products found." : "Loading products…"}
+                        </div>
+                      )}
+                      {highlightChoices.map(product => (
+                        <label
+                          key={product.id}
+                          className="flex cursor-pointer items-center gap-3 border-b p-3 transition last:border-0 hover:bg-card"
+                        >
+                          <input
+                            type="radio"
+                            name="hero-highlight-product"
+                            checked={heroHighlightProductId === product.id}
+                            onChange={() => setHeroHighlightProductId(product.id)}
+                            className="h-4 w-4 border-input text-foreground focus:ring-ring"
+                          />
+                          <div className="flex items-center gap-3">
+                            {product.thumbnail && (
+                              <img src={product.thumbnail} alt={product.title} className="h-8 w-8 rounded-md object-cover" />
+                            )}
+                            <span className="text-xs font-semibold">{product.title}</span>
+                          </div>
+                        </label>
+                      ))}
+                    </div>
+                    <p className="text-[10px] text-muted-foreground">
+                      A product that is later unpublished or deleted drops the card back to the
+                      automatic pick rather than leaving a hole in the hero.
+                    </p>
+                  </div>
+                </div>
               </div>
 
               <Separator />
@@ -1689,6 +1802,9 @@ export default function HomepageTab() {
             icon={Sun}
             description="Category tiles shown in the seasonal section of the homepage. Turn it off to hide the block."
           />
+
+          {/* TRUST BADGES — hero chips and the value-props card strip */}
+          <TrustBadgesCard />
 
           {/* FEATURED ICONS */}
           <IconsCard />

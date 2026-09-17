@@ -159,33 +159,34 @@ function MegaMenuContent({ category }: { category: any }) {
     ? "https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?auto=format&fit=crop&q=80&w=800"
     : "https://images.unsplash.com/photo-1516257984-b1b4d707412e?auto=format&fit=crop&q=80&w=800");
 
-  // Group the columns into 4 vertical columns as requested
-  const groupedColumns: any[][] = [[], [], [], []];
-  
-  if (isShopMenu) {
-    columns.forEach((col: any) => {
-      const name = (col.title || col.name || "").toLowerCase();
-      if (name.includes("featured") || name.includes("sale")) {
-        groupedColumns[0].push(col);
-      } else if (name.includes("top") || name.includes("dress") || name.includes("accessory") || name.includes("accessories")) {
-        groupedColumns[1].push(col);
-      } else if (name.includes("bottom") || name.includes("footwear") || name.includes("shoe") || name.includes("specialty")) {
-        groupedColumns[2].push(col);
-      } else {
-        groupedColumns[3].push(col);
-      }
-    });
-  } else {
-    // Just distribute sequentially starting from the left (Column 1)
-    columns.forEach((col: any, idx: number) => {
-      groupedColumns[idx % 4].push(col);
-    });
-  }
+  /*
+   * The admin's own columns decide the layout.
+   *
+   * These used to be sorted into four fixed slots by keyword - "top", "dress",
+   * "footwear", "specialty" and friends - a taxonomy this catalogue never
+   * adopted. "Premium Panjabi For Men" matched none of them and fell through to
+   * the last slot, "Featured"/"Sale" claimed the first, and the two slots in
+   * between rendered as an empty gap down the middle of the menu.
+   *
+   * Columns are filled left to right now, over as many tracks as there are
+   * columns (four at most), so there is no slot to leave standing empty. Past
+   * four they wrap round and stack, which is the only case where one track
+   * holds more than one group.
+   */
+  const columnCount = Math.min(Math.max(columns.length, 1), 4);
+  const groupedColumns: any[][] = Array.from({ length: columnCount }, () => []);
+
+  columns.forEach((col: any, idx: number) => {
+    groupedColumns[idx % columnCount].push(col);
+  });
 
   return (
     <div className="max-w-[1600px] mx-auto px-4 xl:px-8 py-6 flex justify-between gap-6 xl:gap-8 w-full overflow-hidden">
       {/* Left Link Columns Container */}
-      <div className="grid grid-cols-4 gap-y-8 gap-x-6 xl:gap-x-12 flex-1">
+      <div
+        className="grid gap-y-8 gap-x-6 xl:gap-x-12 flex-1"
+        style={{ gridTemplateColumns: `repeat(${columnCount}, minmax(0, 1fr))` }}
+      >
         {groupedColumns.map((colGroup, groupIdx) => (
           <div key={groupIdx} className="flex flex-col gap-6">
             {colGroup.map((col: any) => (
@@ -456,7 +457,12 @@ export default function HeaderClient({
       {/* 1. TOP UTILITY BAR */}
       <div className="w-full bg-sig-copper-50 text-sig-ink py-2 px-4 text-[10px] sm:text-[11px] font-medium tracking-wide border-b border-sig-line z-60 relative flex justify-between items-center">
         <div className="hidden md:flex flex-1"></div>
-        <div className="flex-1 text-center whitespace-nowrap font-semibold text-[12px]">
+        {/* `whitespace-nowrap` used to apply at every width. A slogan of any
+            length then set a min-width wider than a phone screen, and since this
+            bar spans the page the surplus scrolled the whole site sideways.
+            Below md it wraps; from md up there is room for one line and the
+            flanking columns keep it centred. */}
+        <div className="min-w-0 flex-1 text-center text-[11px] font-semibold leading-snug md:whitespace-nowrap md:text-[12px]">
           {brandSlogan}
         </div>
         <div className="hidden md:flex flex-1 justify-end items-center space-x-6">

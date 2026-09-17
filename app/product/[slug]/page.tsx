@@ -121,7 +121,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
     prisma.category.findMany({
       where: { parentId: null },
       select: { id: true, name: true, slug: true },
-      orderBy: { createdAt: "asc" },
+      orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
       take: 4
     }),
     prisma.color.findMany()

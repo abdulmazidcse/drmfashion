@@ -44,6 +44,7 @@ type Category = {
   parentId?: string | null
   children?: Category[]
   isTrending?: boolean
+  sortOrder?: number
   howToMeasure?: string | null
   howToMeasureImage?: string | null
   metaTitle?: string | null
@@ -62,6 +63,7 @@ type FormValues = {
   bannerImageCaption: string
   parentId: string
   isTrending: boolean
+  sortOrder: string
   metaTitle: string
   metaDescription: string
   metaKeywords: string
@@ -239,7 +241,7 @@ export default function CategoriesPage() {
   }
 
   function openAdd() {
-    reset({ name: "", slug: "", image: "", bannerImage: "", imageAlt: "", bannerImageAlt: "", imageCaption: "", bannerImageCaption: "", parentId: "", isTrending: false, metaTitle: "", metaDescription: "", metaKeywords: "" })
+    reset({ name: "", slug: "", image: "", bannerImage: "", imageAlt: "", bannerImageAlt: "", imageCaption: "", bannerImageCaption: "", parentId: "", isTrending: false, sortOrder: "0", metaTitle: "", metaDescription: "", metaKeywords: "" })
     setAddHowToImageFile(null)
     setAddHowToImagePreview(null)
     setAddHowToImageUrl("")
@@ -263,7 +265,7 @@ export default function CategoriesPage() {
     setEditHowToImagePreview(cat.howToMeasureImage || null)
     setEditHowToImageUrl(cat.howToMeasureImage || "")
     setEditDescription(cat.description || "")
-    editForm.reset({ name: cat.name, slug: cat.slug, image: cat.image || "", bannerImage: cat.bannerImage || "", imageAlt: cat.imageAlt || "", bannerImageAlt: cat.bannerImageAlt || "", imageCaption: cat.imageCaption || "", bannerImageCaption: cat.bannerImageCaption || "", parentId: cat.parentId || "", isTrending: cat.isTrending || false, metaTitle: cat.metaTitle || "", metaDescription: cat.metaDescription || "", metaKeywords: cat.metaKeywords || "" })
+    editForm.reset({ name: cat.name, slug: cat.slug, image: cat.image || "", bannerImage: cat.bannerImage || "", imageAlt: cat.imageAlt || "", bannerImageAlt: cat.bannerImageAlt || "", imageCaption: cat.imageCaption || "", bannerImageCaption: cat.bannerImageCaption || "", parentId: cat.parentId || "", isTrending: cat.isTrending || false, sortOrder: String(cat.sortOrder ?? 0), metaTitle: cat.metaTitle || "", metaDescription: cat.metaDescription || "", metaKeywords: cat.metaKeywords || "" })
   }
 
   async function handleDelete(id: string) {
@@ -407,6 +409,16 @@ export default function CategoriesPage() {
                   <input type="checkbox" {...register("isTrending")} className="w-4 h-4 rounded border-input accent-primary focus:ring-ring" />
                   <span className="text-xs font-semibold text-foreground">Show as Trending Category</span>
                 </label>
+              </div>
+              <div className="space-y-2">
+                <Label>Sort Order</Label>
+                <Input type="number" {...register("sortOrder")} placeholder="0" />
+                <p className="text-xs text-muted-foreground">
+                  Lower shows first; equal numbers keep the order they already had, so leaving
+                  everything at 0 changes nothing. It ranks a category against the others in the
+                  same list — normally its siblings, and on the homepage&apos;s &ldquo;Shop by
+                  category&rdquo; row every trending category together.
+                </p>
               </div>
               <div className="space-y-2">
                 <Label>Description</Label>
@@ -579,6 +591,16 @@ export default function CategoriesPage() {
                   <input type="checkbox" {...editForm.register("isTrending")} className="w-4 h-4 rounded border-input accent-primary focus:ring-ring" />
                   <span className="text-xs font-semibold text-foreground">Show as Trending Category</span>
                 </label>
+              </div>
+              <div className="space-y-2">
+                <Label>Sort Order</Label>
+                <Input type="number" {...editForm.register("sortOrder")} placeholder="0" />
+                <p className="text-xs text-muted-foreground">
+                  Lower shows first; equal numbers keep the order they already had, so leaving
+                  everything at 0 changes nothing. It ranks a category against the others in the
+                  same list — normally its siblings, and on the homepage&apos;s &ldquo;Shop by
+                  category&rdquo; row every trending category together.
+                </p>
               </div>
               <div className="space-y-2">
                 <Label>Description</Label>

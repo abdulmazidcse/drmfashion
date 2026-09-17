@@ -1,6 +1,7 @@
 import Link from "next/link";
 import HeroVideo from "./HeroVideo";
 import HeroHighlightCard, { type HeroHighlight } from "./HeroHighlightCard";
+import TrustBadges from "../TrustBadges";
 
 interface SlideConfig {
   active?: boolean;
@@ -138,23 +139,11 @@ export default function HomeHero({ slides, highlight }: HomeHeroProps) {
               )}
             </div>
 
-            {/* The same three promises the value-props strip further down the
-                page makes — repeated here because this is where the decision to
-                keep scrolling gets made. */}
-            <div className="mt-9 flex flex-wrap gap-x-[22px] gap-y-3 border-t border-sig-line pt-[26px]">
-              {[
-                { mark: "✓", text: "Free shipping over $150" },
-                { mark: "↺", text: "30-day easy returns" },
-                { mark: "★", text: "Secure checkout" },
-              ].map((item) => (
-                <div key={item.text} className="flex items-center gap-2.5 text-[13px] font-semibold text-sig-soft">
-                  <span className="grid h-[22px] w-[22px] place-items-center rounded-full bg-sig-aqua-50 text-[11px] font-extrabold text-sig-aqua-700">
-                    {item.mark}
-                  </span>
-                  {item.text}
-                </div>
-              ))}
-            </div>
+            {/* The same promises the value-props strip further down the page
+                makes — repeated here because this is where the decision to keep
+                scrolling gets made, and read from the one setting so the two
+                cannot drift apart. */}
+            <TrustBadges variant="hero" />
           </div>
 
           {/* ── Media ── */}
