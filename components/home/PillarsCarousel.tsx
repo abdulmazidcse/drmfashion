@@ -3,6 +3,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import ImageCompare from "./ImageCompare";
+import { parsePillarSizes, type PillarSizes } from "@/lib/pillarsSizes";
 
 type Gender = "men" | "women";
 
@@ -55,35 +56,14 @@ interface PillarsCarouselProps {
     purpose?: TabContent;
     product?: Partial<ProductTabContent>;
     media?: PillarsMedia;
+    /** The height ranges on the first slide. Empty falls back to the built-ins. */
+    sizes?: unknown;
   } | null;
 }
 
-interface SizeOption {
-  id: string;
-  range: string;
-  name: string;
-  height: string;
-  inseam: string;
-  /**
-   * How tall the measuring rule beside the figure is drawn, as a percentage of
-   * the media box. It grows with the range, so the bracket itself reads as the
-   * height being described rather than being decoration around the numbers.
-   */
-  bracket: number;
-}
-
 // All media below are stand-ins from public/ — swap in the store's own photography.
-const SIZES: Record<Gender, SizeOption[]> = {
-  men: [
-    { id: "men-1", range: "6' - 6'3\"", name: "Semi Tall", height: "6' 0\" - 6' 3\"", inseam: "34\"", bracket: 51 },
-    { id: "men-2", range: "6'3\" - 6'7\"", name: "Tall", height: "6' 3\" - 6' 7\"", inseam: "36\"", bracket: 54 },
-    { id: "men-3", range: "6'8\" - 7'1\"", name: "Extra Tall", height: "6' 8\" - 7' 1\"", inseam: "38\" - 40\"", bracket: 58 },
-  ],
-  women: [
-    { id: "women-1", range: "5'9\" - 6'1\"", name: "Tall", height: "5' 9\" - 6' 1\"", inseam: "Up to 36\"", bracket: 54 },
-    { id: "women-2", range: "6'2\" - 6'6\"", name: "Extra Tall", height: "6' 2\" - 6' 6\"", inseam: "36\" and up", bracket: 58 },
-  ],
-};
+// The height ranges themselves now come from Settings → Homepage; the defaults
+// they fall back to live in lib/pillarsSizes.ts.
 
 /**
  * Layout of the heights slide, shared by the figures and the measuring rule.
@@ -221,6 +201,10 @@ export default function PillarsCarousel({ initialTabs }: PillarsCarouselProps) {
   /** True while the pointer (or keyboard focus) is inside the media column. */
   const [paused, setPaused] = useState(false);
 
+  // From the same Setting as the slides. A gender left unconfigured keeps the
+  // built-in ranges rather than rendering an empty row of chips.
+  const sizes: PillarSizes = parsePillarSizes(initialTabs?.sizes);
+
   // Every slide comes from the `home_community_tabs` Setting, falling back
   // field by field to DEFAULT_SLIDES.
   const product = DEFAULT_SLIDES[3];
@@ -321,7 +305,7 @@ export default function PillarsCarousel({ initialTabs }: PillarsCarouselProps) {
     setActiveSize(null);
   };
 
-  const selectedSize = SIZES[gender].find((s) => s.id === activeSize) || null;
+  const selectedSize = sizes[gender].find((s) => s.id === activeSize) || null;
   const activeType = slides[activeSlide]?.type;
   const showToggle = activeType === "sizes" || activeType === "compare";
 
@@ -389,7 +373,7 @@ export default function PillarsCarousel({ initialTabs }: PillarsCarouselProps) {
                     {/* The whole ladder is mounted at once; only `left` and
                         `opacity` move, so the browser can interpolate rather
                         than swapping images mid-gesture. */}
-                    {SIZES[gender].map((size, idx) => {
+                    {sizes[gender].map((size, idx) => {
                       const chosen = activeSize === size.id;
                       return (
                         <img
@@ -403,7 +387,7 @@ export default function PillarsCarousel({ initialTabs }: PillarsCarouselProps) {
                             // Once a range is picked every figure travels to the
                             // right-hand slot; the unchosen ones fade out on the
                             // way, leaving the chosen one standing beside the rule.
-                            left: `${activeSize ? SLOT * 2 : slotLeft(idx, SIZES[gender].length)}%`,
+                            left: `${activeSize ? SLOT * 2 : slotLeft(idx, sizes[gender].length)}%`,
                             opacity: !activeSize || chosen ? 1 : 0,
                           }}
                           loading="lazy"
@@ -429,7 +413,7 @@ export default function PillarsCarousel({ initialTabs }: PillarsCarouselProps) {
 
                       {/* Every readout stays mounted and cross-fades, so moving
                           between ranges does not blank the text mid-slide. */}
-                      {SIZES[gender].map((size) => (
+                      {sizes[gender].map((size) => (
                         <div
                           key={size.id}
                           className={`absolute right-[30px] top-0 flex w-max flex-col gap-4 text-right transition-opacity duration-700 ${
@@ -451,7 +435,7 @@ export default function PillarsCarousel({ initialTabs }: PillarsCarouselProps) {
                     </div>
                     {/* Size-range buttons */}
                     <div className="absolute bottom-[30px] left-1/2 z-10 flex -translate-x-1/2 gap-[5px]">
-                      {SIZES[gender].map((size) => (
+                      {sizes[gender].map((size) => (
                         <button
                           key={size.id}
                           onClick={() => setActiveSize(size.id)}

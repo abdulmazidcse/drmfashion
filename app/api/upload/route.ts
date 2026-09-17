@@ -4,6 +4,13 @@ import { s3Client } from "@/lib/minio";
 import { bucketMediaUrl } from "@/lib/utils";
 import { writeFile, mkdir } from "fs/promises";
 import path from "path";
+import { getSettings } from "@/lib/settings";
+import {
+  uploadKindFor,
+  uploadLimitBytes,
+  uploadLimitMb,
+  uploadTooLargeMessage,
+} from "@/lib/uploadLimits";
 
 export async function POST(req: Request) {
   try {
@@ -20,11 +27,16 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Invalid file type. Only images are allowed." }, { status: 400 });
     }
 
-    // Standard Validation: Check file size (Max 5MB — editorial covers and
-    // in-article photography need more headroom than product thumbnails)
-    const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
-    if (file.size > MAX_FILE_SIZE) {
-      return NextResponse.json({ error: "File size exceeds the 5MB limit." }, { status: 400 });
+    // Settings → Brand → Media Uploads, defaulting to the 5MB this used to
+    // hardcode. Read per request rather than per boot: getSettings is cached,
+    // and a limit that needs a redeploy to change is not a setting.
+    const settings = await getSettings();
+    const kind = uploadKindFor(file.type);
+    if (file.size > uploadLimitBytes(settings, kind)) {
+      return NextResponse.json(
+        { error: uploadTooLargeMessage(kind, uploadLimitMb(settings, kind)) },
+        { status: 400 }
+      );
     }
 
     const buffer = Buffer.from(await file.arrayBuffer());

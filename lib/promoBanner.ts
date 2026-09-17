@@ -35,6 +35,20 @@ export const PROMO_BANNER_TEXT_SIZES = ["sm", "md", "lg", "xl"] as const
 
 export type PromoBannerTextSize = (typeof PROMO_BANNER_TEXT_SIZES)[number]
 
+/*
+ * The full range, so the number in the box is the number that is used. A
+ * tighter bound would either be refused by the browser or clamped here without
+ * saying so, and both amount to the setting lying about what it accepts. The
+ * backdrop's padding is subtracted where these are applied, so even 100 stays
+ * on screen.
+ */
+export const MIN_PROMO_BANNER_WIDTH = 1
+export const MAX_PROMO_BANNER_WIDTH = 100
+
+/** 0 is "auto" — no preference, the screen is the only limit. */
+export const MIN_PROMO_BANNER_HEIGHT = 1
+export const MAX_PROMO_BANNER_HEIGHT = 100
+
 export interface PromoBannerConfig {
   active: boolean
 
@@ -44,13 +58,39 @@ export interface PromoBannerConfig {
   imageAlt: string
 
   /**
-   * How wide the banner is allowed to get, in pixels.
+   * How wide the banner is, as a percentage of the screen.
    *
-   * A ceiling, not a width: the card is still `w-full` inside the backdrop's
-   * padding, so on a phone this changes nothing and the picture fills the
-   * screen either way. It is the desktop size.
+   * Read as a share of the viewport rather than a pixel count, so the banner
+   * keeps its proportions on a laptop and a large monitor alike. A floor is
+   * applied when it is rendered: a percentage that is comfortable on a desktop
+   * would be a postage stamp on a phone, so below roughly 320px the banner
+   * simply takes the width it is given.
    */
-  maxWidthPx: number
+  widthPercent: number
+
+  /**
+   * A fixed height for the picture, as a percentage of the screen height.
+   *
+   * 0 means "use the image's own proportions", which is what the banner did
+   * before this existed and is still the right answer for artwork cropped for
+   * the purpose. The ceiling is short of 100 on purpose — a banner as tall as
+   * the screen leaves nowhere for the backdrop, and the close button ends up
+   * against the edge.
+   */
+  heightPercent: number
+
+  /**
+   * What sits behind the picture, or empty for nothing at all.
+   *
+   * Two things need a colour and neither is exotic: a PNG with a transparent
+   * background, which would otherwise show the dimmed page through the artwork,
+   * and `contain`, which leaves the frame showing on two sides.
+   *
+   * Empty by default. Artwork made for a banner is usually full-bleed and
+   * carries its own background, and imposing a colour on it — black, white or
+   * otherwise — only shows up where it is not wanted.
+   */
+  backgroundColor: string
 
   /** Seconds after the page settles before it opens. */
   delaySeconds: number
@@ -78,7 +118,9 @@ export const DEFAULT_PROMO_BANNER: PromoBannerConfig = {
   active: false,
   image: "",
   imageAlt: "",
-  maxWidthPx: 560,
+  widthPercent: 40,
+  heightPercent: 0,
+  backgroundColor: "",
   delaySeconds: 2,
   reshowHours: 4,
   heading: "",
@@ -128,7 +170,24 @@ export function parsePromoBanner(raw: string | null | undefined): PromoBannerCon
     imageAlt: str(f.imageAlt, d.imageAlt),
     // Floored at a narrow phone and capped short of a full desktop window — a
     // poster wider than that stops being a poster and hides the site behind it.
-    maxWidthPx: num(f.maxWidthPx, d.maxWidthPx, 280, 1200),
+    widthPercent: num(
+      f.widthPercent,
+      d.widthPercent,
+      MIN_PROMO_BANNER_WIDTH,
+      MAX_PROMO_BANNER_WIDTH
+    ),
+    // 0 passes through untouched — it is the "auto" switch, not a short
+    // height, so clamping it up to the minimum would take the option away.
+    heightPercent:
+      Number(f.heightPercent) === 0
+        ? 0
+        : num(
+            f.heightPercent,
+            d.heightPercent,
+            MIN_PROMO_BANNER_HEIGHT,
+            MAX_PROMO_BANNER_HEIGHT
+          ),
+    backgroundColor: str(f.backgroundColor, d.backgroundColor),
     // 0 is allowed and means "straight away"; a minute is already far longer
     // than anyone waits before the first scroll.
     delaySeconds: num(f.delaySeconds, d.delaySeconds, 0, 60),

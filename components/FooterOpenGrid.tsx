@@ -125,10 +125,12 @@ export default function FooterOpenGrid({ categories }: { categories: Category[] 
               <span className="mx-2 text-zinc-300" aria-hidden="true">·</span>
               Developed by{" "}
               <a
-                href="https://tallplus.co"
-                className="font-semibold text-zinc-950 underline decoration-zinc-300 underline-offset-4 hover:decoration-zinc-950 transition-colors"
+                href="https://zayantit.com/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-semibold text-zinc-950 underline decoration-zinc-300 underline-offset-4 transition-colors hover:decoration-zinc-950"
               >
-                TallPlus
+                Zayant IT
               </a>
             </span>
             <div className="flex flex-wrap gap-x-6 gap-y-2">

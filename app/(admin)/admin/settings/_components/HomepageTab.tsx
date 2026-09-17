@@ -3,7 +3,7 @@
 import { useState } from "react"
 import dynamic from "next/dynamic"
 
-import { Settings, Loader2, Trash2, Image as ImageIcon, UploadCloud, Sun, X, FileText, Film, LayoutGrid, Plus, ArrowUp, ArrowDown, type LucideIcon } from "lucide-react"
+import { Settings, Loader2, Trash2, Image as ImageIcon, UploadCloud, Sun, X, FileText, Film, LayoutGrid, Pencil, Plus, ArrowUp, ArrowDown, type LucideIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
@@ -18,6 +18,7 @@ import VideoBannersCard from "./VideoBannersCard"
 import TrustBadgesCard from "./TrustBadgesCard"
 import { useSettingsForm, type StyleSectionKey } from "./SettingsFormContext"
 import { MAX_HOME_REELS } from "@/lib/homeReels"
+import { MAX_PILLAR_BRACKET, MIN_PILLAR_BRACKET, type PillarGender } from "@/lib/pillarsSizes"
 import {
   HOME_SHOWCASE_SOURCES,
   MAX_HOME_SHOWCASE_PRODUCTS,
@@ -34,6 +35,119 @@ const RichTextEditor = dynamic(() => import("@/components/admin/RichTextEditor")
     </div>
   ),
 })
+
+/**
+ * One height range: its figure, and the words that describe it.
+ *
+ * The label is the range rather than a fixed string, so what the admin sees
+ * here is what the storefront's chip says. The pencil beside it opens the rest
+ * of the range in place — editing the wording next to the picture it belongs
+ * to, instead of in a separate list where the two have to be matched up by eye.
+ */
+function PillarSizeField({
+  gender,
+  index,
+  value,
+  onChange,
+}: {
+  gender: PillarGender
+  index: number
+  value: string
+  onChange: React.Dispatch<React.SetStateAction<string>>
+}) {
+  const { pillarSizes, updatePillarSize, fieldLabel } = useSettingsForm()
+  const [editing, setEditing] = useState(false)
+
+  const size = pillarSizes[gender][index]
+  if (!size) return null
+
+  const who = gender === "men" ? "Men" : "Women"
+  const label = [size.range, size.name && `(${size.name})`].filter(Boolean).join(" ")
+
+  return (
+    <MediaField
+      label={`${who} — ${label || `range ${index + 1}`}`}
+      value={value}
+      onChange={onChange}
+      labelAction={
+        <button
+          type="button"
+          onClick={() => setEditing((v) => !v)}
+          title={editing ? "Done" : "Edit this range"}
+          aria-expanded={editing}
+          className={`grid h-6 w-6 shrink-0 place-items-center rounded-md border transition-colors ${
+            editing
+              ? "border-primary bg-primary text-primary-foreground"
+              : "border-input bg-card text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          <Pencil className="h-3 w-3" />
+        </button>
+      }
+    >
+      {editing && (
+        <div className="space-y-4 rounded-xl border bg-muted/30 p-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label className={fieldLabel}>Button Label</Label>
+              <Input
+                type="text"
+                value={size.range}
+                onChange={(e) => updatePillarSize(gender, index, { range: e.target.value })}
+                className="font-bold"
+              />
+              <p className="text-[10px] text-muted-foreground">
+                The chip on the storefront. Empty hides this range there.
+              </p>
+            </div>
+            <div className="space-y-2">
+              <Label className={fieldLabel}>Name</Label>
+              <Input
+                type="text"
+                value={size.name}
+                onChange={(e) => updatePillarSize(gender, index, { name: e.target.value })}
+                placeholder="Semi Tall"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label className={fieldLabel}>Height</Label>
+              <Input
+                type="text"
+                value={size.height}
+                onChange={(e) => updatePillarSize(gender, index, { height: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label className={fieldLabel}>Inseam</Label>
+              <Input
+                type="text"
+                value={size.inseam}
+                onChange={(e) => updatePillarSize(gender, index, { inseam: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2 sm:col-span-2">
+              <Label className={fieldLabel}>Rule Height (%)</Label>
+              <Input
+                type="number"
+                min={MIN_PILLAR_BRACKET}
+                max={MAX_PILLAR_BRACKET}
+                value={size.bracket}
+                onChange={(e) =>
+                  updatePillarSize(gender, index, { bracket: Number(e.target.value) })
+                }
+                className="font-mono"
+              />
+              <p className="text-[10px] text-muted-foreground">
+                How tall the measuring rule is drawn beside this range. Step it up with the range
+                — 51, 54, 58 — so the rule reads as the height it describes.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+    </MediaField>
+  )
+}
 
 // Renders the seasonal style section's card. Kept generic over `sectionKey`
 // rather than inlined, so a second season can be reintroduced by adding one key.
@@ -789,6 +903,8 @@ export default function HomepageTab() {
     setTabHeightsCtaText,
     tabHeightsCtaLink,
     setTabHeightsCtaLink,
+    pillarSizes,
+    updatePillarSize,
     tabFitLabel,
     setTabFitLabel,
     tabFitHeading,
@@ -1637,32 +1753,12 @@ export default function HomepageTab() {
                       above.
                     </p>
                   </div>
-                  <MediaField
-                    label={`Men — 6' to 6'3" (Semi Tall)`}
-                    value={pillarFigureMen1}
-                    onChange={setPillarFigureMen1}
-                  />
-                  <MediaField
-                    label={`Men — 6'3" to 6'7" (Tall)`}
-                    value={pillarFigureMen2}
-                    onChange={setPillarFigureMen2}
-                  />
-                  <MediaField
-                    label={`Men — 6'8" to 7'1" (Extra Tall)`}
-                    value={pillarFigureMen3}
-                    onChange={setPillarFigureMen3}
-                  />
+                  <PillarSizeField gender="men" index={0} value={pillarFigureMen1} onChange={setPillarFigureMen1} />
+                  <PillarSizeField gender="men" index={1} value={pillarFigureMen2} onChange={setPillarFigureMen2} />
+                  <PillarSizeField gender="men" index={2} value={pillarFigureMen3} onChange={setPillarFigureMen3} />
                   <div className="hidden md:block" />
-                  <MediaField
-                    label={`Women — 5'9" to 6'1" (Tall)`}
-                    value={pillarFigureWomen1}
-                    onChange={setPillarFigureWomen1}
-                  />
-                  <MediaField
-                    label={`Women — 6'2" to 6'6" (Extra Tall)`}
-                    value={pillarFigureWomen2}
-                    onChange={setPillarFigureWomen2}
-                  />
+                  <PillarSizeField gender="women" index={0} value={pillarFigureWomen1} onChange={setPillarFigureWomen1} />
+                  <PillarSizeField gender="women" index={1} value={pillarFigureWomen2} onChange={setPillarFigureWomen2} />
 
                   <div className="md:col-span-2">
                     <Separator />
@@ -1676,6 +1772,7 @@ export default function HomepageTab() {
                     <Label className={fieldLabel}>CTA Button Link</Label>
                     <Input type="text" value={tabHeightsCtaLink} onChange={(e) => setTabHeightsCtaLink(e.target.value)} className="font-mono" />
                   </div>
+
                 </div>
               )}
 

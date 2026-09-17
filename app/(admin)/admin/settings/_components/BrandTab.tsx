@@ -1,6 +1,6 @@
 "use client"
 
-import { Globe, Image as ImageIcon, MessageCircle, Package } from "lucide-react"
+import { Globe, Image as ImageIcon, MessageCircle, Package, UploadCloud } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import CollapsibleCard from "./CollapsibleCard"
@@ -40,6 +40,10 @@ export default function BrandTab() {
     setSocialPinterest,
     lowStockNoticeEnabled,
     setLowStockNoticeEnabled,
+    uploadMaxMb,
+    setUploadMaxMb,
+    uploadMaxVideoMb,
+    setUploadMaxVideoMb,
     fieldLabel,
     helpText,
   } = useSettingsForm()
@@ -227,6 +231,60 @@ export default function BrandTab() {
             <div className="space-y-3">
               <Label className={fieldLabel}>Pinterest URL</Label>
               <Input type="url" value={socialPinterest} onChange={(e) => setSocialPinterest(e.target.value)} placeholder="https://pinterest.com/yourprofile" />
+            </div>
+          </div>
+        </CollapsibleCard>
+
+        {/* MEDIA UPLOADS — what every upload box on this dashboard will accept */}
+        <CollapsibleCard
+          title="Media Uploads"
+          description="The largest file any upload box on this dashboard will take."
+          icon={UploadCloud}
+          defaultCollapsed
+        >
+          <div className="space-y-6">
+            <p className={helpText}>
+              The web server in front of the site has its own ceiling, and when that one is
+              reached the upload is refused before this dashboard ever sees it — which is why
+              such a failure used to show up as a bare &ldquo;Failed to upload&rdquo;. Keep the
+              server&apos;s limit comfortably above both numbers below and the decision stays
+              here, where a refusal says what is wrong.
+            </p>
+
+            <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+              <div className="space-y-3">
+                <Label className={fieldLabel}>Image Limit (MB)</Label>
+                <Input
+                  type="number"
+                  min={1}
+                  max={2048}
+                  value={uploadMaxMb}
+                  onChange={(e) => setUploadMaxMb(e.target.value)}
+                  className="font-mono font-bold"
+                  placeholder="5"
+                />
+                <p className={helpText}>
+                  Covers photographs and every other non-video upload — logos, banners, product
+                  and category pictures. 5 is the default.
+                </p>
+              </div>
+
+              <div className="space-y-3">
+                <Label className={fieldLabel}>Video Limit (MB)</Label>
+                <Input
+                  type="number"
+                  min={1}
+                  max={2048}
+                  value={uploadMaxVideoMb}
+                  onChange={(e) => setUploadMaxVideoMb(e.target.value)}
+                  className="font-mono font-bold"
+                  placeholder="100"
+                />
+                <p className={helpText}>
+                  Separate because a clip is far bigger than a photograph, and one shared number
+                  would be either useless for video or pointless for images. 100 is the default.
+                </p>
+              </div>
             </div>
           </div>
         </CollapsibleCard>

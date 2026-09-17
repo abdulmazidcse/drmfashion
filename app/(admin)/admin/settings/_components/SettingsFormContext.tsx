@@ -39,6 +39,22 @@ import {
 } from "@/lib/trustBadges"
 import { DEFAULT_HERO_HIGHLIGHT, parseHeroHighlight } from "@/lib/heroHighlight"
 import {
+  DEFAULT_PILLAR_SIZES,
+  parsePillarSizes,
+  type PillarGender,
+  type PillarSize,
+  type PillarSizes,
+} from "@/lib/pillarsSizes"
+import {
+  DEFAULT_UPLOAD_MAX_MB,
+  DEFAULT_UPLOAD_MAX_VIDEO_MB,
+  UPLOAD_MAX_MB_KEY,
+  UPLOAD_MAX_VIDEO_MB_KEY,
+  clampUploadMb,
+  uploadKindFor,
+  uploadTooLargeMessage,
+} from "@/lib/uploadLimits"
+import {
   DEFAULT_PROMO_BANNER,
   PROMO_BANNER_SETTING_KEY,
   parsePromoBanner,
@@ -122,6 +138,32 @@ function flattenCategories(nodes: any[], depth = 0): any[] {
 
 // Every field lives here so the tab panels can stay presentational and be code
 // split — without this they would need ~200 props drilled through the page.
+/**
+ * Turns an upload failure into something the admin can act on.
+ *
+ * "Failed to upload" was true of every cause and useful for none. The one that
+ * actually bites is 413: the reverse proxy rejects the request on size before
+ * it ever reaches the route, so the app's own 5MB allowance never gets a say
+ * and nothing is logged on our side. That needs naming, because the fix is to
+ * shrink the picture (or raise `client_max_body_size` on the server), not to
+ * try again.
+ */
+function uploadErrorMessage(error: unknown, subject: string): string {
+  const res = (error as { response?: { status?: number; data?: { error?: string } } })?.response
+
+  if (res?.status === 413) {
+    return `That ${subject} is too large for the server to accept. Try one under 1MB, or ask whoever runs the server to raise the upload limit.`
+  }
+
+  // The route's own message when it got far enough to write one — wrong file
+  // type, over the 5MB cap, storage unreachable.
+  if (typeof res?.data?.error === "string" && res.data.error.trim() !== "") {
+    return res.data.error
+  }
+
+  return `Failed to upload ${subject}.`
+}
+
 function useSettingsFormState() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -387,6 +429,21 @@ function useSettingsFormState() {
       return { ...prev, [gender]: tiles }
     })
   }
+
+  // The height ranges on the pillars carousel's first slide
+  const [pillarSizes, setPillarSizes] = useState<PillarSizes>(DEFAULT_PILLAR_SIZES)
+
+  function updatePillarSize(gender: PillarGender, index: number, patch: Partial<PillarSize>) {
+    setPillarSizes(prev => ({
+      ...prev,
+      [gender]: prev[gender].map((s, i) => (i === index ? { ...s, ...patch } : s)),
+    }))
+  }
+
+  // What the upload boxes will accept. Kept as strings like the other numeric
+  // settings so a half-typed value does not snap back while it is being edited.
+  const [uploadMaxMb, setUploadMaxMb] = useState(String(DEFAULT_UPLOAD_MAX_MB))
+  const [uploadMaxVideoMb, setUploadMaxVideoMb] = useState(String(DEFAULT_UPLOAD_MAX_VIDEO_MB))
 
   // The image pop-up banner (separate from the promo drawer above it)
   const [promoBanner, setPromoBanner] = useState<PromoBannerConfig>(DEFAULT_PROMO_BANNER)
@@ -815,6 +872,10 @@ function useSettingsFormState() {
                 if (tabs.product.video !== undefined) setTabProductVideo(tabs.product.video)
                 if (tabs.product.poster !== undefined) setTabProductPoster(tabs.product.poster)
               }
+              // keepEmpty so a range just added survives a reload before it has
+              // been typed into.
+              if (tabs.sizes) setPillarSizes(parsePillarSizes(tabs.sizes, { keepEmpty: true }))
+
               if (tabs.media) {
                 if (tabs.media.figureWomen !== undefined) setPillarFigureWomen(tabs.media.figureWomen)
                 if (tabs.media.figureMen1 !== undefined) setPillarFigureMen1(tabs.media.figureMen1)
@@ -855,6 +916,11 @@ function useSettingsFormState() {
           // survive a reload here, even though the storefront drops it.
           if (res.data[HOME_ICONS_SETTING_KEY]) {
             setHomeIcons(parseHomeIcons(res.data[HOME_ICONS_SETTING_KEY], { keepEmpty: true }))
+          }
+
+          if (res.data[UPLOAD_MAX_MB_KEY] !== undefined) setUploadMaxMb(res.data[UPLOAD_MAX_MB_KEY])
+          if (res.data[UPLOAD_MAX_VIDEO_MB_KEY] !== undefined) {
+            setUploadMaxVideoMb(res.data[UPLOAD_MAX_VIDEO_MB_KEY])
           }
 
           if (res.data[PROMO_BANNER_SETTING_KEY]) {
@@ -979,7 +1045,7 @@ function useSettingsFormState() {
       }
     } catch (error) {
       console.error("Logo upload failed:", error)
-      Swal.fire({ text: "Failed to upload logo.", confirmButtonColor: "#18181b", icon: "error" })
+      Swal.fire({ text: uploadErrorMessage(error, "logo"), confirmButtonColor: "#18181b", icon: "error" })
     } finally {
       setUploadingLogo(false)
     }
@@ -999,7 +1065,7 @@ function useSettingsFormState() {
       }
     } catch (error) {
       console.error("Favicon upload failed:", error)
-      Swal.fire({ text: "Failed to upload favicon.", confirmButtonColor: "#18181b", icon: "error" })
+      Swal.fire({ text: uploadErrorMessage(error, "favicon"), confirmButtonColor: "#18181b", icon: "error" })
     } finally {
       setUploadingFavicon(false)
     }
@@ -1021,7 +1087,7 @@ function useSettingsFormState() {
       }
     } catch (error) {
       console.error(`Tab image upload failed for ${tabKey}:`, error)
-      Swal.fire({ text: "Failed to upload image.", confirmButtonColor: "#18181b", icon: "error" })
+      Swal.fire({ text: uploadErrorMessage(error, "image"), confirmButtonColor: "#18181b", icon: "error" })
     } finally {
       setUploadingTabImage(false)
     }
@@ -1034,6 +1100,27 @@ function useSettingsFormState() {
   ) {
     if (!e.target.files || e.target.files.length === 0) return
     const file = e.target.files[0]
+
+    // Refused here as well as on the server. The server is the one that
+    // decides, but sending forty megabytes over a phone connection only to be
+    // told no is a minute of someone's life for an answer already known.
+    const kind = uploadKindFor(file.type)
+    const limitMb =
+      kind === "video"
+        ? clampUploadMb(uploadMaxVideoMb, DEFAULT_UPLOAD_MAX_VIDEO_MB)
+        : clampUploadMb(uploadMaxMb, DEFAULT_UPLOAD_MAX_MB)
+
+    if (file.size > limitMb * 1024 * 1024) {
+      Swal.fire({
+        text: uploadTooLargeMessage(kind, limitMb),
+        confirmButtonColor: "#18181b",
+        icon: "error",
+      })
+      // Cleared so picking the same file again after changing the limit still
+      // fires a change event.
+      e.target.value = ""
+      return
+    }
 
     try {
       setLoadingState(true)
@@ -1056,7 +1143,7 @@ function useSettingsFormState() {
       }
     } catch (error) {
       console.error("Field file upload failed:", error)
-      Swal.fire({ text: "Failed to upload file.", confirmButtonColor: "#18181b", icon: "error" })
+      Swal.fire({ text: uploadErrorMessage(error, "file"), confirmButtonColor: "#18181b", icon: "error" })
     } finally {
       setLoadingState(false)
     }
@@ -1201,6 +1288,7 @@ function useSettingsFormState() {
             video: tabProductVideo,
             poster: tabProductPoster
           },
+          sizes: pillarSizes,
           media: {
             figureWomen: pillarFigureWomen,
             figureMen1: pillarFigureMen1,
@@ -1222,6 +1310,12 @@ function useSettingsFormState() {
         [HOME_ICONS_SETTING_KEY]: JSON.stringify(homeIcons),
         [TRUST_BADGES_SETTING_KEY]: JSON.stringify(trustBadges),
         [PROMO_BANNER_SETTING_KEY]: JSON.stringify(promoBanner),
+        // Clamped on the way out as well as on the way in, so a number typed
+        // past the allowed range is never what gets stored.
+        [UPLOAD_MAX_MB_KEY]: String(clampUploadMb(uploadMaxMb, DEFAULT_UPLOAD_MAX_MB)),
+        [UPLOAD_MAX_VIDEO_MB_KEY]: String(
+          clampUploadMb(uploadMaxVideoMb, DEFAULT_UPLOAD_MAX_VIDEO_MB)
+        ),
         [HOME_SHOWCASE_SETTING_KEY]: JSON.stringify(homeShowcase),
         home_description: homeDescription,
         [HEIGHTS_GUIDE_SETTING_KEY]: JSON.stringify(heightsGuide)
@@ -1533,6 +1627,12 @@ function useSettingsFormState() {
     setHeroHighlightProductId,
     heroHighlightNote,
     setHeroHighlightNote,
+    pillarSizes,
+    updatePillarSize,
+    uploadMaxMb,
+    setUploadMaxMb,
+    uploadMaxVideoMb,
+    setUploadMaxVideoMb,
     promoBanner,
     updatePromoBanner,
     trustBadges,

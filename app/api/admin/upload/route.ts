@@ -4,6 +4,13 @@ import { s3Client } from "@/lib/minio"
 import { bucketMediaUrl } from "@/lib/utils"
 import { writeFile, mkdir } from "fs/promises"
 import path from "path"
+import { getSettings } from "@/lib/settings"
+import {
+  uploadKindFor,
+  uploadLimitBytes,
+  uploadLimitMb,
+  uploadTooLargeMessage,
+} from "@/lib/uploadLimits"
 
 type Upload = {
   filename: string
@@ -59,6 +66,26 @@ export async function POST(req: NextRequest) {
 
       if (uploads.length === 0) {
         return NextResponse.json({ error: "No files uploaded" }, { status: 400 })
+      }
+    }
+
+    // This route never capped anything, which was only survivable while the
+    // proxy in front of it did. With that opened up so refusals can be
+    // explained instead of appearing as a bare 413, the cap lives here, set in
+    // Settings → Brand → Media Uploads.
+    //
+    // Checked after the bodies are read — the bytes have already crossed the
+    // wire by then either way, and rejecting here is what turns "413" into a
+    // sentence naming the limit. Every file in a multipart batch is measured,
+    // so one oversized picture cannot ride in beside small ones.
+    const settings = await getSettings()
+    for (const upload of uploads) {
+      const kind = uploadKindFor(upload.contentType)
+      if (upload.buffer.length > uploadLimitBytes(settings, kind)) {
+        return NextResponse.json(
+          { error: uploadTooLargeMessage(kind, uploadLimitMb(settings, kind)) },
+          { status: 400 }
+        )
       }
     }
 

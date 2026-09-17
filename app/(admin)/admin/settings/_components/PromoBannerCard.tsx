@@ -9,6 +9,9 @@ import CollapsibleCard from "./CollapsibleCard"
 import MediaField from "./MediaField"
 import { useSettingsForm } from "./SettingsFormContext"
 import {
+  MAX_PROMO_BANNER_HEIGHT,
+  MAX_PROMO_BANNER_WIDTH,
+  MIN_PROMO_BANNER_WIDTH,
   PROMO_BANNER_POSITIONS,
   PROMO_BANNER_TEXT_SIZES,
   type PromoBannerPosition,
@@ -148,23 +151,48 @@ export default function PromoBannerCard() {
 
         {/* ─── Size and timing ─────────────────────────────────────────── */}
         <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-          <div className="space-y-3 md:col-span-2">
-            <Label className={fieldLabel}>Popup Width (pixels)</Label>
+          <div className="space-y-3">
+            <Label className={fieldLabel}>Popup Width (% of screen)</Label>
             <Input
               type="number"
-              min={280}
-              max={1200}
-              step={20}
-              value={promoBanner.maxWidthPx}
-              onChange={(e) => updatePromoBanner({ maxWidthPx: Number(e.target.value) })}
+              min={MIN_PROMO_BANNER_WIDTH}
+              max={MAX_PROMO_BANNER_WIDTH}
+              value={promoBanner.widthPercent}
+              onChange={(e) => updatePromoBanner({ widthPercent: Number(e.target.value) })}
               className="font-mono font-bold"
             />
             <p className={helpText}>
-              How wide it is allowed to get, 280–1200. This is the desktop size: on a phone the
-              banner already fills the screen, so a bigger number changes nothing there. 560 is the
-              default; around 900 suits a wide landscape picture.
+              How much of the visitor&apos;s screen width the banner takes. Artwork smaller than this is scaled up to it, so the banner is the size you
+              ask for rather than whatever size the file happens to be. 40 is the default; around
+              70 suits a wide landscape picture. On a phone it fills the screen whatever you put
+              here — a share that reads well on a desktop would be a postage stamp there.
             </p>
           </div>
+
+          <div className="space-y-3">
+            <Label className={fieldLabel}>Max Image Height (% of screen)</Label>
+            <Input
+              type="number"
+              min={0}
+              max={MAX_PROMO_BANNER_HEIGHT}
+              value={promoBanner.heightPercent}
+              onChange={(e) => updatePromoBanner({ heightPercent: Number(e.target.value) })}
+              className="font-mono font-bold"
+            />
+            <p className={helpText}>
+              A ceiling, never a crop: the picture is always shown whole, shrunk to fit if the
+              width you asked for would make it taller than this. <b>0</b> means no preference and
+              the screen is the only limit. Anything up to {MAX_PROMO_BANNER_HEIGHT} keeps it
+              within that share of the screen height.
+            </p>
+          </div>
+
+          <ColourField
+            label="Banner Background"
+            value={promoBanner.backgroundColor}
+            onChange={(backgroundColor) => updatePromoBanner({ backgroundColor })}
+            hint="What sits behind the picture. It shows through artwork saved with a transparent background, and fills the gap when Image Fit is set to Fit inside. Clear the box for no background at all, which is what full-bleed artwork wants."
+          />
 
           <div className="space-y-3">
             <Label className={fieldLabel}>Open After (seconds)</Label>

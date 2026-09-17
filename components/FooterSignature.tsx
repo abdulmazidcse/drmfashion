@@ -109,8 +109,15 @@ export default function FooterSignature({ categories }: { categories: Category[]
       {/* ── Link slab ── */}
       <footer className="relative z-10 border-t border-sig-line bg-sig-card pb-6 pt-14">
         <div className="sig-wrap">
-          <div className="grid gap-9 sm:grid-cols-2 lg:grid-cols-[1.5fr_repeat(4,1fr)]">
-            <div>
+          {/* Two columns from the narrowest screen up, ruled rather than
+              guttered, so the four lists read as a block instead of as one
+              column of links long enough to need its own scroll. The gutters
+              come back at lg, where the row opens out to brand + four. */}
+          <div className="grid grid-cols-2 lg:grid-cols-[1.5fr_repeat(4,1fr)] lg:gap-9">
+            {/* Full width above the ruled pairs, closed by a rule of its own so
+                the block below reads as a table rather than as loose columns.
+                Its own cell, and no rule, again at lg. */}
+            <div className="col-span-2 border-b border-sig-line pb-9 lg:col-span-1 lg:border-0 lg:pb-0">
               <Link href="/" className="inline-block transition-opacity hover:opacity-90">
                 <Image
                   src={logoSrc}
@@ -129,8 +136,20 @@ export default function FooterSignature({ categories }: { categories: Category[]
               </div>
             </div>
 
-            {columns.map((col) => (
-              <div key={col.title}>
+            {columns.map((col, i) => (
+              <div
+                key={col.title}
+                // Rules are drawn per cell rather than with `divide-*`, which
+                // follows DOM order and cannot tell the end of a row from the
+                // middle of one. Index 0 and 2 carry the vertical rule, 0 and 1
+                // the horizontal one under the first pair; lg clears all of it.
+                className={[
+                  "py-7 lg:py-0",
+                  i % 2 === 0 ? "border-r border-sig-line pr-5" : "pl-5",
+                  i < 2 ? "border-b border-sig-line" : "",
+                  "lg:border-0 lg:px-0",
+                ].join(" ")}
+              >
                 <h6 className="mb-4 text-xs font-extrabold uppercase tracking-[0.13em] text-sig-ink">
                   {col.title}
                 </h6>
@@ -150,19 +169,29 @@ export default function FooterSignature({ categories }: { categories: Category[]
             ))}
           </div>
 
-          <div className="mt-11 flex flex-wrap justify-between gap-4 border-t border-sig-line pt-5.5 text-[13px] text-sig-soft">
+          {/* Copyright left, credit centred. Three tracks rather than a flex
+              row: the outer two are equal fractions, so the middle one sits on
+              the footer's centre line however long the copyright runs — with
+              `justify-between` the credit would sit at the right edge, and with
+              a two-cell grid it would be centred on the leftover space rather
+              than on the footer. Below sm it stacks, both lines centred. */}
+          <div className="mt-8 grid gap-3 border-t border-sig-line pt-5.5 text-center text-[13px] text-sig-soft sm:grid-cols-[1fr_auto_1fr] sm:items-center sm:text-left lg:mt-11">
             <span>
               &copy; {year} {storeName}. All rights reserved.
             </span>
-            <span>
+            <span className="sm:text-center">
               Developed by{" "}
               <a
-                href="https://tallplus.co"
+                href="https://zayantit.com/"
+                target="_blank"
+                rel="noopener noreferrer"
                 className="font-semibold text-sig-copper-700 underline decoration-sig-copper-200 underline-offset-4 transition-colors hover:decoration-sig-copper-700"
               >
-                TallPlus
+                Zayant IT
               </a>
             </span>
+            {/* Mirrors the copyright's track so the middle one really is centred. */}
+            <span aria-hidden="true" className="hidden sm:block" />
           </div>
         </div>
       </footer>

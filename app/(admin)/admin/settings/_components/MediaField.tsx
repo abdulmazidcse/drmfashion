@@ -14,23 +14,33 @@ import { useSettingsForm } from "./SettingsFormContext"
  */
 export default function MediaField({
   label,
+  labelAction,
   hint,
   value,
   onChange,
   kind = "image",
+  children,
 }: {
   label: string
+  /** Sits beside the label — a control that belongs to this field's subject
+   *  rather than to its picture, such as editing what the label itself says. */
+  labelAction?: React.ReactNode
   hint?: string
   value: string
   onChange: React.Dispatch<React.SetStateAction<string>>
   kind?: "image" | "video"
+  /** Rendered under the field, for a panel that control opens. */
+  children?: React.ReactNode
 }) {
   const { handleFieldFileUpload, fieldLabel } = useSettingsForm()
   const [uploading, setUploading] = useState(false)
 
   return (
     <div className="space-y-3">
-      <Label className={fieldLabel}>{label}</Label>
+      <div className="flex items-center gap-2">
+        <Label className={fieldLabel}>{label}</Label>
+        {labelAction}
+      </div>
 
       <div className="flex items-center gap-3">
         <div className="h-20 w-20 shrink-0 overflow-hidden rounded-md border bg-muted/50">
@@ -77,6 +87,8 @@ export default function MediaField({
       </div>
 
       {hint && <p className="text-[10px] text-muted-foreground">{hint}</p>}
+
+      {children}
     </div>
   )
 }

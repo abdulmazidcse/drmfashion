@@ -135,6 +135,10 @@ export default function PromoBannerPopup() {
   const hasButton = config.buttonLabel.trim() !== "" && config.buttonHref.trim() !== "";
   const hasCopy = config.heading.trim() !== "" || config.body.trim() !== "" || hasButton;
 
+  // 0 means "no preference", not "no height" — the screen still has to be the
+  // limit, or a tall picture runs off both ends of a `fixed` backdrop at once.
+  const heightCapVh = config.heightPercent > 0 ? config.heightPercent : 100;
+
   return (
     <div
       className="fixed inset-0 z-[120] flex items-center justify-center bg-black/60 p-4 backdrop-blur-[2px]"
@@ -145,9 +149,23 @@ export default function PromoBannerPopup() {
     >
       {/* The click that closes belongs to the backdrop alone — a visitor
           reading the copy should not dismiss the offer by touching it. */}
+      {/* The card takes its size from the picture, not the other way round.
+          Given a fixed width the picture has to be stretched to it and the
+          surplus height trimmed, which is what kept cutting the top and bottom
+          off the artwork. Both settings are ceilings instead: the picture is
+          drawn whole, as large as those two allow.
+
+          `max()` holds a floor of 320px, because a share of the screen chosen
+          to look right on a desktop would be a postage stamp on a phone;
+          `min()` with 100% keeps that floor inside the backdrop's padding on a
+          screen narrower still. */}
       <div
-        className="relative w-full overflow-hidden rounded-2xl shadow-2xl"
-        style={{ maxWidth: config.maxWidthPx }}
+        className="relative overflow-hidden rounded-2xl shadow-2xl"
+        style={
+          config.backgroundColor.trim() !== ""
+            ? { backgroundColor: config.backgroundColor }
+            : undefined
+        }
         onClick={(e) => e.stopPropagation()}
       >
         <button
@@ -159,11 +177,31 @@ export default function PromoBannerPopup() {
           <X className="h-4 w-4" />
         </button>
 
+        {/* The width belongs to the picture, and the card closes around it.
+            Sized the other way round, the card's width would have to be forced
+            onto the picture and the surplus height trimmed — which is what kept
+            cutting the artwork's top and bottom off.
+
+            Width is the size, not a ceiling, so artwork smaller than the
+            setting is scaled up to it rather than sitting there at its own size
+            ignoring the number. Height then caps it: too tall at that width and
+            the browser shrinks both together, keeping the proportions.
+
+            `100vw - 2rem` rather than `100%`, because a percentage here would
+            resolve against the card, whose width is this. `max()` holds a floor
+            of 320px, since a share of the screen chosen for a desktop would be
+            a postage stamp on a phone. The height subtracts the same padding,
+            so even 100% stays clear of the edges rather than running under
+            them. */}
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={formatImageUrl(config.image)}
           alt={config.imageAlt || config.heading || ""}
-          className="block h-auto w-full"
+          className="block h-auto"
+          style={{
+            width: `min(calc(100vw - 2rem), max(320px, ${config.widthPercent}vw))`,
+            maxHeight: `min(calc(100vh - 2rem), ${heightCapVh}vh)`,
+          }}
         />
 
         {hasCopy && (
