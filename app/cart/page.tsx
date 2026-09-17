@@ -16,12 +16,14 @@ import { sortLengths, sortSizes } from "@/lib/variants";
 import Header from "@/components/HeaderClient";
 import Footer from "@/components/Footer";
 import { useCurrency } from "@/providers/CurrencyProvider";
+import { COUNTRIES } from "@/lib/countries";
 import {
   applyFreeShippingThreshold,
   DEFAULT_SHIPPING_METHODS,
   defaultShippingMethod,
   freeShippingThresholdFromSettings,
   parseShippingMethods,
+  shippingPriceForCountry,
   type ShippingMethod,
 } from "@/lib/shipping";
 
@@ -29,7 +31,7 @@ import {
 
 export default function CartPage() {
   const router = useRouter();
-  const { formatPrice } = useCurrency();
+  const { formatPrice, selectedCountry } = useCurrency();
   const [items, setItems] = useState<CartItem[]>([]);
   const [mounted, setMounted] = useState(false);
   const [promoCode, setPromoCode] = useState("");
@@ -203,9 +205,16 @@ export default function CartPage() {
 
   const subtotal = cartTotal(items);
   const discount = promoApplied ? Math.round(subtotal * (discountPercentage / 100)) : 0;
-  const cheapestMethod = defaultShippingMethod(shippingMethods);
+  // The cart has no address yet, so the estimate uses the country the shopper
+  // picked in the currency switcher — the same one checkout preselects, so the
+  // figure here is the one they see on the next page.
+  const estimateCountry =
+    COUNTRIES.find((c) => c.name.toLowerCase() === selectedCountry?.toLowerCase())?.code ?? "";
+  const cheapestMethod = defaultShippingMethod(shippingMethods, estimateCountry);
   const shipping = applyFreeShippingThreshold(
-    shippingEnabled ? cheapestMethod?.price ?? 0 : 0,
+    shippingEnabled && cheapestMethod
+      ? shippingPriceForCountry(cheapestMethod, estimateCountry)
+      : 0,
     subtotal,
     freeShippingThreshold
   );

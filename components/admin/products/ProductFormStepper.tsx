@@ -1,5 +1,6 @@
 "use client"
 
+import { Fragment } from "react"
 import { ChevronLeft, ChevronRight } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
 
@@ -118,10 +119,18 @@ export default function ProductFormStepper({
               <span />
             )}
 
+            {/* Keyed, and of two different element types, so React tears the old
+                node down instead of reusing it across the swap. Reused, this is
+                one <button> whose `type` flips from "button" to "submit" while
+                the click that caused the swap is still in flight — the browser
+                reads the new type when it runs that click's activation
+                behaviour and posts the form, which is why stepping onto the
+                final step used to save the product on its own. */}
             {isLastStep ? (
-              submitSlot
+              <Fragment key="submit">{submitSlot}</Fragment>
             ) : (
               <button
+                key="next"
                 type="button"
                 onClick={onNext}
                 className="flex items-center gap-1.5 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold py-2.5 px-5 rounded-xl transition cursor-pointer text-sm shadow-sm"

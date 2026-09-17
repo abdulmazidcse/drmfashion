@@ -75,7 +75,15 @@ export async function generateMetadata(): Promise<Metadata> {
     title,
     description,
     icons: {
-      icon: favicon,
+      // The store's own upload first, then the square multi-size .ico. Google
+      // rejects a non-square favicon (its crawler wants a square that is a
+      // multiple of 48px) and falls back to whatever else is declared, so the
+      // .ico has to be named here rather than left to the /favicon.ico guess.
+      icon: [
+        { url: favicon },
+        { url: "/favicon.ico", sizes: "16x16 32x32 48x48 256x256" },
+      ],
+      apple: "/apple-touch-icon.png",
     },
     openGraph: {
       type: "website",

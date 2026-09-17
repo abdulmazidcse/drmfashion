@@ -8,10 +8,16 @@
 // prices and `Order.totalAmount`. The storefront converts for display through
 // `CurrencyProvider`, exactly as it does for every other amount.
 //
-// The browser only ever sends back a method *id*. Every server path that moves
-// money (`/api/checkout`, the Stripe intent) re-reads the settings row and
-// takes the price from there via `resolveShipping`, so a tampered payload can
-// change which tier was picked but never what it costs.
+// A tier can also be repriced per destination: `countryRates` overrides `price`
+// when the shipping address is in one of the listed countries. Anywhere not
+// listed pays the tier's own `price`, so adding a country is opt-in and no
+// order is ever blocked for want of a rate.
+//
+// The browser only ever sends back a method *id* — never a price, and never a
+// country it picked the price for. Every server path that moves money
+// (`/api/checkout`, the Stripe intent) re-reads the settings row and re-derives
+// the fee from the address on the order via `resolveShipping`, so a tampered
+// payload can change which tier was picked but never what it costs.
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const SHIPPING_METHODS_KEY = "shipping_methods"
@@ -19,6 +25,14 @@ export const SHIPPING_METHODS_KEY = "shipping_methods"
 // Order value, in base currency, above which shipping stops being charged.
 // Edited in Admin → Settings → Shipping; advertised on the product page.
 export const FREE_SHIPPING_THRESHOLD_KEY = "shipping_free_threshold"
+
+/** One destination override inside a tier. */
+export interface ShippingCountryRate {
+  /** ISO 3166-1 alpha-2, upper case. */
+  country: string
+  /** In the store's base currency. 0 ships free to that country. */
+  price: number
+}
 
 export interface ShippingMethod {
   /** Stable slug stored on the order and sent by the browser. */
@@ -28,13 +42,18 @@ export interface ShippingMethod {
   deliveryTime: string
   /** In the store's base currency. 0 means the merchant absorbs the cost. */
   price: number
+  /**
+   * Per-country prices that override `price`. Edited in Admin → Settings →
+   * Shipping; a country listed twice keeps its first row.
+   */
+  countryRates: ShippingCountryRate[]
   active: boolean
 }
 
 export const DEFAULT_SHIPPING_METHODS: ShippingMethod[] = [
-  { id: "standard", name: "Standard Shipping", deliveryTime: "8-12 days", price: 0, active: true },
-  { id: "priority", name: "Priority Shipping", deliveryTime: "6-8 days", price: 14, active: true },
-  { id: "express", name: "Express Shipping", deliveryTime: "6 days", price: 20, active: true },
+  { id: "standard", name: "Standard Shipping", deliveryTime: "8-12 days", price: 0, countryRates: [], active: true },
+  { id: "priority", name: "Priority Shipping", deliveryTime: "6-8 days", price: 14, countryRates: [], active: true },
+  { id: "express", name: "Express Shipping", deliveryTime: "6 days", price: 20, countryRates: [], active: true },
 ]
 
 function round2(n: number): number {
@@ -88,11 +107,45 @@ function sanitise(rows: unknown[]): ShippingMethod[] {
       name,
       deliveryTime: String(row.deliveryTime ?? "").trim(),
       price: Number.isFinite(price) && price > 0 ? round2(price) : 0,
+      // Absent on every row saved before country pricing existed, so this has
+      // to tolerate `undefined` rather than assume an array.
+      countryRates: sanitiseCountryRates(row.countryRates),
       active: row.active !== false,
     })
   })
 
   return methods.length > 0 ? methods : DEFAULT_SHIPPING_METHODS
+}
+
+/**
+ * Normalises a tier's destination overrides.
+ *
+ * Country codes are upper-cased so a row typed as "bd" still matches the "BD"
+ * the checkout form sends, and a country repeated by mistake keeps its first
+ * row — silently charging whichever duplicate sorted last would be worse.
+ */
+function sanitiseCountryRates(raw: unknown): ShippingCountryRate[] {
+  if (!Array.isArray(raw)) return []
+
+  const seen = new Set<string>()
+  const rates: ShippingCountryRate[] = []
+
+  for (const entry of raw) {
+    if (!entry || typeof entry !== "object") continue
+    const row = entry as Partial<Record<keyof ShippingCountryRate, unknown>>
+    const country = String(row.country ?? "").trim().toUpperCase()
+    if (!country || seen.has(country)) continue
+
+    const price = Number(row.price)
+    // Unlike a tier's own price, 0 here is a deliberate "free to this country"
+    // and has to survive; only a missing or nonsensical number is dropped.
+    if (!Number.isFinite(price) || price < 0) continue
+
+    seen.add(country)
+    rates.push({ country, price: round2(price) })
+  }
+
+  return rates
 }
 
 /** Reads the methods out of a settings map (`getPublicSettings`, `/api/settings`). */
@@ -140,11 +193,47 @@ export function activeShippingMethods(methods: ShippingMethod[]): ShippingMethod
   return methods.filter((m) => m.active)
 }
 
-/** The tier a shopper gets by default — cheapest first, ties broken by order. */
-export function defaultShippingMethod(methods: ShippingMethod[]): ShippingMethod | null {
+/**
+ * What a tier costs to a given destination.
+ *
+ * The one place a country becomes a price. Every display path and both server
+ * money paths call it, so the quote on the checkout radio, the cart's estimate
+ * and the amount authorised on the card cannot drift apart.
+ *
+ * An unknown or missing country falls back to the tier's own price rather than
+ * refusing: the cart shows an estimate long before an address is typed, and a
+ * country the merchant has not priced yet still has to be sellable.
+ */
+export function shippingPriceForCountry(
+  method: ShippingMethod,
+  countryCode?: unknown
+): number {
+  const code = typeof countryCode === "string" ? countryCode.trim().toUpperCase() : ""
+  if (!code) return method.price
+
+  const override = method.countryRates.find((r) => r.country === code)
+  return override ? override.price : method.price
+}
+
+/**
+ * The tier a shopper gets by default — cheapest first, ties broken by order.
+ *
+ * Cheapest is judged at the destination, so a tier that is dearest worldwide
+ * but free to the shopper's own country is the one preselected there.
+ */
+export function defaultShippingMethod(
+  methods: ShippingMethod[],
+  countryCode?: unknown
+): ShippingMethod | null {
   const active = activeShippingMethods(methods)
   if (active.length === 0) return null
-  return active.reduce((cheapest, m) => (m.price < cheapest.price ? m : cheapest), active[0])
+  return active.reduce(
+    (cheapest, m) =>
+      shippingPriceForCountry(m, countryCode) < shippingPriceForCountry(cheapest, countryCode)
+        ? m
+        : cheapest,
+    active[0]
+  )
 }
 
 export interface ResolvedShipping {
@@ -167,17 +256,19 @@ export interface ResolvedShipping {
 export function resolveShipping(
   methods: ShippingMethod[],
   methodId: unknown,
-  opts: { shippingEnabled?: boolean } = {}
+  opts: { shippingEnabled?: boolean; countryCode?: unknown } = {}
 ): ResolvedShipping {
   const active = activeShippingMethods(methods)
   const requested = typeof methodId === "string" ? methodId.trim() : ""
-  const method = active.find((m) => m.id === requested) ?? defaultShippingMethod(methods)
+  const method =
+    active.find((m) => m.id === requested) ?? defaultShippingMethod(methods, opts.countryCode)
 
   if (!method) return { method: null, methodName: "Standard Shipping", fee: 0 }
 
   // Master switch in Admin → Settings → Shipping. Keeps the chosen tier's name
   // on the order so the warehouse still knows how fast to send it.
-  const fee = opts.shippingEnabled === false ? 0 : method.price
+  const fee =
+    opts.shippingEnabled === false ? 0 : shippingPriceForCountry(method, opts.countryCode)
 
   return { method, methodName: method.name, fee: round2(fee) }
 }

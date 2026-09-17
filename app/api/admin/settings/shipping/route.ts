@@ -7,8 +7,10 @@ import {
   SHIPPING_METHODS_KEY,
   parseShippingMethods,
   slugifyMethodId,
+  type ShippingCountryRate,
   type ShippingMethod,
 } from "@/lib/shipping"
+import { COUNTRIES } from "@/lib/countries"
 import { WAREHOUSE_KEY, parseWarehouse } from "@/lib/warehouse"
 import { maskUpsConfig, upsConfigFromSettings } from "@/lib/upsConfig"
 
@@ -23,6 +25,12 @@ const UPS_KEYS = [
 // Sent back in place of a stored secret, and refused on the way in — the form
 // posts it unchanged whenever the operator did not type a new one.
 const SECRET_PLACEHOLDER = "__unchanged__"
+
+// Country overrides are checked against the same list the checkout address form
+// offers. A code outside it could never match a real order, so it would sit in
+// the settings looking like a configured rate while charging nothing of the
+// sort — better to refuse the save and say which row is wrong.
+const KNOWN_COUNTRY_CODES = new Set(COUNTRIES.map(c => c.code.toUpperCase()))
 
 // GET shipping settings
 export async function GET(req: NextRequest) {
@@ -112,11 +120,51 @@ export async function POST(req: NextRequest) {
       while (seen.has(id)) id = `${id}-${i + 1}`
       seen.add(id)
 
+      // Per-country prices. Validated here rather than left to the storefront
+      // parser, which silently drops a bad row — an operator who mistypes a
+      // country should be told, not have the rate quietly vanish.
+      const incomingRates = Array.isArray(row?.countryRates) ? row.countryRates : []
+      const seenCountries = new Set<string>()
+      const countryRates: ShippingCountryRate[] = []
+
+      for (const rateRow of incomingRates) {
+        const country = String(rateRow?.country ?? "").trim().toUpperCase()
+        // A blank row is the empty one the form adds when the operator clicks
+        // "Add Country" and has not chosen yet — dropped, not an error.
+        if (!country) continue
+
+        if (!KNOWN_COUNTRY_CODES.has(country)) {
+          return NextResponse.json(
+            { message: `"${name}": ${country} is not a country this store ships to.` },
+            { status: 400 }
+          )
+        }
+
+        if (seenCountries.has(country)) {
+          return NextResponse.json(
+            { message: `"${name}" lists ${country} twice. Keep one rate per country.` },
+            { status: 400 }
+          )
+        }
+
+        const countryPrice = Number(rateRow?.price)
+        if (!Number.isFinite(countryPrice) || countryPrice < 0) {
+          return NextResponse.json(
+            { message: `"${name}" needs a price of 0 or more for ${country}.` },
+            { status: 400 }
+          )
+        }
+
+        seenCountries.add(country)
+        countryRates.push({ country, price: Math.round(countryPrice * 100) / 100 })
+      }
+
       methods.push({
         id,
         name,
         deliveryTime: String(row?.deliveryTime ?? "").trim(),
         price: Math.round(price * 100) / 100,
+        countryRates,
         active: row?.active !== false,
       })
     }

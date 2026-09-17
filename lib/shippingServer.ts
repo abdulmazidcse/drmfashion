@@ -4,7 +4,9 @@
 // so a quote can never differ between authorising a card and writing the order.
 //
 // Two kinds of method arrive here:
-//   • a store tier  (`standard`)  — priced from the `shipping_methods` setting
+//   • a store tier  (`standard`)  — priced from the `shipping_methods` setting,
+//                                   per the destination country where the
+//                                   merchant has set a rate for one
 //   • a UPS service (`ups:03`)    — re-quoted from UPS at order time
 //
 // In both cases the browser only names the choice. It never supplies the price.
@@ -138,10 +140,13 @@ export async function resolveOrderShipping({
     }
   }
 
+  // The country comes off the destination the order is actually being written
+  // for, never off the browser's quote, so a shopper cannot pick a cheap
+  // country's rate and ship somewhere dearer.
   const resolved = resolveShipping(
     shippingMethodsFromSettings(settings),
     shippingMethodId,
-    { shippingEnabled }
+    { shippingEnabled, countryCode: destination?.countryCode }
   )
 
   return { methodName: resolved.methodName, carrier: null, fee: resolved.fee }

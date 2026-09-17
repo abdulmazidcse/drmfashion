@@ -5,7 +5,7 @@ import { useState, useEffect } from "react"
 // Mirrors the server's sentinel: posted back unchanged when no new secret was
 // typed, so saving other fields cannot blank a working credential.
 const SECRET_PLACEHOLDER = "__unchanged__"
-import { Save, Loader2, Truck, Info, Plus, Trash2, GripVertical, Warehouse, KeyRound, CheckCircle2, AlertTriangle } from "lucide-react"
+import { Save, Loader2, Truck, Info, Plus, Trash2, GripVertical, Warehouse, KeyRound, CheckCircle2, AlertTriangle, Globe } from "lucide-react"
 import { useCurrency } from "@/providers/CurrencyProvider"
 import Swal from "sweetalert2";
 import { Button } from "@/components/ui/button"
@@ -79,11 +79,56 @@ export default function ShippingSettingsPage() {
   const addMethod = () =>
     setMethods(list => [
       ...list,
-      { id: "", name: "", deliveryTime: "", price: 0, active: true },
+      { id: "", name: "", deliveryTime: "", price: 0, countryRates: [], active: true },
     ])
 
   const removeMethod = (index: number) =>
     setMethods(list => list.filter((_, i) => i !== index))
+
+  // ─── Per-country prices ────────────────────────────────────────────────────
+  // A method's own price is what most destinations pay; these rows override it
+  // for the countries named. Rows are keyed by position rather than country so
+  // an operator can open the select and change their mind without the row
+  // jumping or merging into another.
+
+  const updateCountryRate = (
+    methodIndex: number,
+    rateIndex: number,
+    patch: Partial<{ country: string; price: number }>
+  ) =>
+    setMethods(list =>
+      list.map((m, i) =>
+        i !== methodIndex
+          ? m
+          : {
+              ...m,
+              countryRates: m.countryRates.map((r, j) =>
+                j === rateIndex ? { ...r, ...patch } : r
+              ),
+            }
+      )
+    )
+
+  /** Opens on the first country not already priced, so the save cannot reject a duplicate. */
+  const addCountryRate = (methodIndex: number) =>
+    setMethods(list =>
+      list.map((m, i) => {
+        if (i !== methodIndex) return m
+        const taken = new Set(m.countryRates.map(r => r.country))
+        const next = COUNTRIES.find(c => !taken.has(c.code))
+        if (!next) return m
+        return { ...m, countryRates: [...m.countryRates, { country: next.code, price: m.price }] }
+      })
+    )
+
+  const removeCountryRate = (methodIndex: number, rateIndex: number) =>
+    setMethods(list =>
+      list.map((m, i) =>
+        i !== methodIndex
+          ? m
+          : { ...m, countryRates: m.countryRates.filter((_, j) => j !== rateIndex) }
+      )
+    )
 
   const move = (index: number, direction: -1 | 1) =>
     setMethods(list => {
@@ -178,7 +223,8 @@ export default function ShippingSettingsPage() {
               <div>
                 <h2 className="text-sm font-medium">Shipping Methods</h2>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Shown at checkout in this order. Set a price of 0 for free shipping.
+                  Shown at checkout in this order. Set a price of 0 for free shipping, and add
+                  country prices below a method to charge a different rate by destination.
                 </p>
               </div>
               <Button type="button" variant="outline" size="sm" onClick={addMethod}>
@@ -249,7 +295,7 @@ export default function ShippingSettingsPage() {
                       />
                     </div>
                     <div className="space-y-1.5">
-                      <Label htmlFor={`price-${i}`}>Price ({baseCurrency.symbol})</Label>
+                      <Label htmlFor={`price-${i}`}>Default Price ({baseCurrency.symbol})</Label>
                       <Input
                         id={`price-${i}`}
                         type="number"
@@ -259,6 +305,98 @@ export default function ShippingSettingsPage() {
                         onChange={e => updateMethod(i, { price: Number(e.target.value) })}
                       />
                     </div>
+                  </div>
+
+                  {/* Per-country prices for this method */}
+                  <div className="rounded-md border border-dashed p-3 space-y-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-xs font-medium flex items-center gap-1.5">
+                          <Globe className="h-3.5 w-3.5 text-muted-foreground" />
+                          Country Prices
+                        </p>
+                        <p className="text-[11px] text-muted-foreground mt-0.5">
+                          Charged instead of the default price when the shipping address is in
+                          one of these countries. Anywhere not listed pays the default.
+                        </p>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => addCountryRate(i)}
+                        disabled={method.countryRates.length >= COUNTRIES.length}
+                      >
+                        <Plus className="h-3.5 w-3.5" /> Add Country
+                      </Button>
+                    </div>
+
+                    {method.countryRates.length === 0 ? (
+                      <p className="text-[11px] text-muted-foreground">
+                        No country prices — every destination pays {baseCurrency.symbol}
+                        {method.price}.
+                      </p>
+                    ) : (
+                      <div className="space-y-2">
+                        {method.countryRates.map((rate, j) => (
+                          <div key={j} className="flex items-end gap-2">
+                            <div className="flex-1 space-y-1.5">
+                              <Label htmlFor={`rate-country-${i}-${j}`} className="text-[11px]">
+                                Country
+                              </Label>
+                              <select
+                                id={`rate-country-${i}-${j}`}
+                                value={rate.country}
+                                onChange={e =>
+                                  updateCountryRate(i, j, { country: e.target.value })
+                                }
+                                className="w-full h-9 rounded-md border border-input bg-transparent px-2 text-sm"
+                              >
+                                {COUNTRIES.map(c => (
+                                  <option
+                                    key={c.code}
+                                    value={c.code}
+                                    // Picking a country already priced on this
+                                    // method would fail the save, so it is closed
+                                    // off here rather than explained afterwards.
+                                    disabled={
+                                      c.code !== rate.country &&
+                                      method.countryRates.some(r => r.country === c.code)
+                                    }
+                                  >
+                                    {c.name}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                            <div className="w-32 space-y-1.5">
+                              <Label htmlFor={`rate-price-${i}-${j}`} className="text-[11px]">
+                                Price ({baseCurrency.symbol})
+                              </Label>
+                              <Input
+                                id={`rate-price-${i}-${j}`}
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                value={rate.price}
+                                onChange={e =>
+                                  updateCountryRate(i, j, { price: Number(e.target.value) })
+                                }
+                              />
+                            </div>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => removeCountryRate(i, j)}
+                              aria-label={`Remove country price ${j + 1}`}
+                            >
+                              <Trash2 className="h-4 w-4 text-destructive" />
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
               ))}

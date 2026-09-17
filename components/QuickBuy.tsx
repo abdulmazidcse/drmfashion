@@ -20,6 +20,7 @@ import {
   activeShippingMethods,
   applyFreeShippingThreshold,
   defaultShippingMethod,
+  shippingPriceForCountry,
   type ShippingMethod,
 } from "@/lib/shipping";
 
@@ -139,9 +140,12 @@ export default function QuickBuy({ product, payments, shipping, tax: taxSettings
   const subtotal = unitPrice * quantity;
   const shippingOptions = activeShippingMethods(shipping.methods);
   const selectedMethod =
-    shippingOptions.find((m) => m.id === selectedMethodId) ?? defaultShippingMethod(shipping.methods);
+    shippingOptions.find((m) => m.id === selectedMethodId) ??
+    defaultShippingMethod(shipping.methods, form.country);
   const shippingFee = applyFreeShippingThreshold(
-    shipping.enabled ? selectedMethod?.price ?? 0 : 0,
+    shipping.enabled && selectedMethod
+      ? shippingPriceForCountry(selectedMethod, form.country)
+      : 0,
     subtotal,
     shipping.freeThreshold
   );
@@ -539,7 +543,9 @@ export default function QuickBuy({ product, payments, shipping, tax: taxSettings
               <div className="space-y-2 border-b border-zinc-200 pb-4">
                 <p className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Shipping Method</p>
                 {shippingOptions.map((method) => {
-                  const price = shipping.enabled ? method.price : 0;
+                  const price = shipping.enabled
+                    ? shippingPriceForCountry(method, form.country)
+                    : 0;
                   return (
                     <label
                       key={method.id}

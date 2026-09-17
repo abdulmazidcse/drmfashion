@@ -30,6 +30,7 @@ import {
   defaultShippingMethod,
   freeShippingThresholdFromSettings,
   parseShippingMethods,
+  shippingPriceForCountry,
   upsMethodId,
   type ShippingMethod,
 } from "@/lib/shipping";
@@ -632,14 +633,19 @@ export default function CheckoutPage() {
     name: r.serviceName,
     deliveryTime: r.daysToDelivery || "",
     price: r.rate,
+    // A carrier quote is already for this address, so there is nothing to
+    // override — `shippingPriceForCountry` then just returns the quote.
+    countryRates: [],
     active: true,
   }));
 
   const selectedMethod =
     [...availableMethods, ...upsAsMethods].find((m) => m.id === selectedMethodId) ??
-    defaultShippingMethod(shippingMethods);
+    defaultShippingMethod(shippingMethods, form.country);
   const shipping = applyFreeShippingThreshold(
-    shippingEnabled ? selectedMethod?.price ?? 0 : 0,
+    shippingEnabled && selectedMethod
+      ? shippingPriceForCountry(selectedMethod, form.country)
+      : 0,
     subtotal,
     freeShippingThreshold
   );
@@ -1051,7 +1057,12 @@ export default function CheckoutPage() {
                     {availableMethods.length > 0 && (
                       <div className="space-y-2">
                         {availableMethods.map((method) => {
-                          const price = shippingEnabled ? method.price : 0;
+                          // Repriced as the country select changes, so the radio
+                          // always shows what /api/checkout will charge for the
+                          // address currently in the form.
+                          const price = shippingEnabled
+                            ? shippingPriceForCountry(method, form.country)
+                            : 0;
                           return (
                             <label
                               key={method.id}
