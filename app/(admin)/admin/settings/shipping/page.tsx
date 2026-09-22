@@ -29,6 +29,9 @@ export default function ShippingSettingsPage() {
   // Kept as a string: "" is a blank input, which is what "no offer" should
   // look like. It is parsed on save and by the preview below.
   const [freeThreshold, setFreeThreshold] = useState("")
+  // Also kept as a string for the same reason: blank means "use the built-in
+  // default", which is distinct from "0" (turned off) — see parseBkashFreeShippingMax.
+  const [bkashFreeShippingMax, setBkashFreeShippingMax] = useState("")
   const [warehouse, setWarehouse] = useState<WarehouseAddress>(DEFAULT_WAREHOUSE)
   const [ups, setUps] = useState({
     enabled: false,
@@ -51,6 +54,9 @@ export default function ShippingSettingsPage() {
         }
         if (typeof data.shipping_free_threshold === "string") {
           setFreeThreshold(data.shipping_free_threshold === "0" ? "" : data.shipping_free_threshold)
+        }
+        if (typeof data.bkash_free_shipping_max_amount === "string") {
+          setBkashFreeShippingMax(data.bkash_free_shipping_max_amount)
         }
         if (data.warehouse_address) setWarehouse(data.warehouse_address)
       setUps(u => ({
@@ -150,6 +156,7 @@ export default function ShippingSettingsPage() {
           shipping_enabled: String(enabled),
           shipping_methods: methods,
           shipping_free_threshold: freeThreshold,
+          bkash_free_shipping_max_amount: bkashFreeShippingMax,
           warehouse_address: warehouse,
           ups_enabled: String(ups.enabled),
           ups_environment: ups.environment,
@@ -165,6 +172,9 @@ export default function ShippingSettingsPage() {
       if (Array.isArray(data.shipping_methods)) setMethods(data.shipping_methods)
       if (typeof data.shipping_free_threshold === "string") {
         setFreeThreshold(data.shipping_free_threshold === "0" ? "" : data.shipping_free_threshold)
+      }
+      if (typeof data.bkash_free_shipping_max_amount === "string") {
+        setBkashFreeShippingMax(data.bkash_free_shipping_max_amount)
       }
       if (data.warehouse_address) setWarehouse(data.warehouse_address)
       setUps(u => ({
@@ -423,6 +433,31 @@ export default function ShippingSettingsPage() {
               placeholder="No free shipping offer"
               value={freeThreshold}
               onChange={e => setFreeThreshold(e.target.value)}
+              className="max-w-xs"
+            />
+          </div>
+
+          <Separator />
+
+          {/* bKash free shipping cap */}
+          <div className="space-y-2">
+            <Label htmlFor="bkash_free_shipping_max_amount">
+              Free Shipping for bKash Orders Up To ({baseCurrency.symbol})
+            </Label>
+            <p className="text-xs text-muted-foreground">
+              An order paid online via bKash ships free when its subtotal is at or below this
+              amount — separate from the threshold above, which waives shipping above a subtotal
+              for any payment method. Leave blank for the default (৳2000). Enter 0 to turn this
+              offer off.
+            </p>
+            <Input
+              id="bkash_free_shipping_max_amount"
+              type="number"
+              min="0"
+              step="0.01"
+              placeholder="2000"
+              value={bkashFreeShippingMax}
+              onChange={e => setBkashFreeShippingMax(e.target.value)}
               className="max-w-xs"
             />
           </div>

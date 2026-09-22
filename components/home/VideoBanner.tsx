@@ -3,6 +3,8 @@
 import React, { useEffect, useRef } from "react";
 import Link from "next/link";
 import type { HomeVideoBanner } from "@/lib/homeVideoBanners";
+import HomeVideoMedia from "./HomeVideoMedia";
+import { controlEmbeddedMedia } from "@/lib/externalVideo";
 
 const HEIGHTS: Record<HomeVideoBanner["height"], string> = {
   // Portrait on a phone, cinematic on a desktop — the two crops the admin
@@ -43,8 +45,8 @@ export default function VideoBanner({ banner }: { banner: HomeVideoBanner }) {
     const root = rootRef.current;
     if (!root) return;
 
-    const videos = Array.from(root.querySelectorAll("video"));
-    if (videos.length === 0) return;
+    const media = Array.from(root.querySelectorAll("video, iframe[data-yt-embed]"));
+    if (media.length === 0) return;
 
     // Reduced motion: leave both posters up. The copy is the point of the
     // banner; the footage is atmosphere, and atmosphere is what this setting
@@ -54,23 +56,19 @@ export default function VideoBanner({ banner }: { banner: HomeVideoBanner }) {
     const io = new IntersectionObserver(
       (entries) => {
         for (const entry of entries) {
-          const video = entry.target as HTMLVideoElement;
+          const el = entry.target as HTMLElement;
           // `offsetParent === null` is the cheap read of "display:none at this
           // breakpoint" — the hidden crop never gets asked to load.
-          const displayed = video.offsetParent !== null;
-          if (entry.isIntersecting && displayed) {
-            // Autoplay can still be refused even when muted; there is nothing
-            // to recover, the poster simply stays up.
-            video.play().catch(() => {});
-          } else {
-            video.pause();
-          }
+          const displayed = el.offsetParent !== null;
+          // Autoplay can still be refused even when muted; there is nothing
+          // to recover, the poster simply stays up.
+          controlEmbeddedMedia(el, entry.isIntersecting && displayed);
         }
       },
       { threshold: 0.25 }
     );
 
-    videos.forEach((v) => io.observe(v));
+    media.forEach((el) => io.observe(el));
     return () => io.disconnect();
   }, [banner.video, banner.videoMobile]);
 
@@ -93,40 +91,33 @@ export default function VideoBanner({ banner }: { banner: HomeVideoBanner }) {
   const split = Boolean(banner.videoMobile);
 
   const videoClass = "absolute inset-0 h-full w-full object-cover";
-  const videoProps = {
-    muted: true,
-    loop: true,
-    playsInline: true,
-    preload: "none" as const,
-    // Keeps older iOS from hoisting the clip into its native fullscreen player.
-    "webkit-playsinline": "true",
-    tabIndex: -1,
-    "aria-hidden": true,
-  };
 
   return (
     <section ref={rootRef} className={`relative w-full overflow-hidden bg-at-ink ${HEIGHTS[banner.height]}`}>
       {split ? (
         <>
-          <video
-            {...videoProps}
+          <HomeVideoMedia
             src={mobileSrc}
-            poster={banner.posterMobile || banner.poster || undefined}
+            poster={banner.posterMobile || banner.poster}
             className={`${videoClass} sm:hidden`}
+            tabIndex={-1}
+            ariaHidden
           />
-          <video
-            {...videoProps}
+          <HomeVideoMedia
             src={banner.video}
-            poster={banner.poster || undefined}
+            poster={banner.poster}
             className={`${videoClass} hidden sm:block`}
+            tabIndex={-1}
+            ariaHidden
           />
         </>
       ) : (
-        <video
-          {...videoProps}
+        <HomeVideoMedia
           src={banner.video}
-          poster={banner.poster || undefined}
+          poster={banner.poster}
           className={videoClass}
+          tabIndex={-1}
+          ariaHidden
         />
       )}
 

@@ -878,7 +878,7 @@ export default async function Home() {
             {/* Promo banners (Admin → Banners) sit outside the section toggles:
                 they follow the hero / best-sellers slot whether or not that
                 section is switched on, and hide themselves when empty. */}
-            {key === "hero" && <PromoBanners position="home_top" />}
+            {key === "hero" && <PromoBanners position="home_top" variant="slider" />}
             {key === "bestsellers" && <PromoBanners position="home_middle" />}
           </React.Fragment>
         ))}

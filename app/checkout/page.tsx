@@ -11,6 +11,7 @@ import Header from "@/components/HeaderClient";
 import Footer from "@/components/Footer";
 import StripeCheckout from "@/components/StripeCheckout";
 import SquareCheckout from "@/components/SquareCheckout";
+import { startBkashCheckout } from "@/lib/bkashCheckoutClient";
 import { useCurrency } from "@/providers/CurrencyProvider";
 import Swal from "@/lib/swal";
 import { COUNTRIES } from "@/lib/countries";
@@ -26,7 +27,9 @@ import {
 import {
   DEFAULT_SHIPPING_METHODS,
   activeShippingMethods,
+  applyBkashFreeShipping,
   applyFreeShippingThreshold,
+  bkashFreeShippingMaxFromSettings,
   defaultShippingMethod,
   freeShippingThresholdFromSettings,
   parseShippingMethods,
@@ -82,7 +85,20 @@ export default function CheckoutPage() {
   const [discountPercentage, setDiscountPercentage] = useState(0);
   const [step, setStep] = useState(0);
   const [placing, setPlacing] = useState(false);
-  const [placed, setPlaced] = useState(false);
+  // Read once, synchronously, from the URL the page was loaded with — before
+  // any effect runs — so a bKash success redirect renders the confirmation
+  // panel on the very first paint instead of flashing the checkout form first.
+  const [bkashOrderInfo] = useState<{ total: number; fullName: string; email: string } | null>(() => {
+    if (typeof window === "undefined") return null;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("bkash") !== "success") return null;
+    return {
+      total: Number(params.get("value")) || 0,
+      fullName: params.get("name") || "",
+      email: params.get("email") || "",
+    };
+  });
+  const [placed, setPlaced] = useState(() => bkashOrderInfo !== null);
 
   // Scroll to top of window on step changes
   useEffect(() => {
@@ -101,6 +117,53 @@ export default function CheckoutPage() {
     }
   }, [placed, router]);
 
+  // Picks up where the customer left off after a bKash redirect: success lands
+  // here via app/api/checkout/bkash/callback with the order already created
+  // server-side, so this just mirrors what handlePlaceOrder does for the
+  // synchronous payment methods (track, clear cart) — `placed` itself and
+  // `bkashOrderInfo` are already set from the URL by the lazy state
+  // initializers above, so this effect only runs the side effects that can't
+  // happen during render.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const bkashStatus = params.get("bkash");
+    if (!bkashStatus) return;
+
+    if (bkashStatus === "success") {
+      const cartItems = getCart();
+
+      trackPurchase({
+        transaction_id: params.get("orderId") || "",
+        value: bkashOrderInfo?.total || cartTotal(cartItems),
+        currency: params.get("currency") || storeCurrency(),
+        shipping: Number(params.get("shipping")) || 0,
+        items: cartItems.map((i) => ({
+          item_id: i.productId,
+          item_name: i.title,
+          price: i.price,
+          quantity: i.quantity,
+          item_variant: [i.color, i.size, i.length].filter(Boolean).join(" / ") || undefined,
+        })),
+      });
+
+      clearCart();
+    } else if (bkashStatus === "failed" || bkashStatus === "payment_captured_error") {
+      Swal.fire({
+        text:
+          bkashStatus === "payment_captured_error"
+            ? "Your bKash payment was received, but we hit a snag finishing your order. Our support team will contact you shortly — please don't pay again."
+            : "Your bKash payment didn't go through. Please try again.",
+        confirmButtonColor: "#18181b",
+        icon: bkashStatus === "payment_captured_error" ? "warning" : "error",
+      });
+    }
+
+    // Drop the query string so a refresh doesn't re-fire tracking or re-show
+    // the error on an already-resolved visit.
+    window.history.replaceState({}, "", "/checkout");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Loyalty reward points state hooks
   const [availablePoints, setAvailablePoints] = useState(0);
   const [redeemInput, setRedeemInput] = useState("");
@@ -113,6 +176,7 @@ export default function CheckoutPage() {
   const [selectedMethodId, setSelectedMethodId] = useState("");
   const [shippingEnabled, setShippingEnabled] = useState(true);
   const [freeShippingThreshold, setFreeShippingThreshold] = useState<number | null>(null);
+  const [bkashFreeShippingMax, setBkashFreeShippingMax] = useState<number | null>(null);
   const [upsRates, setUpsRates] = useState<UpsRate[]>([]);
   const [upsRatesAreMock, setUpsRatesAreMock] = useState(false);
   const [fetchingRates, setFetchingRates] = useState(false);
@@ -139,7 +203,7 @@ export default function CheckoutPage() {
     country: "US",
     paymentMethod: "cod",
     cardNumber: "", cardExpiry: "", cardCVC: "",
-    bkashNumber: "", nagadNumber: "",
+    nagadNumber: "",
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -459,6 +523,7 @@ export default function CheckoutPage() {
           // Shipping settings are now in the same public API call
           setShippingEnabled(data.shipping_enabled !== "false");
           setFreeShippingThreshold(freeShippingThresholdFromSettings(data));
+          setBkashFreeShippingMax(bkashFreeShippingMaxFromSettings(data));
           setTaxSettings(taxSettingsFromSettings(data));
           const methods = parseShippingMethods(data.shipping_methods);
           setShippingMethods(methods);
@@ -642,12 +707,17 @@ export default function CheckoutPage() {
   const selectedMethod =
     [...availableMethods, ...upsAsMethods].find((m) => m.id === selectedMethodId) ??
     defaultShippingMethod(shippingMethods, form.country);
-  const shipping = applyFreeShippingThreshold(
-    shippingEnabled && selectedMethod
-      ? shippingPriceForCountry(selectedMethod, form.country)
-      : 0,
+  const shipping = applyBkashFreeShipping(
+    applyFreeShippingThreshold(
+      shippingEnabled && selectedMethod
+        ? shippingPriceForCountry(selectedMethod, form.country)
+        : 0,
+      subtotal,
+      freeShippingThreshold
+    ),
     subtotal,
-    freeShippingThreshold
+    form.paymentMethod,
+    bkashFreeShippingMax
   );
 
   const shippingDestination = {
@@ -673,44 +743,58 @@ export default function CheckoutPage() {
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
     setForm((f) => ({ ...f, [k]: e.target.value }));
 
+  const buildCheckoutPayload = (paymentIntentId?: string) => ({
+    fullName: form.fullName,
+    email: form.email,
+    phone: `${COUNTRY_METADATA[form.country as keyof typeof COUNTRY_METADATA]?.dialCode || ""} ${form.phone}`.trim(),
+    address: `${form.address}, ${form.area}, ${form.city} ${form.postalCode}`,
+    paymentMethod: form.paymentMethod,
+    totalAmount: total,
+    tax: tax,
+    shipping: shipping,
+    shippingMethodId: selectedMethod?.id || "",
+    shippingDestination,
+    currencyCode: selectedCurrency?.code || "USD",
+    currencySymbol: selectedCurrency?.symbol || "$",
+    exchangeRate: selectedCurrency?.rate || 1.0,
+    shippingFee: shipping,
+    promoCode: promoCode || undefined,
+    items: items.map((item) => ({
+      productId: item.productId,
+      color: item.color,
+      size: item.size,
+      length: item.length,
+      price: item.price,
+      quantity: item.quantity,
+      title: item.title,
+      // Raw measurements only — the server recomputes the tailoring fee.
+      custom: item.custom ? { values: item.custom.values } : undefined,
+    })),
+    paymentDetails: {
+      nagadNumber: form.nagadNumber,
+      cardNumber: form.paymentMethod === "card" ? "Stripe Payment" : "",
+      paymentIntentId: paymentIntentId || undefined,
+    },
+    pointsRedeemed: pointsRedeemedApplied ? pointsRedeemed : 0,
+  });
+
+  const handleBkashCheckout = async () => {
+    setPlacing(true);
+    try {
+      await startBkashCheckout(buildCheckoutPayload());
+      // On success the browser navigates away to bKash — nothing left to do
+      // here. setPlacing(false) only matters for the error path below.
+    } catch (err: any) {
+      console.error(err);
+      Swal.fire({ text: err.message || "Failed to start bKash payment. Please try again.", confirmButtonColor: "#18181b", icon: "error" });
+      setPlacing(false);
+    }
+  };
+
   const handlePlaceOrder = async (paymentIntentId?: string) => {
     setPlacing(true);
     try {
-      const payload = {
-        fullName: form.fullName,
-        email: form.email,
-        phone: `${COUNTRY_METADATA[form.country as keyof typeof COUNTRY_METADATA]?.dialCode || ""} ${form.phone}`.trim(),
-        address: `${form.address}, ${form.area}, ${form.city} ${form.postalCode}`,
-        paymentMethod: form.paymentMethod,
-        totalAmount: total,
-        tax: tax,
-        shipping: shipping,
-        shippingMethodId: selectedMethod?.id || "",
-        shippingDestination,
-        currencyCode: selectedCurrency?.code || "USD",
-        currencySymbol: selectedCurrency?.symbol || "$",
-        exchangeRate: selectedCurrency?.rate || 1.0,
-        shippingFee: shipping,
-        promoCode: promoCode || undefined,
-        items: items.map((item) => ({
-          productId: item.productId,
-          color: item.color,
-          size: item.size,
-          length: item.length,
-          price: item.price,
-          quantity: item.quantity,
-          title: item.title,
-          // Raw measurements only — the server recomputes the tailoring fee.
-          custom: item.custom ? { values: item.custom.values } : undefined,
-        })),
-        paymentDetails: {
-          bkashNumber: form.bkashNumber,
-          nagadNumber: form.nagadNumber,
-          cardNumber: form.paymentMethod === "card" ? "Stripe Payment" : "",
-          paymentIntentId: paymentIntentId || undefined,
-        },
-        pointsRedeemed: pointsRedeemedApplied ? pointsRedeemed : 0,
-      };
+      const payload = buildCheckoutPayload(paymentIntentId);
 
       const res = await fetch("/api/checkout", {
         method: "POST",
@@ -781,13 +865,13 @@ export default function CheckoutPage() {
         <div>
           <h1 className="text-3xl sm:text-4xl font-extrabold uppercase tracking-tight mb-3">Order Confirmed!</h1>
           <p className="text-zinc-400 text-sm font-light max-w-md mx-auto">
-            Thank you, <strong className="text-zinc-700">{form.fullName || "valued customer"}</strong>! Your order has been placed successfully.
-            You'll receive a confirmation at <strong className="text-zinc-700">{form.email || "your email"}</strong>.
+            Thank you, <strong className="text-zinc-700">{bkashOrderInfo?.fullName || form.fullName || "valued customer"}</strong>! Your order has been placed successfully.
+            You'll receive a confirmation at <strong className="text-zinc-700">{bkashOrderInfo?.email || form.email || "your email"}</strong>.
           </p>
         </div>
         <div className="bg-white border border-zinc-100 px-8 py-6 max-w-sm w-full">
-          <div className="flex justify-between text-xs mb-2 text-zinc-500"><span>Order Total</span><span className="font-black text-zinc-950">{formatPrice(total)}</span></div>
-          <div className="flex justify-between text-xs text-zinc-500"><span>Payment</span><span className="font-bold text-zinc-700 uppercase">{form.paymentMethod === "cod" ? "Cash on Delivery" : form.paymentMethod === "card" ? "Credit / Debit Card" : form.paymentMethod === "square" ? "Square" : form.paymentMethod}</span></div>
+          <div className="flex justify-between text-xs mb-2 text-zinc-500"><span>Order Total</span><span className="font-black text-zinc-950">{formatPrice(bkashOrderInfo?.total ?? total)}</span></div>
+          <div className="flex justify-between text-xs text-zinc-500"><span>Payment</span><span className="font-bold text-zinc-700 uppercase">{bkashOrderInfo ? "bKash (Online Payment)" : form.paymentMethod === "cod" ? "Cash on Delivery" : form.paymentMethod === "card" ? "Credit / Debit Card" : form.paymentMethod === "square" ? "Square" : form.paymentMethod}</span></div>
         </div>
         <div className="flex gap-4">
           <Link href="/account" className="border border-zinc-950 text-zinc-950 px-8 py-3 text-xs font-bold tracking-widest uppercase hover:bg-zinc-50 transition-colors">Go to Account</Link>
@@ -1237,7 +1321,7 @@ export default function CheckoutPage() {
                   { value: "cod", label: "Cash on Delivery", desc: "Pay when your order arrives", enabled: paymentMethods.cod && (!paymentCodCountry || form.country === paymentCodCountry) },
                   { value: "card", label: "Credit / Debit Card (Stripe)", desc: "Visa, Mastercard, Amex", enabled: paymentMethods.card },
                   { value: "square", label: "Square", desc: "Pay securely with Square", enabled: paymentMethods.square },
-                  { value: "bkash", label: "bKash", desc: "Send to merchant number", enabled: paymentMethods.bkash },
+                  { value: "bkash", label: "bKash", desc: "Pay securely online via bKash", enabled: paymentMethods.bkash },
                   { value: "nagad", label: "Nagad", desc: "Pay via Nagad account", enabled: paymentMethods.nagad },
                 ].filter(opt => opt.enabled).map((opt) => (
                   <label
@@ -1260,25 +1344,8 @@ export default function CheckoutPage() {
                 )}
 
                 {form.paymentMethod === "bkash" && (
-                  <div>
-                    <label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 mb-1.5 block">bKash Number *</label>
-                    <input 
-                      type="tel" 
-                      value={form.bkashNumber} 
-                      onChange={(e) => {
-                        set("bkashNumber")(e);
-                        if (errors.bkashNumber) setErrors((errs) => ({ ...errs, bkashNumber: "" }));
-                      }} 
-                      placeholder="+880 1XXXXXXXXX" 
-                      className={`w-full px-4 py-2 text-sm border bg-zinc-50 focus:bg-white focus:outline-none transition-all ${
-                        errors.bkashNumber 
-                          ? "border-red-500 focus:border-red-500 focus:ring-1 focus:ring-red-500" 
-                          : "border-zinc-200 focus:border-zinc-950 focus:ring-1 focus:ring-zinc-950"
-                      }`}
-                    />
-                    {errors.bkashNumber && (
-                      <p className="text-red-500 text-[10px] mt-1 uppercase font-bold tracking-wider">{errors.bkashNumber}</p>
-                    )}
+                  <div className="pt-2 text-xs text-zinc-500">
+                    <p>You&apos;ll be redirected to bKash to complete payment securely, then brought back here.</p>
                   </div>
                 )}
 
@@ -1311,7 +1378,6 @@ export default function CheckoutPage() {
                   </button>
                   <button onClick={() => {
                     const newErrors: Record<string, string> = {};
-                    if (form.paymentMethod === "bkash" && !form.bkashNumber) newErrors.bkashNumber = "bKash Number is required";
                     if (form.paymentMethod === "nagad" && !form.nagadNumber) newErrors.nagadNumber = "Nagad Number is required";
                     
                     setErrors(newErrors);
@@ -1352,7 +1418,7 @@ export default function CheckoutPage() {
                 <div className="bg-zinc-50 p-4">
                   <p className="text-[10px] font-black uppercase tracking-widest text-zinc-400 mb-2">Payment Method</p>
                   <p className="text-sm font-bold text-zinc-900">
-                    {form.paymentMethod === "cod" ? "Cash on Delivery" : form.paymentMethod === "card" ? "Credit/Debit Card (Stripe)" : form.paymentMethod === "square" ? "Square Payment" : form.paymentMethod === "bkash" ? `bKash — ${form.bkashNumber}` : `Nagad — ${form.nagadNumber}`}
+                    {form.paymentMethod === "cod" ? "Cash on Delivery" : form.paymentMethod === "card" ? "Credit/Debit Card (Stripe)" : form.paymentMethod === "square" ? "Square Payment" : form.paymentMethod === "bkash" ? "bKash (Online Payment)" : `Nagad — ${form.nagadNumber}`}
                   </p>
                 </div>
 
@@ -1383,12 +1449,14 @@ export default function CheckoutPage() {
                     </div>
                   ) : (
                     <button
-                      onClick={() => handlePlaceOrder()}
+                      onClick={() => (form.paymentMethod === "bkash" ? handleBkashCheckout() : handlePlaceOrder())}
                       disabled={placing}
                       className="flex-[2] bg-zinc-950 text-white py-4 text-xs font-black tracking-widest uppercase hover:bg-zinc-800 disabled:opacity-60 disabled:cursor-wait transition-all flex items-center justify-center gap-2"
                     >
                       {placing ? (
-                        <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Placing Order…</>
+                        <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> {form.paymentMethod === "bkash" ? "Redirecting to bKash…" : "Placing Order…"}</>
+                      ) : form.paymentMethod === "bkash" ? (
+                        <>Pay with bKash · {formatPrice(total)}</>
                       ) : (
                         <>Place Order · {formatPrice(total)}</>
                       )}

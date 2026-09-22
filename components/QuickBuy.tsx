@@ -16,8 +16,10 @@ import { sortLengths, sortSizes } from "@/lib/variants";
 import { useRegions } from "@/lib/useRegions";
 import { resolveTax, taxLineLabel, type TaxSettings } from "@/lib/tax";
 import Swal from "@/lib/swal";
+import { startBkashCheckout } from "@/lib/bkashCheckoutClient";
 import {
   activeShippingMethods,
+  applyBkashFreeShipping,
   applyFreeShippingThreshold,
   defaultShippingMethod,
   shippingPriceForCountry,
@@ -62,6 +64,8 @@ interface QuickBuyProps {
     methods: ShippingMethod[];
     /** Base-currency subtotal above which shipping is free, or null. */
     freeThreshold: number | null;
+    /** Base-currency subtotal at or below which a bKash order ships free, or null. */
+    bkashFreeShippingMax: number | null;
   };
   tax: TaxSettings;
   /** Admin → Settings → Branding → Product Page. */
@@ -125,7 +129,6 @@ export default function QuickBuy({ product, payments, shipping, tax: taxSettings
     city: "",
     postalCode: "",
     paymentMethod: firstPaymentMethod,
-    bkashNumber: "",
     nagadNumber: "",
   });
 
@@ -142,12 +145,17 @@ export default function QuickBuy({ product, payments, shipping, tax: taxSettings
   const selectedMethod =
     shippingOptions.find((m) => m.id === selectedMethodId) ??
     defaultShippingMethod(shipping.methods, form.country);
-  const shippingFee = applyFreeShippingThreshold(
-    shipping.enabled && selectedMethod
-      ? shippingPriceForCountry(selectedMethod, form.country)
-      : 0,
+  const shippingFee = applyBkashFreeShipping(
+    applyFreeShippingThreshold(
+      shipping.enabled && selectedMethod
+        ? shippingPriceForCountry(selectedMethod, form.country)
+        : 0,
+      subtotal,
+      shipping.freeThreshold
+    ),
     subtotal,
-    shipping.freeThreshold
+    form.paymentMethod,
+    shipping.bkashFreeShippingMax
   );
 
   // Destination-based, and after shipping because the fee may itself be taxed.
@@ -203,51 +211,67 @@ export default function QuickBuy({ product, payments, shipping, tax: taxSettings
     return Object.keys(next).length === 0;
   }
 
+  function buildCheckoutPayload(paymentIntentId?: string) {
+    const dialCode = COUNTRY_METADATA[form.country]?.dialCode || "";
+    return {
+      fullName: form.fullName,
+      email: form.email,
+      phone: `${dialCode} ${form.phone}`.trim(),
+      address: `${form.address}, ${form.area}, ${form.city} ${form.postalCode}`,
+      paymentMethod: form.paymentMethod,
+      totalAmount: total,
+      tax,
+      shipping: shippingFee,
+      shippingMethodId: selectedMethod?.id || "",
+      shippingDestination: {
+        city: form.city,
+        postalCode: form.postalCode,
+        countryCode: form.country,
+        state: form.area,
+        addressLine: form.address,
+      },
+      currencyCode: selectedCurrency?.code || "USD",
+      currencySymbol: selectedCurrency?.symbol || "$",
+      exchangeRate: selectedCurrency?.rate || 1.0,
+      items: items.map((i) => ({
+        productId: i.productId,
+        color: i.color,
+        size: i.size,
+        length: i.length,
+        price: i.price,
+        quantity: i.quantity,
+        title: i.title,
+      })),
+      paymentDetails: {
+        nagadNumber: form.nagadNumber,
+        cardNumber: form.paymentMethod === "card" ? "Stripe Payment" : "",
+        paymentIntentId: paymentIntentId || undefined,
+      },
+      pointsRedeemed: 0,
+    };
+  }
+
+  async function handleBkashCheckout() {
+    if (!validate()) return;
+    setPlacing(true);
+    try {
+      await startBkashCheckout(buildCheckoutPayload());
+      // On success the browser navigates away to bKash.
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to start bKash payment.";
+      Swal.fire({ text: message, confirmButtonColor: "#18181b", icon: "error" });
+      setPlacing(false);
+    }
+  }
+
   async function placeOrder(paymentIntentId?: string) {
     if (!validate()) return;
     setPlacing(true);
     try {
-      const dialCode = COUNTRY_METADATA[form.country]?.dialCode || "";
       const res = await fetch("/api/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          fullName: form.fullName,
-          email: form.email,
-          phone: `${dialCode} ${form.phone}`.trim(),
-          address: `${form.address}, ${form.area}, ${form.city} ${form.postalCode}`,
-          paymentMethod: form.paymentMethod,
-          totalAmount: total,
-          tax,
-          shipping: shippingFee,
-          shippingMethodId: selectedMethod?.id || "",
-          shippingDestination: {
-            city: form.city,
-            postalCode: form.postalCode,
-            countryCode: form.country,
-            state: form.area,
-            addressLine: form.address,
-          },
-          currencyCode: selectedCurrency?.code || "USD",
-          currencySymbol: selectedCurrency?.symbol || "$",
-          exchangeRate: selectedCurrency?.rate || 1.0,
-          items: items.map((i) => ({
-            productId: i.productId,
-            color: i.color,
-            size: i.size,
-            length: i.length,
-            price: i.price,
-            quantity: i.quantity,
-            title: i.title,
-          })),
-          paymentDetails: {
-            bkashNumber: form.bkashNumber,
-            nagadNumber: form.nagadNumber,
-            cardNumber: form.paymentMethod === "card" ? "Stripe Payment" : "",
-            paymentIntentId: paymentIntentId || undefined,
-          },
-          pointsRedeemed: 0,
-        }),
+        body: JSON.stringify(buildCheckoutPayload(paymentIntentId)),
       });
 
       if (!res.ok) {
@@ -520,10 +544,7 @@ export default function QuickBuy({ product, payments, shipping, tax: taxSettings
               )}
 
               {form.paymentMethod === "bkash" && (
-                <div>
-                  <label className={labelClass}>bKash Number</label>
-                  <input value={form.bkashNumber} onChange={set("bkashNumber")} className={fieldClass} placeholder="01XXXXXXXXX" />
-                </div>
+                <p className="text-xs text-zinc-500">You&apos;ll be redirected to bKash to complete payment securely.</p>
               )}
 
               {form.paymentMethod === "nagad" && (
@@ -633,14 +654,16 @@ export default function QuickBuy({ product, payments, shipping, tax: taxSettings
               )
             ) : (
               <button
-                onClick={() => placeOrder()}
+                onClick={() => (form.paymentMethod === "bkash" ? handleBkashCheckout() : placeOrder())}
                 disabled={placing}
                 className="w-full bg-zinc-950 text-white py-4 text-xs font-black tracking-widest uppercase hover:bg-zinc-800 disabled:opacity-60 disabled:cursor-wait transition-colors flex items-center justify-center gap-2"
               >
                 {placing ? (
                   <>
-                    <Loader2 className="w-4 h-4 animate-spin" /> Placing Order…
+                    <Loader2 className="w-4 h-4 animate-spin" /> {form.paymentMethod === "bkash" ? "Redirecting to bKash…" : "Placing Order…"}
                   </>
+                ) : form.paymentMethod === "bkash" ? (
+                  <>Pay with bKash · {formatPrice(total)}</>
                 ) : (
                   <>Place Order · {formatPrice(total)}</>
                 )}

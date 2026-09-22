@@ -26,6 +26,13 @@ export const SHIPPING_METHODS_KEY = "shipping_methods"
 // Edited in Admin → Settings → Shipping; advertised on the product page.
 export const FREE_SHIPPING_THRESHOLD_KEY = "shipping_free_threshold"
 
+// Order value, in base currency, AT OR BELOW which a bKash-paid order ships
+// free — the mirror image of FREE_SHIPPING_THRESHOLD_KEY (which waives
+// shipping above a subtotal, for any payment method). Edited in Admin →
+// Settings → Shipping.
+export const BKASH_FREE_SHIPPING_MAX_KEY = "bkash_free_shipping_max_amount"
+export const DEFAULT_BKASH_FREE_SHIPPING_MAX = 2000
+
 /** One destination override inside a tier. */
 export interface ShippingCountryRate {
   /** ISO 3166-1 alpha-2, upper case. */
@@ -187,6 +194,40 @@ export function applyFreeShippingThreshold(
 ): number {
   if (threshold === null || fee <= 0) return fee
   return subtotal >= threshold ? 0 : fee
+}
+
+/**
+ * The bKash free-shipping cap, or null when disabled.
+ *
+ * Blank, zero and anything non-numeric all mean "no offer" — same convention
+ * as `parseFreeShippingThreshold`.
+ */
+export function parseBkashFreeShippingMax(raw: unknown): number | null {
+  if (raw === undefined || raw === null || raw === "") return DEFAULT_BKASH_FREE_SHIPPING_MAX
+  const n = Number(raw)
+  return Number.isFinite(n) && n > 0 ? round2(n) : null
+}
+
+export function bkashFreeShippingMaxFromSettings(
+  settings: Record<string, string> | undefined | null
+): number | null {
+  return parseBkashFreeShippingMax(settings?.[BKASH_FREE_SHIPPING_MAX_KEY])
+}
+
+/**
+ * Zeroes a shipping fee for a bKash order at or under the cap.
+ *
+ * Applied alongside `applyFreeShippingThreshold` — either rule can waive the
+ * fee, so call this after (or before) it and take the lower result.
+ */
+export function applyBkashFreeShipping(
+  fee: number,
+  subtotal: number,
+  paymentMethod: unknown,
+  maxAmount: number | null
+): number {
+  if (maxAmount === null || fee <= 0) return fee
+  return paymentMethod === "bkash" && subtotal <= maxAmount ? 0 : fee
 }
 
 export function activeShippingMethods(methods: ShippingMethod[]): ShippingMethod[] {

@@ -541,6 +541,37 @@ model Payment {
   createdAt           DateTime          @default(now())
 }
 
+// Holds a checkout's full form payload while the customer is off-site
+// completing a redirect-based gateway payment (bKash today). The real Order
+// is only created once the gateway confirms payment server-side — see
+// lib/orderCreation.ts and app/api/checkout/bkash/callback/route.ts.
+model PendingCheckout {
+  id                     String    @id @default(cuid())
+
+  merchantInvoiceNumber  String    @unique
+  paymentID              String?   @unique
+
+  provider               String
+
+  amount                 Float
+
+  payload                Json
+  // Set once, when the checkout account is created/upgraded during Create
+  // Payment (findOrCreateCheckoutUser is idempotent, so the callback re-finds
+  // rather than re-creates it) — carried here so the "your account was
+  // created" email still goes out after payment succeeds, from the callback,
+  // instead of firing early for a payment that might never complete.
+  generatedPassword      String?
+
+  status                 String    @default("PENDING")
+
+  orderId                String?
+  failureReason          String?
+
+  createdAt              DateTime  @default(now())
+  expiresAt              DateTime
+}
+
 model Review {
   id              String      @id @default(cuid())
 

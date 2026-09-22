@@ -431,6 +431,7 @@ function ReelsCard() {
                   <MediaField
                     label="Video"
                     kind="video"
+                    allowUrl
                     hint="Vertical 9:16 works best. Clips play muted and on loop."
                     value={reel.video}
                     onChange={(next) =>

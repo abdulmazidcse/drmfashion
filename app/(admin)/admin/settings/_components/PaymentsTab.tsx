@@ -87,7 +87,7 @@ export default function PaymentsTab() {
                   </div>
                   <div>
                     <h3 className="font-bold text-sm tracking-widest uppercase text-foreground mb-1">bKash</h3>
-                    <p className="text-xs text-muted-foreground">Manual bKash transfer</p>
+                    <p className="text-xs text-muted-foreground">Online payment via bKash Payment Gateway</p>
                   </div>
                 </div>
                 <button type="button" className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${paymentBkashEnabled === "true" ? 'bg-primary' : 'bg-muted-foreground/30'}`}>

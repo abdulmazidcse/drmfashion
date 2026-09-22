@@ -4,6 +4,8 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { ChevronLeft, ChevronRight, Play } from "lucide-react";
 import SectionHeading from "./SectionHeading";
+import HomeVideoMedia from "./HomeVideoMedia";
+import { controlEmbeddedMedia } from "@/lib/externalVideo";
 import type { HomeReel } from "@/lib/homeReels";
 
 interface ReelsProps {
@@ -52,8 +54,8 @@ export default function Reels({ title, highlight, subtitle, reels }: ReelsProps)
     const el = scrollRef.current;
     if (!el) return;
 
-    const videos = Array.from(el.querySelectorAll("video"));
-    if (videos.length === 0) return;
+    const media = Array.from(el.querySelectorAll("video, iframe[data-yt-embed]"));
+    if (media.length === 0) return;
 
     // Respect the OS "reduce motion" setting: leave every poster in place and
     // let the play badge invite a tap instead.
@@ -63,20 +65,15 @@ export default function Reels({ title, highlight, subtitle, reels }: ReelsProps)
     const io = new IntersectionObserver(
       entries => {
         for (const entry of entries) {
-          const video = entry.target as HTMLVideoElement;
-          if (entry.isIntersecting) {
-            // Autoplay is rejected on some browsers even when muted; there is
-            // nothing to recover, the poster simply stays up.
-            video.play().catch(() => {});
-          } else {
-            video.pause();
-          }
+          // Autoplay is rejected on some browsers even when muted; there is
+          // nothing to recover, the poster simply stays up.
+          controlEmbeddedMedia(entry.target, entry.isIntersecting);
         }
       },
       { threshold: 0.4 }
     );
 
-    videos.forEach(v => io.observe(v));
+    media.forEach(el => io.observe(el));
     return () => io.disconnect();
   }, [reels]);
 
@@ -129,16 +126,9 @@ export default function Reels({ title, highlight, subtitle, reels }: ReelsProps)
           {reels.map((reel, i) => {
             const tile = (
               <>
-                <video
+                <HomeVideoMedia
                   src={reel.video}
-                  poster={reel.poster || undefined}
-                  muted
-                  loop
-                  playsInline
-                  preload="none"
-                  // Keeps older iOS from hoisting the clip into its native
-                  // fullscreen player, which `playsInline` alone did not cover.
-                  webkit-playsinline="true"
+                  poster={reel.poster}
                   className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
                 />
 

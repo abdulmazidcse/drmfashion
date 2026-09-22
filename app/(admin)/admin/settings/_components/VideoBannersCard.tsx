@@ -127,6 +127,7 @@ export default function VideoBannersCard() {
                     <MediaField
                       label="Desktop video"
                       kind="video"
+                      allowUrl
                       hint="Landscape. Plays muted and on loop. Required — without it the banner is skipped."
                       value={banner.video}
                       onChange={(next) =>
@@ -138,6 +139,7 @@ export default function VideoBannersCard() {
                     <MediaField
                       label="Mobile video"
                       kind="video"
+                      allowUrl
                       hint="Portrait cut. Leave empty to reuse the desktop file — a wide crop reads badly on a phone."
                       value={banner.videoMobile}
                       onChange={(next) =>

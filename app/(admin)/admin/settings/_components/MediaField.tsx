@@ -1,9 +1,11 @@
 "use client"
 
 import { useState } from "react"
-import { Loader2, Trash2, Image as ImageIcon, UploadCloud } from "lucide-react"
+import { Loader2, Trash2, Image as ImageIcon, UploadCloud, Link as LinkIcon } from "lucide-react"
 import { Label } from "@/components/ui/label"
+import { Input } from "@/components/ui/input"
 import { useSettingsForm } from "./SettingsFormContext"
+import { isExternalVideoUrl, parseYouTubeId, youtubeThumbnailUrl } from "@/lib/externalVideo"
 
 /**
  * Thumbnail + Upload + Remove, in place of a raw URL box.
@@ -19,6 +21,7 @@ export default function MediaField({
   value,
   onChange,
   kind = "image",
+  allowUrl = false,
   children,
 }: {
   label: string
@@ -29,11 +32,18 @@ export default function MediaField({
   value: string
   onChange: React.Dispatch<React.SetStateAction<string>>
   kind?: "image" | "video"
+  /** Video only: also accept a pasted YouTube or direct video-file link, as an
+   *  alternative to uploading a file to site storage. */
+  allowUrl?: boolean
   /** Rendered under the field, for a panel that control opens. */
   children?: React.ReactNode
 }) {
   const { handleFieldFileUpload, fieldLabel } = useSettingsForm()
   const [uploading, setUploading] = useState(false)
+  const [urlMode, setUrlMode] = useState(() => allowUrl && isExternalVideoUrl(value))
+
+  const externalVideo = kind === "video" && isExternalVideoUrl(value)
+  const youtubeId = externalVideo ? parseYouTubeId(value) : null
 
   return (
     <div className="space-y-3">
@@ -45,7 +55,15 @@ export default function MediaField({
       <div className="flex items-center gap-3">
         <div className="h-20 w-20 shrink-0 overflow-hidden rounded-md border bg-muted/50">
           {value ? (
-            kind === "video" ? (
+            externalVideo ? (
+              youtubeId ? (
+                <img src={youtubeThumbnailUrl(youtubeId)} alt={label} className="h-full w-full object-cover" />
+              ) : (
+                <div className="flex h-full w-full items-center justify-center">
+                  <LinkIcon className="h-5 w-5 text-muted-foreground" />
+                </div>
+              )
+            ) : kind === "video" ? (
               <video src={value} className="h-full w-full object-cover" muted playsInline />
             ) : (
               <img src={value} alt={label} className="h-full w-full object-cover" />
@@ -58,21 +76,52 @@ export default function MediaField({
         </div>
 
         <div className="flex flex-col gap-2">
-          <label className="relative flex cursor-pointer items-center justify-center gap-2 rounded-md border border-input bg-card px-4 py-2 shadow-xs transition-colors hover:bg-muted/50">
-            <input
-              type="file"
-              className="sr-only"
-              accept={kind === "video" ? "video/*" : "image/*"}
-              disabled={uploading}
-              onChange={(e) => handleFieldFileUpload(e, onChange, setUploading)}
-            />
-            {uploading ? (
-              <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-            ) : (
-              <UploadCloud className="h-4 w-4 text-muted-foreground" />
-            )}
-            <span className="text-xs font-bold">{value ? "Replace" : "Upload"}</span>
-          </label>
+          {urlMode ? (
+            <>
+              <Input
+                type="url"
+                placeholder="https://youtube.com/watch?v=… or a direct video link"
+                value={value}
+                onChange={(e) => onChange(e.target.value)}
+                className="h-9 w-64 text-xs"
+              />
+              <button
+                type="button"
+                onClick={() => setUrlMode(false)}
+                className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground transition-colors hover:text-foreground"
+              >
+                <UploadCloud className="h-3 w-3" /> Upload a file instead
+              </button>
+            </>
+          ) : (
+            <>
+              <label className="relative flex cursor-pointer items-center justify-center gap-2 rounded-md border border-input bg-card px-4 py-2 shadow-xs transition-colors hover:bg-muted/50">
+                <input
+                  type="file"
+                  className="sr-only"
+                  accept={kind === "video" ? "video/*" : "image/*"}
+                  disabled={uploading}
+                  onChange={(e) => handleFieldFileUpload(e, onChange, setUploading)}
+                />
+                {uploading ? (
+                  <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                ) : (
+                  <UploadCloud className="h-4 w-4 text-muted-foreground" />
+                )}
+                <span className="text-xs font-bold">{value ? "Replace" : "Upload"}</span>
+              </label>
+
+              {allowUrl && (
+                <button
+                  type="button"
+                  onClick={() => setUrlMode(true)}
+                  className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground transition-colors hover:text-foreground"
+                >
+                  <LinkIcon className="h-3 w-3" /> Paste a video link instead
+                </button>
+              )}
+            </>
+          )}
 
           {value && (
             <button
@@ -87,6 +136,9 @@ export default function MediaField({
       </div>
 
       {hint && <p className="text-[10px] text-muted-foreground">{hint}</p>}
+      {allowUrl && !urlMode && (
+        <p className="text-[10px] text-muted-foreground">Supports YouTube links or a direct video file link.</p>
+      )}
 
       {children}
     </div>

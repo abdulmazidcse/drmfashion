@@ -1,3 +1,6 @@
+"use client";
+
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import HeroVideo from "./HeroVideo";
 import HeroHighlightCard, { type HeroHighlight } from "./HeroHighlightCard";
@@ -24,24 +27,31 @@ interface HomeHeroProps {
   slides?: {
     men?: SlideConfig;
     women?: SlideConfig;
+    /**
+     * Milliseconds between auto-rotations when both slides are active; 0
+     * disables rotation (Admin → Settings → Homepage — "Rotation Animation
+     * Interval", already saved, previously never read here).
+     */
+    rotationInterval?: number;
   } | null;
   highlight?: HeroHighlight | null;
 }
 
 /**
- * Signature hero — a single split card rather than the full-bleed dual panel
- * this used to be.
+ * Signature hero — a split card that rotates between the Men and Women
+ * slides when both are active and a rotation interval is set, and a single
+ * static card otherwise.
  *
- * Both slides are still read from Settings and both still reach the visitor:
- * the leading one supplies the copy and the media, and the ghost button beside
- * the primary CTA carries either that slide's own second button or, with that
- * left blank, the other slide's call to action. So configuring the men's and
- * women's slides in Admin still drives what is on screen — it just resolves to
- * one card and two buttons instead of two half-width panels.
+ * With rotation off (interval 0, or only one slide active) this still
+ * behaves exactly as the single-card design did before: the lead slide
+ * supplies the copy and media, and the ghost button beside the primary CTA
+ * carries the other slide's call to action, so configuring both slides in
+ * Admin still drives what's on screen even without motion.
  */
 export default function HomeHero({ slides, highlight }: HomeHeroProps) {
   const isMenActive = slides?.men?.active !== false;
   const isWomenActive = slides?.women?.active !== false;
+  const rotationInterval = Number(slides?.rotationInterval) || 0;
 
   // A slide only plays a video when one is configured. The bundled defaults used
   // to sit at the end of this chain, which made "no video" impossible to express:
@@ -84,8 +94,44 @@ export default function HomeHero({ slides, highlight }: HomeHeroProps) {
     activeSlides.push(menSlide, womenSlide);
   }
 
-  const lead = activeSlides[0];
-  const secondary = activeSlides[1] ?? null;
+  const rotating = activeSlides.length === 2 && rotationInterval > 0;
+
+  const [activeIndex, setActiveIndex] = useState(0);
+  // True while the pointer (or keyboard focus) is on the card — a visitor
+  // reaching for a CTA shouldn't have the slide change out from under them.
+  const [paused, setPaused] = useState(false);
+
+  // Same "remaining budget survives a pause" timer technique as
+  // components/home/PillarsCarousel.tsx and components/BannerSlider.tsx.
+  const remainingRef = useRef(rotationInterval);
+
+  useEffect(() => {
+    remainingRef.current = rotationInterval;
+  }, [activeIndex, rotationInterval]);
+
+  useEffect(() => {
+    if (!rotating || paused) return;
+    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
+
+    const startedAt = Date.now();
+    const t = setTimeout(() => {
+      setActiveIndex(i => (i + 1) % activeSlides.length);
+    }, remainingRef.current);
+
+    return () => {
+      clearTimeout(t);
+      remainingRef.current = Math.max(0, remainingRef.current - (Date.now() - startedAt));
+    };
+  }, [activeIndex, paused, rotating, activeSlides.length]);
+
+  // Not rotating always means "show the first slide" — `activeIndex` simply
+  // stops advancing (the timer effect above no-ops while `!rotating`), so
+  // ignoring it here is enough; no reset effect needed.
+  const displayIndex = rotating ? activeIndex % activeSlides.length : 0;
+  const lead = activeSlides[displayIndex];
+  // The other slide, when there is one — carries the ghost CTA whether or not
+  // rotation is on, same as before: both slides still reach the visitor.
+  const secondary = activeSlides.length > 1 ? activeSlides[(displayIndex + 1) % activeSlides.length] : null;
 
   /**
    * The ghost button beside the primary CTA.
@@ -103,41 +149,81 @@ export default function HomeHero({ slides, highlight }: HomeHeroProps) {
   return (
     <section className="bg-sig-cream pb-3 pt-8">
       <div className="sig-wrap">
-        <div className="grid min-h-[520px] overflow-hidden rounded-[26px] bg-sig-card shadow-sig lg:grid-cols-[1fr_1.02fr] lg:rounded-sig-lg">
+        <div
+          className="grid min-h-[520px] overflow-hidden rounded-[26px] bg-sig-card shadow-sig lg:grid-cols-[1fr_1.02fr] lg:rounded-sig-lg"
+          onMouseEnter={() => setPaused(true)}
+          onMouseLeave={() => setPaused(false)}
+          onFocusCapture={() => setPaused(true)}
+          onBlurCapture={() => setPaused(false)}
+        >
 
           {/* ── Copy ── */}
           <div className="flex flex-col justify-center px-7 py-12 sm:px-14 sm:py-16">
-            {lead.topBarTag && (
-              <span className="inline-flex w-fit items-center gap-2 rounded-full bg-sig-aqua-50 px-[15px] py-2 text-xs font-bold tracking-[0.02em] text-sig-aqua-700">
-                ◆ {lead.topBarTag}
-              </span>
-            )}
-
-            <h1 className="mb-[18px] mt-5 text-[38px] font-extrabold leading-[1.04] tracking-[-0.035em] text-sig-ink sm:text-[clamp(38px,4.4vw,60px)]">
-              {lead.title}
-            </h1>
-
-            <p className="max-w-[42ch] text-base leading-[1.75] text-sig-soft">
-              {lead.subtitle}
-            </p>
-
-            <div className="mt-8 flex flex-wrap gap-3">
-              <Link
-                href={lead.shopLink}
-                className="inline-flex items-center justify-center gap-2.5 rounded-full border-[1.5px] border-transparent bg-sig-copper-600 px-[30px] py-[15px] text-sm font-bold text-white shadow-[0_10px_24px_-12px_rgba(160,99,47,0.85)] transition-all duration-200 hover:-translate-y-px hover:bg-sig-copper-500"
-              >
-                {lead.buttonText} →
-              </Link>
-
-              {ghostCta && (
-                <Link
-                  href={ghostCta.shopLink}
-                  className="inline-flex items-center justify-center gap-2.5 rounded-full border-[1.5px] border-sig-line bg-sig-card px-[30px] py-[15px] text-sm font-bold text-sig-ink transition-colors duration-200 hover:border-sig-copper-400 hover:text-sig-copper-700"
+            {/* Every active slide's copy is mounted in the same grid cell and
+                crossfaded — CSS Grid (not position:absolute) so the column
+                still sizes itself to the current slide's content instead of
+                collapsing, the same trick PillarsCarousel's text column uses. */}
+            <div className="grid">
+              {activeSlides.map((slide, i) => (
+                <div
+                  key={i}
+                  className={`col-start-1 row-start-1 flex flex-col items-start transition-opacity duration-500 ease-[cubic-bezier(0.3,1,0.3,1)] ${
+                    i === displayIndex ? "opacity-100" : "pointer-events-none opacity-0"
+                  }`}
+                  aria-hidden={i !== displayIndex}
                 >
-                  {ghostCta.buttonText}
-                </Link>
-              )}
+                  {slide.topBarTag && (
+                    <span className="inline-flex w-fit items-center gap-2 rounded-full bg-sig-aqua-50 px-[15px] py-2 text-xs font-bold tracking-[0.02em] text-sig-aqua-700">
+                      ◆ {slide.topBarTag}
+                    </span>
+                  )}
+
+                  <h1 className="mb-[18px] mt-5 text-[38px] font-extrabold leading-[1.04] tracking-[-0.035em] text-sig-ink sm:text-[clamp(38px,4.4vw,60px)]">
+                    {slide.title}
+                  </h1>
+
+                  <p className="max-w-[42ch] text-base leading-[1.75] text-sig-soft">
+                    {slide.subtitle}
+                  </p>
+
+                  <div className="mt-8 flex flex-wrap gap-3">
+                    <Link
+                      href={slide.shopLink}
+                      tabIndex={i === displayIndex ? undefined : -1}
+                      className="inline-flex items-center justify-center gap-2.5 rounded-full border-[1.5px] border-transparent bg-sig-copper-600 px-[30px] py-[15px] text-sm font-bold text-white shadow-[0_10px_24px_-12px_rgba(160,99,47,0.85)] transition-all duration-200 hover:-translate-y-px hover:bg-sig-copper-500"
+                    >
+                      {slide.buttonText} →
+                    </Link>
+
+                    {i === displayIndex && ghostCta && (
+                      <Link
+                        href={ghostCta.shopLink}
+                        className="inline-flex items-center justify-center gap-2.5 rounded-full border-[1.5px] border-sig-line bg-sig-card px-[30px] py-[15px] text-sm font-bold text-sig-ink transition-colors duration-200 hover:border-sig-copper-400 hover:text-sig-copper-700"
+                      >
+                        {ghostCta.buttonText}
+                      </Link>
+                    )}
+                  </div>
+                </div>
+              ))}
             </div>
+
+            {rotating && (
+              <div className="mt-6 flex gap-2">
+                {activeSlides.map((slide, i) => (
+                  <button
+                    key={i}
+                    type="button"
+                    aria-label={`Show ${slide.title}`}
+                    aria-current={i === displayIndex}
+                    onClick={() => setActiveIndex(i)}
+                    className={`h-1.5 rounded-full transition-all ${
+                      i === displayIndex ? "w-6 bg-sig-copper-600" : "w-1.5 bg-sig-line hover:bg-sig-copper-400"
+                    }`}
+                  />
+                ))}
+              </div>
+            )}
 
             {/* The same promises the value-props strip further down the page
                 makes — repeated here because this is where the decision to keep
@@ -149,6 +235,7 @@ export default function HomeHero({ slides, highlight }: HomeHeroProps) {
           {/* ── Media ── */}
           <div className="relative min-h-[340px] lg:min-h-0">
             <HeroVideo
+              key={displayIndex}
               src={lead.video}
               poster={lead.poster}
               alt={lead.posterAlt || lead.title}
@@ -156,7 +243,8 @@ export default function HomeHero({ slides, highlight }: HomeHeroProps) {
             />
 
             {/* Float card: a real product, passed down from the page's existing
-                best-seller query rather than fetched again here. */}
+                best-seller query rather than fetched again here. Constant
+                across slides — it isn't per-slide data. */}
             {highlight && <HeroHighlightCard highlight={highlight} />}
           </div>
 

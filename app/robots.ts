@@ -9,7 +9,7 @@ import { requestSiteUrl } from '@/lib/siteUrl'
  *         the cart/checkout flow and /buy (a noindex duplicate of the product
  *         page used for ad traffic), plus the sitemap is advertised.
  */
-const ALLOW_INDEXING = false
+const ALLOW_INDEXING = true
 
 // Rendered per request so the sitemap it advertises always carries the domain
 // this deployment is actually being served from.
