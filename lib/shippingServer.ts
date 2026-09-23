@@ -33,6 +33,8 @@ interface Destination {
   city?: string
   postalCode?: string
   countryCode?: string
+  /** Division/Province/State ISO 3166-2 short code — see lib/shipping.ts's ShippingRegionRestriction. */
+  state?: string
   addressLine?: string
 }
 
@@ -140,13 +142,14 @@ export async function resolveOrderShipping({
     }
   }
 
-  // The country comes off the destination the order is actually being written
-  // for, never off the browser's quote, so a shopper cannot pick a cheap
-  // country's rate and ship somewhere dearer.
+  // The country and region come off the destination the order is actually
+  // being written for, never off the browser's quote, so a shopper cannot
+  // pick a cheap country's rate — or a region-restricted tier they don't
+  // actually qualify for — and ship somewhere dearer.
   const resolved = resolveShipping(
     shippingMethodsFromSettings(settings),
     shippingMethodId,
-    { shippingEnabled, countryCode: destination?.countryCode }
+    { shippingEnabled, countryCode: destination?.countryCode, regionCode: destination?.state }
   )
 
   return { methodName: resolved.methodName, carrier: null, fee: resolved.fee }

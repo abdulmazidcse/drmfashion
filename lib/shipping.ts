@@ -41,6 +41,23 @@ export interface ShippingCountryRate {
   price: number
 }
 
+/**
+ * Limits which destinations a tier is even offered to — the availability
+ * counterpart to `ShippingCountryRate`, which only changes the price.
+ *
+ * `region` is the ISO 3166-2 short code `country-region-data` returns (see
+ * lib/regionsServer.ts) — the same value the checkout address form's
+ * Division/Province/State dropdown already stores as `shippingDestination.state`.
+ */
+export interface ShippingRegionRestriction {
+  /** "only": offered exclusively in this region. "except": offered everywhere but it. */
+  scope: "only" | "except"
+  /** ISO 3166-1 alpha-2, upper case. */
+  country: string
+  /** ISO 3166-2 short code, upper case. */
+  region: string
+}
+
 export interface ShippingMethod {
   /** Stable slug stored on the order and sent by the browser. */
   id: string
@@ -54,13 +71,15 @@ export interface ShippingMethod {
    * Shipping; a country listed twice keeps its first row.
    */
   countryRates: ShippingCountryRate[]
+  /** Null means offered everywhere (every method before this field existed). */
+  regionRestriction: ShippingRegionRestriction | null
   active: boolean
 }
 
 export const DEFAULT_SHIPPING_METHODS: ShippingMethod[] = [
-  { id: "standard", name: "Standard Shipping", deliveryTime: "8-12 days", price: 0, countryRates: [], active: true },
-  { id: "priority", name: "Priority Shipping", deliveryTime: "6-8 days", price: 14, countryRates: [], active: true },
-  { id: "express", name: "Express Shipping", deliveryTime: "6 days", price: 20, countryRates: [], active: true },
+  { id: "standard", name: "Standard Shipping", deliveryTime: "8-12 days", price: 0, countryRates: [], regionRestriction: null, active: true },
+  { id: "priority", name: "Priority Shipping", deliveryTime: "6-8 days", price: 14, countryRates: [], regionRestriction: null, active: true },
+  { id: "express", name: "Express Shipping", deliveryTime: "6 days", price: 20, countryRates: [], regionRestriction: null, active: true },
 ]
 
 function round2(n: number): number {
@@ -117,6 +136,7 @@ function sanitise(rows: unknown[]): ShippingMethod[] {
       // Absent on every row saved before country pricing existed, so this has
       // to tolerate `undefined` rather than assume an array.
       countryRates: sanitiseCountryRates(row.countryRates),
+      regionRestriction: sanitiseRegionRestriction(row.regionRestriction),
       active: row.active !== false,
     })
   })
@@ -153,6 +173,24 @@ function sanitiseCountryRates(raw: unknown): ShippingCountryRate[] {
   }
 
   return rates
+}
+
+/**
+ * Normalises a tier's optional region restriction. Malformed input (missing
+ * scope/country/region, or absent entirely) means "offered everywhere" — the
+ * same tolerant-default philosophy `sanitiseCountryRates` uses, so a bad row
+ * never accidentally hides a method from every customer.
+ */
+function sanitiseRegionRestriction(raw: unknown): ShippingRegionRestriction | null {
+  if (!raw || typeof raw !== "object") return null
+  const row = raw as Partial<Record<keyof ShippingRegionRestriction, unknown>>
+
+  const scope = row.scope === "only" || row.scope === "except" ? row.scope : null
+  const country = String(row.country ?? "").trim().toUpperCase()
+  const region = String(row.region ?? "").trim().toUpperCase()
+  if (!scope || !country || !region) return null
+
+  return { scope, country, region }
 }
 
 /** Reads the methods out of a settings map (`getPublicSettings`, `/api/settings`). */
@@ -235,6 +273,52 @@ export function activeShippingMethods(methods: ShippingMethod[]): ShippingMethod
 }
 
 /**
+ * Whether a tier is offered to a given destination at all — separate from
+ * `shippingPriceForCountry`, which only decides what it costs once it's
+ * already offered.
+ *
+ * No restriction: always allowed. With one, BOTH scopes are first scoped to
+ * the restriction's own country — "except Dhaka" means "elsewhere in
+ * Bangladesh", never "anywhere in the world that isn't Dhaka division". A
+ * shipment to a different country entirely never matches either scope, so an
+ * "Inside/Outside Dhaka" pair of tiers never appears for an order going
+ * somewhere else. An unknown/missing destination (no country picked yet)
+ * fails that same country check, so both stay hidden until it's known.
+ */
+export function methodAllowedForDestination(
+  method: ShippingMethod,
+  countryCode?: unknown,
+  regionCode?: unknown
+): boolean {
+  const restriction = method.regionRestriction
+  if (!restriction) return true
+
+  const country = typeof countryCode === "string" ? countryCode.trim().toUpperCase() : ""
+  if (country !== restriction.country) return false
+
+  const region = typeof regionCode === "string" ? regionCode.trim().toUpperCase() : ""
+  const regionMatches = Boolean(region) && region === restriction.region
+
+  return restriction.scope === "only" ? regionMatches : !regionMatches
+}
+
+/**
+ * The methods an actual shopper should be offered: active, and allowed for
+ * where they're shipping to. This is what checkout's radio list and both
+ * server money paths (`resolveShipping`'s fallback, `resolveOrderShipping`)
+ * go through — `activeShippingMethods` alone stays untouched for callers
+ * that don't have (or don't care about) a destination yet.
+ */
+export function shippableMethodsForDestination(
+  methods: ShippingMethod[],
+  destination: { countryCode?: unknown; regionCode?: unknown } = {}
+): ShippingMethod[] {
+  return activeShippingMethods(methods).filter((m) =>
+    methodAllowedForDestination(m, destination.countryCode, destination.regionCode)
+  )
+}
+
+/**
  * What a tier costs to a given destination.
  *
  * The one place a country becomes a price. Every display path and both server
@@ -260,20 +344,23 @@ export function shippingPriceForCountry(
  * The tier a shopper gets by default — cheapest first, ties broken by order.
  *
  * Cheapest is judged at the destination, so a tier that is dearest worldwide
- * but free to the shopper's own country is the one preselected there.
+ * but free to the shopper's own country is the one preselected there. Region
+ * restrictions narrow the field the same way `active` does — a tier the
+ * shopper's destination isn't even offered can never be the default.
  */
 export function defaultShippingMethod(
   methods: ShippingMethod[],
-  countryCode?: unknown
+  countryCode?: unknown,
+  regionCode?: unknown
 ): ShippingMethod | null {
-  const active = activeShippingMethods(methods)
-  if (active.length === 0) return null
-  return active.reduce(
+  const shippable = shippableMethodsForDestination(methods, { countryCode, regionCode })
+  if (shippable.length === 0) return null
+  return shippable.reduce(
     (cheapest, m) =>
       shippingPriceForCountry(m, countryCode) < shippingPriceForCountry(cheapest, countryCode)
         ? m
         : cheapest,
-    active[0]
+    shippable[0]
   )
 }
 
@@ -292,17 +379,24 @@ export interface ResolvedShipping {
  * An unknown id resolves to the default tier rather than erroring: ids can go
  * stale between the shopper loading checkout and the admin editing a method,
  * and failing a paid-for order over that is worse than shipping it at the
- * cheapest rate.
+ * cheapest rate. The same fallback covers a region-restricted tier the
+ * destination doesn't actually qualify for — e.g. a tampered request asking
+ * for the Dhaka-only tier on an order going elsewhere quietly resolves to a
+ * tier that destination is actually offered, rather than being trusted.
  */
 export function resolveShipping(
   methods: ShippingMethod[],
   methodId: unknown,
-  opts: { shippingEnabled?: boolean; countryCode?: unknown } = {}
+  opts: { shippingEnabled?: boolean; countryCode?: unknown; regionCode?: unknown } = {}
 ): ResolvedShipping {
-  const active = activeShippingMethods(methods)
+  const shippable = shippableMethodsForDestination(methods, {
+    countryCode: opts.countryCode,
+    regionCode: opts.regionCode,
+  })
   const requested = typeof methodId === "string" ? methodId.trim() : ""
   const method =
-    active.find((m) => m.id === requested) ?? defaultShippingMethod(methods, opts.countryCode)
+    shippable.find((m) => m.id === requested) ??
+    defaultShippingMethod(methods, opts.countryCode, opts.regionCode)
 
   if (!method) return { method: null, methodName: "Standard Shipping", fee: 0 }
 

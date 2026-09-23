@@ -61,7 +61,10 @@
       "Skill(update-config)",
       "Skill(update-config:*)",
       "PowerShell($p=\"d:\\\\laragon\\\\www\\\\ERP-V2\"; foreach\\($d in @\\(\"backend\",\"web\",\"mobile\"\\)\\){ \"== $d\"; Get-ChildItem \"$p\\\\$d\" -Force -ErrorAction SilentlyContinue | Where-Object { $_.Name -match '^\\(artisan|composer\\\\.json|package\\\\.json|pubspec\\\\.yaml|vite\\\\.config\\\\.js|vite\\\\.config\\\\.ts|angular\\\\.json|next\\\\.config\\\\.js|\\\\.env\\)$' } | Select-Object -ExpandProperty Name })",
-      "Read(//c/Users/abdul.mazid/.claude/**)"
+      "Read(//c/Users/abdul.mazid/.claude/**)",
+      "Bash(node -e ' *)",
+      "Bash(node scripts/_check_shipping.mjs)",
+      "Bash(node scripts/_verify-landing-checkout.mjs \"http://localhost:3000/l/test-landing-1790062847412\")"
     ]
   }
 }

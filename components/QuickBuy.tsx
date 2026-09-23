@@ -18,10 +18,10 @@ import { resolveTax, taxLineLabel, type TaxSettings } from "@/lib/tax";
 import Swal from "@/lib/swal";
 import { startBkashCheckout } from "@/lib/bkashCheckoutClient";
 import {
-  activeShippingMethods,
   applyBkashFreeShipping,
   applyFreeShippingThreshold,
   defaultShippingMethod,
+  shippableMethodsForDestination,
   shippingPriceForCountry,
   type ShippingMethod,
 } from "@/lib/shipping";
@@ -141,10 +141,13 @@ export default function QuickBuy({ product, payments, shipping, tax: taxSettings
   // display only, and mirror the same rules so the two agree.
   const unitPrice = variant?.price ?? product.discountPrice ?? product.basePrice;
   const subtotal = unitPrice * quantity;
-  const shippingOptions = activeShippingMethods(shipping.methods);
+  const shippingOptions = shippableMethodsForDestination(shipping.methods, {
+    countryCode: form.country,
+    regionCode: form.area,
+  });
   const selectedMethod =
     shippingOptions.find((m) => m.id === selectedMethodId) ??
-    defaultShippingMethod(shipping.methods, form.country);
+    defaultShippingMethod(shipping.methods, form.country, form.area);
   const shippingFee = applyBkashFreeShipping(
     applyFreeShippingThreshold(
       shipping.enabled && selectedMethod

@@ -33,7 +33,7 @@ const STATIC_ROUTES: Array<{ path: string; priority: number; changeFrequency: Me
 async function loadDynamicEntries() {
   const now = new Date()
 
-  const [products, categories, collections, posts, pages] = await Promise.all([
+  const [products, categories, collections, landingPages, posts, pages] = await Promise.all([
     prisma.product.findMany({
       where: { published: true, deletedAt: null },
       // The photography comes along so each product entry can carry <image:image>
@@ -67,6 +67,12 @@ async function loadDynamicEntries() {
       },
       select: { slug: true, updatedAt: true },
     }),
+    // Unlike /buy/[slug] (excluded above), a landing page is unique curated
+    // content, not a duplicate of any other page, so it's indexable.
+    prisma.landingPage.findMany({
+      where: { active: true },
+      select: { slug: true, updatedAt: true },
+    }),
     prisma.journalPost.findMany({
       where: { published: true },
       select: { slug: true, updatedAt: true },
@@ -77,7 +83,7 @@ async function loadDynamicEntries() {
     }),
   ])
 
-  return { products, categories, collections, posts, pages }
+  return { products, categories, collections, landingPages, posts, pages }
 }
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
@@ -88,10 +94,10 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   // routes instead — an incomplete sitemap beats no deploy.
   const dynamicEntries = await loadDynamicEntries().catch((e) => {
     console.warn("[SITEMAP] database unavailable, listing static routes only", e)
-    return { products: [], categories: [], collections: [], posts: [], pages: [] }
+    return { products: [], categories: [], collections: [], landingPages: [], posts: [], pages: [] }
   })
 
-  const { products, categories, collections, posts, pages } = dynamicEntries
+  const { products, categories, collections, landingPages, posts, pages } = dynamicEntries
 
   const now = new Date()
 
@@ -111,6 +117,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     ...collections.map((c) => ({
       url: `${base}/collection/${c.slug}`,
       lastModified: c.updatedAt,
+      changeFrequency: "weekly" as const,
+      priority: 0.7,
+    })),
+    ...landingPages.map((l) => ({
+      url: `${base}/landingpage/${l.slug}`,
+      lastModified: l.updatedAt,
       changeFrequency: "weekly" as const,
       priority: 0.7,
     })),

@@ -11,6 +11,7 @@ import {
   slugifyMethodId,
   type ShippingCountryRate,
   type ShippingMethod,
+  type ShippingRegionRestriction,
 } from "@/lib/shipping"
 import { COUNTRIES } from "@/lib/countries"
 import { WAREHOUSE_KEY, parseWarehouse } from "@/lib/warehouse"
@@ -166,12 +167,46 @@ export async function POST(req: NextRequest) {
         countryRates.push({ country, price: Math.round(countryPrice * 100) / 100 })
       }
 
+      // Optional region restriction — who this method is even offered to,
+      // as opposed to countryRates above (which only changes what it costs).
+      // Validated the same way: a country outside the known list, or a scope
+      // with no region picked, is rejected rather than silently dropped, so
+      // an operator finds out immediately rather than discovering later that
+      // "Inside Dhaka" was quietly offered everywhere.
+      let regionRestriction: ShippingRegionRestriction | null = null
+      const rawRestriction = row?.regionRestriction
+      if (rawRestriction && typeof rawRestriction === "object") {
+        const scope = rawRestriction.scope
+        if (scope === "only" || scope === "except") {
+          const country = String(rawRestriction.country ?? "").trim().toUpperCase()
+          const region = String(rawRestriction.region ?? "").trim().toUpperCase()
+
+          if (!KNOWN_COUNTRY_CODES.has(country)) {
+            return NextResponse.json(
+              { message: `"${name}": ${country || "(no country)"} is not a country this store ships to.` },
+              { status: 400 }
+            )
+          }
+          if (!region) {
+            return NextResponse.json(
+              { message: `"${name}" needs a region picked for its availability rule.` },
+              { status: 400 }
+            )
+          }
+
+          regionRestriction = { scope, country, region }
+        }
+        // scope "all" (or anything else malformed) means no restriction — the
+        // same as never having set one, not an error.
+      }
+
       methods.push({
         id,
         name,
         deliveryTime: String(row?.deliveryTime ?? "").trim(),
         price: Math.round(price * 100) / 100,
         countryRates,
+        regionRestriction,
         active: row?.active !== false,
       })
     }

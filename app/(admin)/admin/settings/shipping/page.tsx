@@ -14,11 +14,110 @@ import { Label } from "@/components/ui/label"
 import { Card, CardContent } from "@/components/ui/card"
 import { Switch } from "@/components/ui/switch"
 import { Separator } from "@/components/ui/separator"
-import { DEFAULT_SHIPPING_METHODS, parseFreeShippingThreshold, type ShippingMethod } from "@/lib/shipping"
+import { DEFAULT_SHIPPING_METHODS, parseFreeShippingThreshold, type ShippingMethod, type ShippingRegionRestriction } from "@/lib/shipping"
 import { DEFAULT_WAREHOUSE, isWarehouseComplete, type WarehouseAddress } from "@/lib/warehouse"
 import { COUNTRIES } from "@/lib/countries"
 import { regionLabelFor } from "@/lib/regions"
 import { useRegions } from "@/lib/useRegions"
+
+const selectClass = "w-full h-9 rounded-md border border-input bg-transparent px-2 text-sm"
+
+/**
+ * A method's own file for the same reason `useRegions` can't live inline in
+ * `.map()` — it's a hook, and the shipping-methods list is a dynamic array.
+ * "Which region" is fetched live per the country picked here, the same
+ * dataset (and same `/api/regions/[country]`) the checkout address form's
+ * Division/State/Province dropdown already uses — so a store's own regions
+ * (e.g. Bangladesh's Divisions) line up exactly with what a shopper picks.
+ */
+function RegionRestrictionEditor({
+  method,
+  onChange,
+}: {
+  method: ShippingMethod
+  onChange: (patch: Partial<ShippingMethod>) => void
+}) {
+  const restriction = method.regionRestriction
+  // Bangladesh by default — not a functional restriction, just where this
+  // picker starts since Dhaka/outside-Dhaka splits are the common case here.
+  const [pendingCountry, setPendingCountry] = useState(restriction?.country || "BD")
+  const { regions, loading } = useRegions(pendingCountry)
+
+  const scope: "all" | ShippingRegionRestriction["scope"] = restriction?.scope ?? "all"
+
+  const setScope = (nextScope: "all" | ShippingRegionRestriction["scope"]) => {
+    if (nextScope === "all") {
+      onChange({ regionRestriction: null })
+      return
+    }
+    onChange({
+      regionRestriction: {
+        scope: nextScope,
+        country: pendingCountry,
+        region: restriction?.region || regions[0]?.code || "",
+      },
+    })
+  }
+
+  const setCountry = (country: string) => {
+    setPendingCountry(country)
+    if (restriction) onChange({ regionRestriction: { ...restriction, country, region: "" } })
+  }
+
+  const setRegion = (region: string) => {
+    if (restriction) onChange({ regionRestriction: { ...restriction, region } })
+  }
+
+  return (
+    <div className="rounded-md border border-dashed p-3 space-y-3">
+      <div>
+        <p className="text-xs font-medium flex items-center gap-1.5">
+          <Globe className="h-3.5 w-3.5 text-muted-foreground" />
+          Availability
+        </p>
+        <p className="text-[11px] text-muted-foreground mt-0.5">
+          Limit this method to — or hide it from — one Division/State/Province within the
+          country picked below. Either way it only ever shows for that country: an
+          &quot;Outside Dhaka&quot; tier set to &quot;Everywhere except Dhaka&quot; still only
+          appears for Bangladesh addresses, never for a different country entirely.
+        </p>
+      </div>
+
+      <select value={scope} onChange={(e) => setScope(e.target.value as typeof scope)} className={selectClass}>
+        <option value="all">Everywhere</option>
+        <option value="only">Only in…</option>
+        <option value="except">Everywhere except…</option>
+      </select>
+
+      {scope !== "all" && (
+        <div className="flex gap-2">
+          <select value={pendingCountry} onChange={(e) => setCountry(e.target.value)} className={`flex-1 ${selectClass}`}>
+            {COUNTRIES.map((c) => (
+              <option key={c.code} value={c.code}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+          <select
+            value={restriction?.region || ""}
+            onChange={(e) => setRegion(e.target.value)}
+            disabled={loading || regions.length === 0}
+            className={`flex-1 ${selectClass}`}
+          >
+            <option value="" disabled>
+              {loading ? "Loading…" : regions.length === 0 ? "No regions for this country" : `Select ${regionLabelFor(pendingCountry).toLowerCase()}…`}
+            </option>
+            {regions.map((r) => (
+              <option key={r.code} value={r.code}>
+                {r.name}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+    </div>
+  )
+}
 
 export default function ShippingSettingsPage() {
   const { baseCurrency } = useCurrency()
@@ -85,7 +184,7 @@ export default function ShippingSettingsPage() {
   const addMethod = () =>
     setMethods(list => [
       ...list,
-      { id: "", name: "", deliveryTime: "", price: 0, countryRates: [], active: true },
+      { id: "", name: "", deliveryTime: "", price: 0, countryRates: [], regionRestriction: null, active: true },
     ])
 
   const removeMethod = (index: number) =>
@@ -408,6 +507,11 @@ export default function ShippingSettingsPage() {
                       </div>
                     )}
                   </div>
+
+                  <RegionRestrictionEditor
+                    method={method}
+                    onChange={(patch) => updateMethod(i, patch)}
+                  />
                 </div>
               ))}
             </div>

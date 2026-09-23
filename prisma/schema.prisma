@@ -323,6 +323,7 @@ model Product {
   reviews         Review[]
   questions       ProductQuestion[]
   collections     CollectionProduct[]
+  landingPages    LandingPageProduct[]
 
   createdAt       DateTime          @default(now())
   updatedAt       DateTime          @updatedAt
@@ -675,6 +676,42 @@ model CollectionProduct {
   createdAt    DateTime   @default(now())
 
   @@id([collectionId, productId])
+  @@index([productId])
+}
+
+/// Admin-curated, one-page "landing" checkout for several hand-picked
+/// products at once (/landingpage/[slug]) — the multi-product counterpart to a single
+/// product's QuickBuy page (/buy/[slug]). A shopper adds whichever of the
+/// featured products they want (variant + quantity each) and pays once;
+/// see lib/orderCreation.ts, which already accepts an arbitrary-length
+/// items[] array, so this needed no checkout backend changes.
+model LandingPage {
+  id              String               @id @default(cuid())
+  title           String
+  slug            String               @unique
+  active          Boolean              @default(true)
+  /// Page header copy, shown above the product list.
+  heading         String?
+  subheading      String?
+  bannerImage     String?
+  metaTitle       String?
+  metaDescription String?              @db.Text
+  products        LandingPageProduct[]
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @default(now()) @updatedAt
+
+  @@index([active])
+}
+
+model LandingPageProduct {
+  landingPageId String
+  landingPage   LandingPage @relation(fields: [landingPageId], references: [id], onDelete: Cascade)
+  productId     String
+  product       Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
+  sortOrder     Int         @default(0)
+  createdAt     DateTime    @default(now())
+
+  @@id([landingPageId, productId])
   @@index([productId])
 }
 

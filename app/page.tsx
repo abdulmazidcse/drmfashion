@@ -23,6 +23,7 @@ import CustomerReviews from "@/components/home/CustomerReviews";
 import JournalTeaser from "@/components/home/JournalTeaser";
 import ProductShowcase from "@/components/home/ProductShowcase";
 import { HOME_REELS_SETTING_KEY, parseHomeReels } from "@/lib/homeReels";
+import { parseHomeHeroSlides } from "@/lib/homeHeroSlides";
 import IconsGrid from "@/components/home/IconsGrid";
 import { HOME_ICONS_SETTING_KEY, parseHomeIcons, type HomeIconTile } from "@/lib/homeIcons";
 import VideoBanner from "@/components/home/VideoBanner";
@@ -228,23 +229,26 @@ export default async function Home() {
       const s = await prisma.setting.findUnique({
         where: { key: "home_hero_slides" }
       });
-      if (!s) return null;
-      try {
-        const parsed = JSON.parse(s.value);
-        if (parsed.men) {
-          if (parsed.men.image) parsed.men.image = formatImageUrl(parsed.men.image);
-          if (parsed.men.video) parsed.men.video = formatImageUrl(parsed.men.video);
-          if (parsed.men.videoFallback) parsed.men.videoFallback = formatImageUrl(parsed.men.videoFallback);
-        }
-        if (parsed.women) {
-          if (parsed.women.image) parsed.women.image = formatImageUrl(parsed.women.image);
-          if (parsed.women.video) parsed.women.video = formatImageUrl(parsed.women.video);
-          if (parsed.women.videoFallback) parsed.women.videoFallback = formatImageUrl(parsed.women.videoFallback);
-        }
-        return parsed;
-      } catch (e) {
-        return null;
+
+      let parsed: any = null;
+      if (s) {
+        try { parsed = JSON.parse(s.value); } catch (e) { parsed = null; }
       }
+
+      // parseHomeHeroSlides also migrates the old { men, women } shape and,
+      // with nothing saved at all, falls back to the two built-in slides —
+      // the hero is never blank.
+      const slides = parseHomeHeroSlides(parsed, { keepEmpty: false }).map((slide) => ({
+        ...slide,
+        image: slide.image ? formatImageUrl(slide.image) : slide.image,
+        video: slide.video ? formatImageUrl(slide.video) : slide.video,
+      }));
+
+      return {
+        slides,
+        rotationInterval: Number(parsed?.rotationInterval) || 0,
+        highlight: parsed?.highlight ?? null,
+      };
     }),
     fetchWithCache("home:community:tabs", async () => {
       const s = await prisma.setting.findUnique({
@@ -663,7 +667,13 @@ export default async function Home() {
       : null;
 
   const sectionNodes: Record<HomeSectionKey, React.ReactNode> = {
-    hero: <HomeHero slides={heroSlidesSetting} highlight={heroHighlight} />,
+    hero: (
+      <HomeHero
+        slides={heroSlidesSetting?.slides ?? []}
+        rotationInterval={heroSlidesSetting?.rotationInterval ?? 0}
+        highlight={heroHighlight}
+      />
+    ),
 
     pillars: (
       <ScrollReveal>

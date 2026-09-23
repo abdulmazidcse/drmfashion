@@ -39,6 +39,13 @@ import {
 } from "@/lib/trustBadges"
 import { DEFAULT_HERO_HIGHLIGHT, parseHeroHighlight } from "@/lib/heroHighlight"
 import {
+  EMPTY_HERO_SLIDE,
+  HOME_HERO_SLIDES_SETTING_KEY,
+  MAX_HOME_HERO_SLIDES,
+  parseHomeHeroSlides,
+  type HeroSlideItem,
+} from "@/lib/homeHeroSlides"
+import {
   DEFAULT_PILLAR_SIZES,
   parsePillarSizes,
   type PillarGender,
@@ -253,7 +260,6 @@ function useSettingsFormState() {
   const [customHeadScripts, setCustomHeadScripts] = useState("")
 
   // Homepage Hero Slider Settings
-  const [activeEditTab, setActiveEditTab] = useState<"men" | "women">("men")
   const [slideRotationInterval, setSlideRotationInterval] = useState("7000")
 
   // The product card floating over the hero image. Blank id and blank note both
@@ -263,33 +269,31 @@ function useSettingsFormState() {
   const [heroHighlightProductId, setHeroHighlightProductId] = useState(DEFAULT_HERO_HIGHLIGHT.productId)
   const [heroHighlightNote, setHeroHighlightNote] = useState(DEFAULT_HERO_HIGHLIGHT.note)
 
-  const [slideMenActive, setSlideMenActive] = useState(true)
-  const [slideMenTitle, setSlideMenTitle] = useState("FINALLY, CLOTHES THAT FIT.")
-  const [slideMenSubtitle, setSlideMenSubtitle] = useState("Designed specifically for men up to 7'1\". Proportions perfected for vertical precision.")
-  /** Alt text for the poster image; empty falls back to the slide title. */
-  const [slideMenImageAlt, setSlideMenImageAlt] = useState("")
-  const [slideMenImage, setSlideMenImage] = useState("/images/men_hero.png")
-  const [slideMenVideo, setSlideMenVideo] = useState("/videos/men.mp4")
-  const [slideMenVideoFallback, setSlideMenVideoFallback] = useState("/videos/fashion.mp4")
-  const [slideMenButtonText, setSlideMenButtonText] = useState("Shop Men")
-  const [slideMenShopLink, setSlideMenShopLink] = useState("/shop")
-  const [slideMenButtonText2, setSlideMenButtonText2] = useState("")
-  const [slideMenShopLink2, setSlideMenShopLink2] = useState("")
-  const [slideMenTopBarTag, setSlideMenTopBarTag] = useState("Made for Tall")
+  // The hero's own slide list — an unbounded, reorderable set of image (+
+  // optional video) slides, same CRUD shape as videoBanners below.
+  const [heroSlides, setHeroSlides] = useState<HeroSlideItem[]>([])
 
-  const [slideWomenActive, setSlideWomenActive] = useState(true)
-  const [slideWomenTitle, setSlideWomenTitle] = useState("ELEGANCE IN EVERY INCH.")
-  const [slideWomenSubtitle, setSlideWomenSubtitle] = useState("Tailored specifically for tall women up to 6'6\". Modern style with perfect length.")
-  /** Alt text for the poster image; empty falls back to the slide title. */
-  const [slideWomenImageAlt, setSlideWomenImageAlt] = useState("")
-  const [slideWomenImage, setSlideWomenImage] = useState("/images/olaszkolda-fashion-10318918.jpg")
-  const [slideWomenVideo, setSlideWomenVideo] = useState("/videos/women.mp4")
-  const [slideWomenVideoFallback, setSlideWomenVideoFallback] = useState("/videos/main-side-video.mp4")
-  const [slideWomenButtonText, setSlideWomenButtonText] = useState("Shop Women")
-  const [slideWomenShopLink, setSlideWomenShopLink] = useState("/shop")
-  const [slideWomenButtonText2, setSlideWomenButtonText2] = useState("")
-  const [slideWomenShopLink2, setSlideWomenShopLink2] = useState("")
-  const [slideWomenTopBarTag, setSlideWomenTopBarTag] = useState("Made for Tall")
+  function updateHeroSlide(index: number, patch: Partial<HeroSlideItem>) {
+    setHeroSlides(prev => prev.map((s, i) => (i === index ? { ...s, ...patch } : s)))
+  }
+
+  function addHeroSlide() {
+    setHeroSlides(prev => (prev.length >= MAX_HOME_HERO_SLIDES ? prev : [...prev, { ...EMPTY_HERO_SLIDE }]))
+  }
+
+  function removeHeroSlide(index: number) {
+    setHeroSlides(prev => prev.filter((_, i) => i !== index))
+  }
+
+  function moveHeroSlide(index: number, direction: -1 | 1) {
+    setHeroSlides(prev => {
+      const target = index + direction
+      if (target < 0 || target >= prev.length) return prev
+      const next = [...prev]
+      ;[next[index], next[target]] = [next[target], next[index]]
+      return next
+    })
+  }
 
   // Free-text block rendered just above the storefront footer
   const [homeDescription, setHomeDescription] = useState("")
@@ -675,14 +679,6 @@ function useSettingsFormState() {
     useState<"heights" | "fit" | "purpose" | "product">("heights")
   const [uploadingTabImage, setUploadingTabImage] = useState(false)
 
-  // Homepage slide upload states
-  const [uploadingMenImage, setUploadingMenImage] = useState(false)
-  const [uploadingMenVideo, setUploadingMenVideo] = useState(false)
-  const [uploadingMenVideoFallback, setUploadingMenVideoFallback] = useState(false)
-  const [uploadingWomenImage, setUploadingWomenImage] = useState(false)
-  const [uploadingWomenVideo, setUploadingWomenVideo] = useState(false)
-  const [uploadingWomenVideoFallback, setUploadingWomenVideoFallback] = useState(false)
-
   const [tabHeightsLabel, setTabHeightsLabel] = useState("Our Heights")
   const [tabHeightsHeading, setTabHeightsHeading] = useState("Designed For Real Heights.")
   const [tabHeightsDescription, setTabHeightsDescription] = useState("We engineer clothing specifically for tall men from 6'3\" to 7'1\" and tall women from 5'9\" to 6'6\". Every pattern is scaled vertically to ensure the waist, elbows, and knees land exactly where they should.")
@@ -804,45 +800,19 @@ function useSettingsFormState() {
           if (res.data.promo_popup_delay_seconds !== undefined) setPromoPopupDelaySeconds(res.data.promo_popup_delay_seconds)
           if (res.data.promo_popup_frequency_days !== undefined) setPromoPopupFrequencyDays(res.data.promo_popup_frequency_days)
 
-          if (res.data.home_hero_slides) {
+          if (res.data[HOME_HERO_SLIDES_SETTING_KEY]) {
             try {
-              const slides = JSON.parse(res.data.home_hero_slides)
-              if (slides.rotationInterval !== undefined) setSlideRotationInterval(String(slides.rotationInterval))
+              const raw = JSON.parse(res.data[HOME_HERO_SLIDES_SETTING_KEY])
+              if (raw.rotationInterval !== undefined) setSlideRotationInterval(String(raw.rotationInterval))
 
-              const highlight = parseHeroHighlight(slides.highlight)
+              const highlight = parseHeroHighlight(raw.highlight)
               setHeroHighlightActive(highlight.active)
               setHeroHighlightProductId(highlight.productId)
               setHeroHighlightNote(highlight.note)
 
-               if (slides.men) {
-                if (slides.men.active !== undefined) setSlideMenActive(!!slides.men.active)
-                if (slides.men.title !== undefined) setSlideMenTitle(slides.men.title)
-                if (slides.men.subtitle !== undefined) setSlideMenSubtitle(slides.men.subtitle)
-                if (slides.men.image !== undefined) setSlideMenImage(slides.men.image)
-                if (slides.men.imageAlt !== undefined) setSlideMenImageAlt(slides.men.imageAlt)
-                if (slides.men.video !== undefined) setSlideMenVideo(slides.men.video)
-                if (slides.men.videoFallback !== undefined) setSlideMenVideoFallback(slides.men.videoFallback)
-                if (slides.men.buttonText !== undefined) setSlideMenButtonText(slides.men.buttonText)
-                if (slides.men.shopLink !== undefined) setSlideMenShopLink(slides.men.shopLink)
-                if (slides.men.buttonText2 !== undefined) setSlideMenButtonText2(slides.men.buttonText2)
-                if (slides.men.shopLink2 !== undefined) setSlideMenShopLink2(slides.men.shopLink2)
-                if (slides.men.topBarTag !== undefined) setSlideMenTopBarTag(slides.men.topBarTag)
-              }
-
-              if (slides.women) {
-                if (slides.women.active !== undefined) setSlideWomenActive(!!slides.women.active)
-                if (slides.women.title !== undefined) setSlideWomenTitle(slides.women.title)
-                if (slides.women.subtitle !== undefined) setSlideWomenSubtitle(slides.women.subtitle)
-                if (slides.women.image !== undefined) setSlideWomenImage(slides.women.image)
-                if (slides.women.imageAlt !== undefined) setSlideWomenImageAlt(slides.women.imageAlt)
-                if (slides.women.video !== undefined) setSlideWomenVideo(slides.women.video)
-                if (slides.women.videoFallback !== undefined) setSlideWomenVideoFallback(slides.women.videoFallback)
-                if (slides.women.buttonText !== undefined) setSlideWomenButtonText(slides.women.buttonText)
-                if (slides.women.shopLink !== undefined) setSlideWomenShopLink(slides.women.shopLink)
-                if (slides.women.buttonText2 !== undefined) setSlideWomenButtonText2(slides.women.buttonText2)
-                if (slides.women.shopLink2 !== undefined) setSlideWomenShopLink2(slides.women.shopLink2)
-                if (slides.women.topBarTag !== undefined) setSlideWomenTopBarTag(slides.women.topBarTag)
-              }
+              // Recognises the old { men, women } shape and migrates it into
+              // the new list automatically — see lib/homeHeroSlides.ts.
+              setHeroSlides(parseHomeHeroSlides(raw, { keepEmpty: true }))
             } catch(e) {}
           }
 
@@ -1220,41 +1190,14 @@ function useSettingsFormState() {
         promo_popup_privacy_url: promoPopupPrivacyUrl,
         promo_popup_delay_seconds: promoPopupDelaySeconds,
         promo_popup_frequency_days: promoPopupFrequencyDays,
-        home_hero_slides: JSON.stringify({
+        [HOME_HERO_SLIDES_SETTING_KEY]: JSON.stringify({
           rotationInterval: Number(slideRotationInterval) || 7000,
           highlight: {
             active: heroHighlightActive,
             productId: heroHighlightProductId,
             note: heroHighlightNote,
           },
-          men: {
-            active: slideMenActive,
-            title: slideMenTitle,
-            subtitle: slideMenSubtitle,
-            image: slideMenImage,
-            imageAlt: slideMenImageAlt,
-            video: slideMenVideo,
-            videoFallback: slideMenVideoFallback,
-            buttonText: slideMenButtonText,
-            shopLink: slideMenShopLink,
-            buttonText2: slideMenButtonText2,
-            shopLink2: slideMenShopLink2,
-            topBarTag: slideMenTopBarTag
-          },
-          women: {
-            active: slideWomenActive,
-            title: slideWomenTitle,
-            subtitle: slideWomenSubtitle,
-            image: slideWomenImage,
-            imageAlt: slideWomenImageAlt,
-            video: slideWomenVideo,
-            videoFallback: slideWomenVideoFallback,
-            buttonText: slideWomenButtonText,
-            shopLink: slideWomenShopLink,
-            buttonText2: slideWomenButtonText2,
-            shopLink2: slideWomenShopLink2,
-            topBarTag: slideWomenTopBarTag
-          }
+          slides: heroSlides,
         }),
         home_community_tabs: JSON.stringify({
           heights: {
@@ -1460,58 +1403,13 @@ function useSettingsFormState() {
     setfacebookPixelId,
     customHeadScripts,
     setCustomHeadScripts,
-    activeEditTab,
-    setActiveEditTab,
     slideRotationInterval,
     setSlideRotationInterval,
-    slideMenActive,
-    setSlideMenActive,
-    slideMenTitle,
-    setSlideMenTitle,
-    slideMenSubtitle,
-    setSlideMenSubtitle,
-    slideMenImage,
-    setSlideMenImage,
-    slideMenImageAlt,
-    setSlideMenImageAlt,
-    slideMenVideo,
-    setSlideMenVideo,
-    slideMenVideoFallback,
-    setSlideMenVideoFallback,
-    slideMenButtonText,
-    setSlideMenButtonText,
-    slideMenShopLink,
-    setSlideMenShopLink,
-    slideMenButtonText2,
-    setSlideMenButtonText2,
-    slideMenShopLink2,
-    setSlideMenShopLink2,
-    slideMenTopBarTag,
-    setSlideMenTopBarTag,
-    slideWomenActive,
-    setSlideWomenActive,
-    slideWomenTitle,
-    setSlideWomenTitle,
-    slideWomenSubtitle,
-    setSlideWomenSubtitle,
-    slideWomenImage,
-    setSlideWomenImage,
-    slideWomenImageAlt,
-    setSlideWomenImageAlt,
-    slideWomenVideo,
-    setSlideWomenVideo,
-    slideWomenVideoFallback,
-    setSlideWomenVideoFallback,
-    slideWomenButtonText,
-    setSlideWomenButtonText,
-    slideWomenShopLink,
-    setSlideWomenShopLink,
-    slideWomenButtonText2,
-    setSlideWomenButtonText2,
-    slideWomenShopLink2,
-    setSlideWomenShopLink2,
-    slideWomenTopBarTag,
-    setSlideWomenTopBarTag,
+    heroSlides,
+    updateHeroSlide,
+    addHeroSlide,
+    removeHeroSlide,
+    moveHeroSlide,
     homeDescription,
     setHomeDescription,
     heightsGuide,
@@ -1537,18 +1435,6 @@ function useSettingsFormState() {
     setActiveCommunityEditTab,
     uploadingTabImage,
     setUploadingTabImage,
-    uploadingMenImage,
-    setUploadingMenImage,
-    uploadingMenVideo,
-    setUploadingMenVideo,
-    uploadingMenVideoFallback,
-    setUploadingMenVideoFallback,
-    uploadingWomenImage,
-    setUploadingWomenImage,
-    uploadingWomenVideo,
-    setUploadingWomenVideo,
-    uploadingWomenVideoFallback,
-    setUploadingWomenVideoFallback,
     tabHeightsLabel,
     setTabHeightsLabel,
     tabHeightsHeading,

@@ -42,6 +42,7 @@ export const PERMISSION_MODULES: PermissionModule[] = [
   { key: "categories", label: "Categories", group: "E-Commerce", paths: ["/admin/categories"], apiPaths: ["/api/admin/categories"] },
   { key: "collections", label: "Collections", group: "E-Commerce", paths: ["/admin/collections"], apiPaths: ["/api/admin/collections"] },
   { key: "banners", label: "Banners", group: "E-Commerce", paths: ["/admin/banners"], apiPaths: ["/api/admin/banners"] },
+  { key: "landingPages", label: "Landing Pages", group: "E-Commerce", paths: ["/admin/landing-pages"], apiPaths: ["/api/admin/landing-pages"] },
   { key: "menus", label: "Menu Builder", group: "E-Commerce", paths: ["/admin/menus"], apiPaths: ["/api/admin/menus"] },
 
   // ── Attributes ────────────────────────────────────────────────────────

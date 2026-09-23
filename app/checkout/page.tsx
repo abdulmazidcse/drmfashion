@@ -26,13 +26,13 @@ import {
 } from "@/lib/tax";
 import {
   DEFAULT_SHIPPING_METHODS,
-  activeShippingMethods,
   applyBkashFreeShipping,
   applyFreeShippingThreshold,
   bkashFreeShippingMaxFromSettings,
   defaultShippingMethod,
   freeShippingThresholdFromSettings,
   parseShippingMethods,
+  shippableMethodsForDestination,
   shippingPriceForCountry,
   upsMethodId,
   type ShippingMethod,
@@ -530,9 +530,9 @@ export default function CheckoutPage() {
           // Pre-select the cheapest tier so the summary is never blank; the
           // shopper can still switch before continuing.
           setSelectedMethodId((prev) =>
-            activeShippingMethods(methods).some((m) => m.id === prev)
+            shippableMethodsForDestination(methods, { countryCode: form.country, regionCode: form.area }).some((m) => m.id === prev)
               ? prev
-              : defaultShippingMethod(methods)?.id ?? ""
+              : defaultShippingMethod(methods, form.country, form.area)?.id ?? ""
           );
 
           if (data.square_app_id) setSquareAppId(data.square_app_id);
@@ -680,6 +680,10 @@ export default function CheckoutPage() {
     }
 
     setMounted(true);
+    // Reads form.country/form.area as they are at the moment settings load —
+    // deliberately not reactive to later address changes, which the
+    // shippableMethodsForDestination() call at render time already handles.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const subtotal = cartTotal(items);
@@ -689,7 +693,10 @@ export default function CheckoutPage() {
 
   // Display only — the server re-resolves every fee before charging: store
   // tiers from the settings row, UPS services by re-quoting the carrier.
-  const availableMethods = activeShippingMethods(shippingMethods);
+  const availableMethods = shippableMethodsForDestination(shippingMethods, {
+    countryCode: form.country,
+    regionCode: form.area,
+  });
 
   // UPS services are modelled as methods too, so one radio group covers both
   // and the selected id means the same thing to the server either way.
@@ -701,12 +708,16 @@ export default function CheckoutPage() {
     // A carrier quote is already for this address, so there is nothing to
     // override — `shippingPriceForCountry` then just returns the quote.
     countryRates: [],
+    // A live carrier quote is already for this exact address, so a region
+    // restriction (which exists to decide whether a *store* tier is offered)
+    // has nothing to apply to here.
+    regionRestriction: null,
     active: true,
   }));
 
   const selectedMethod =
     [...availableMethods, ...upsAsMethods].find((m) => m.id === selectedMethodId) ??
-    defaultShippingMethod(shippingMethods, form.country);
+    defaultShippingMethod(shippingMethods, form.country, form.area);
   const shipping = applyBkashFreeShipping(
     applyFreeShippingThreshold(
       shippingEnabled && selectedMethod
