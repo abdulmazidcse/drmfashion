@@ -5,7 +5,7 @@ import Link from "next/link";
 import Image from "next/image";
 import SigSectionHead from "./SigSectionHead";
 
-type Gender = "men" | "women";
+type Gender = "men" | "women" | "kids";
 
 interface Tile {
   title: string;
@@ -20,19 +20,20 @@ interface Tile {
 interface TrendingCategoriesProps {
   men?: Tile[];
   women?: Tile[];
+  kids?: Tile[];
 }
 
-export default function TrendingCategories({ men, women }: TrendingCategoriesProps) {
+export default function TrendingCategories({ men, women, kids }: TrendingCategoriesProps) {
   // Both the curated tiles and the stand-ins are built on the server now — see
   // lib/homeTiles.ts. The hardcoded copies that used to live here linked to a
   // /shop text search, because a client component has no way to find out
   // whether the category a tile names actually exists.
-  const tiles: Record<Gender, Tile[]> = { men: men ?? [], women: women ?? [] };
+  const tiles: Record<Gender, Tile[]> = { men: men ?? [], women: women ?? [], kids: kids ?? [] };
 
   // Open on whichever tab actually has tiles, so flagging categories for one
   // gender only doesn't land the visitor on an empty grid.
   const [activeGender, setActiveGender] = useState<Gender>(
-    tiles.men.length ? "men" : "women"
+    tiles.men.length ? "men" : tiles.women.length ? "women" : "kids"
   );
 
   return (
@@ -42,7 +43,7 @@ export default function TrendingCategories({ men, women }: TrendingCategoriesPro
         <SigSectionHead kicker="Browse" title="Shop by category">
           {/* Gender switch, as a pill pair to match the header's nav. */}
           <div className="flex gap-1 rounded-full border border-sig-line bg-sig-card p-1.5">
-            {(["men", "women"] as Gender[]).map((g) => (
+            {(["men", "women", "kids"] as Gender[]).map((g) => (
               <button
                 key={g}
                 onClick={() => setActiveGender(g)}

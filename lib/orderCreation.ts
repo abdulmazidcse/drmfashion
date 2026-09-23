@@ -656,12 +656,21 @@ export async function runPostOrderSideEffects(params: {
   }
 
   try {
-    const orderItems = body.items.map((item) => ({
-      title: item.title || "Product",
+    // Pulled from the order's own items (not `body.items`) so the email always
+    // shows the SKU, title and price the order was actually created with —
+    // the checkout payload has no SKU at all, and its price/title are
+    // whatever the client sent before server-side recalculation.
+    const dbItems = await prisma.orderItem.findMany({
+      where: { orderId: order.id },
+      include: { variant: { include: { product: { select: { title: true } } } } },
+    })
+    const orderItems = dbItems.map((item) => ({
+      title: item.variant.product.title,
       quantity: item.quantity,
-      price: item.price || 0,
-      color: item.color,
-      size: item.size,
+      price: item.price,
+      color: item.variant.color,
+      size: item.variant.size,
+      sku: item.variant.sku,
     }))
     await sendOrderConfirmationEmail(body.email, {
       customerName: body.fullName,
@@ -670,6 +679,11 @@ export async function runPostOrderSideEffects(params: {
       totalAmount: order.totalAmount,
       shippingAddress: body.address,
       paymentMethod: body.paymentMethod,
+      currencySymbol: order.currencySymbol,
+      exchangeRate: order.exchangeRate,
+      createdAt: order.createdAt,
+      shippingCountry: order.shippingCountry,
+      shippingState: order.shippingState,
     })
   } catch (emailErr) {
     console.error("[CHECKOUT_EMAIL_ERROR]", emailErr)

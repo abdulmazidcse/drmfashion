@@ -6,6 +6,7 @@ import { Loader2 } from "lucide-react"
 import { useCurrency } from "@/providers/CurrencyProvider"
 import PrintInvoiceButton from "@/components/PrintInvoiceButton"
 import { taxLineLabel } from "@/lib/tax"
+import { formatOrderDateTime } from "@/lib/timezones"
 
 type CustomMeasurement = {
   templateName?: string
@@ -24,6 +25,7 @@ type OrderItem = {
     size: string
     color: string
     length?: string | null
+    sku: string
     product: {
       title: string
     }
@@ -42,6 +44,8 @@ type Order = {
   paymentStatus: string
   shippingAddress: string
   shippingPhone: string
+  shippingCountry?: string | null
+  shippingState?: string | null
   currencyCode?: string
   currencySymbol?: string
   exchangeRate?: number
@@ -158,7 +162,7 @@ export default function InvoiceClient({ id }: { id: string }) {
               #{id.slice(-8).toUpperCase()}
             </div>
             <div style={{ fontSize: 12, color: "#666" }}>
-              {new Date(order.createdAt).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}
+              {formatOrderDateTime(order.createdAt, order.shippingCountry, order.shippingState)}
             </div>
             <div style={{ fontSize: 10, color: "#000", marginTop: 8, fontWeight: "bold" }}>
               Tracking ID: <span style={{ fontFamily: "monospace", fontSize: 11, background: "#f4f4f5", padding: "2px 6px", borderRadius: 4 }}>{id}</span>
@@ -209,6 +213,7 @@ export default function InvoiceClient({ id }: { id: string }) {
                 <tr key={item.id} style={{ borderBottom: "1px solid #f0f0f0", verticalAlign: "top" }}>
                   <td style={{ fontSize: 13, color: "#333", padding: 12 }}>
                     <div>{item.variant.product.title}</div>
+                    <div style={{ fontSize: 11, color: "#999", fontFamily: "monospace", marginTop: 2 }}>SKU: {item.variant.sku}</div>
                     {item.isCustom && (
                       <div style={{ marginTop: 6 }}>
                         <span style={{ display: "inline-block", fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", background: "#09090b", color: "#fff", borderRadius: 3, padding: "2px 6px", marginBottom: 4 }}>

@@ -41,7 +41,7 @@ import {
   type HomeSectionKey
 } from "@/lib/homeSections";
 import { categoryImageAlt } from "@/lib/imageMeta";
-import { FALLBACK_MEN, FALLBACK_WOMEN, FALLBACK_SLUGS, type FallbackTile } from "@/lib/homeTiles";
+import { FALLBACK_MEN, FALLBACK_WOMEN, FALLBACK_KIDS, FALLBACK_SLUGS, type FallbackTile } from "@/lib/homeTiles";
 import { Sparkles, ShieldCheck } from "lucide-react";
 import ScrollReveal from "@/components/ScrollReveal";
 import TrustBadges from "@/components/TrustBadges";
@@ -543,6 +543,7 @@ export default async function Home() {
   const isWomenCat = (c: any) => /wom[ae]n|ladies/.test(catText(c));
   // \b keeps "woman" from matching as "man" — belt and braces, since women win above.
   const isMenCat = (c: any) => !isWomenCat(c) && /\bm[ae]n/.test(catText(c));
+  const isKidsCat = (c: any) => /\bkids?\b|\bchild(ren)?\b/.test(catText(c));
   const toTile = (c: any) => ({
     title: c.name,
     image: c.image || "/images/hero.jpg",
@@ -563,13 +564,21 @@ export default async function Home() {
 
   const curatedMen = trendingCategories.filter(isMenCat).slice(0, 6).map(toTile);
   const curatedWomen = trendingCategories.filter(isWomenCat).slice(0, 6).map(toTile);
+  const curatedKids = trendingCategories.filter(isKidsCat).slice(0, 6).map(toTile);
 
   // With nothing flagged isTrending the row falls back to a built-in list. Those
   // tiles name categories that usually do exist, so resolve each one and link to
   // the category page; the /shop text search they used to point at is a strictly
   // worse destination than the category they are named after.
+  //
+  // Kids gets its own fallback flag rather than joining the men/women one: this
+  // store already has Men and Women curated, so the combined flag would never
+  // trip, leaving the Kids tab empty until someone flags a Kids category
+  // isTrending — whereas Men/Women falling back is an all-or-nothing gate
+  // because those two are curated together from the same starter set.
   const needFallback = curatedMen.length === 0 && curatedWomen.length === 0;
-  const fallbackCategories = needFallback
+  const needKidsFallback = curatedKids.length === 0;
+  const fallbackCategories = needFallback || needKidsFallback
     ? await prisma.category
         .findMany({
           where: { slug: { in: FALLBACK_SLUGS }, deletedAt: null },
@@ -602,6 +611,7 @@ export default async function Home() {
 
   const menCategoryTiles = needFallback ? FALLBACK_MEN.map(toFallbackTile) : curatedMen;
   const womenCategoryTiles = needFallback ? FALLBACK_WOMEN.map(toFallbackTile) : curatedWomen;
+  const kidsCategoryTiles = needKidsFallback ? FALLBACK_KIDS.map(toFallbackTile) : curatedKids;
 
   // `spotlightProducts` and the `heroLeft`/`heroRight` image pair used to be
   // derived here for <FeaturedProductsSlider> and a category-driven hero. Neither
@@ -727,7 +737,7 @@ export default async function Home() {
 
     trending: (
       <ScrollReveal>
-        <TrendingCategories men={menCategoryTiles} women={womenCategoryTiles} />
+        <TrendingCategories men={menCategoryTiles} women={womenCategoryTiles} kids={kidsCategoryTiles} />
       </ScrollReveal>
     ),
 

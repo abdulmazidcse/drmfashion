@@ -6,6 +6,7 @@ import { Printer, Loader2, ArrowLeft } from "lucide-react"
 import api from "@/lib/axios"
 import { useSettings } from "@/providers/SettingsProvider"
 import { taxLineLabel } from "@/lib/tax"
+import { formatOrderDateTime } from "@/lib/timezones"
 
 type CustomMeasurement = {
   templateName?: string
@@ -43,6 +44,8 @@ type Order = {
   paymentStatus: string
   shippingAddress: string
   shippingPhone: string
+  shippingCountry?: string | null
+  shippingState?: string | null
   currencyCode?: string
   currencySymbol?: string
   exchangeRate?: number
@@ -160,7 +163,7 @@ export default function InvoicePage() {
           <div className="text-right">
             <h2 className="text-3xl font-black text-zinc-200 uppercase tracking-widest mb-2">Invoice</h2>
             <p className="text-sm font-bold text-zinc-800">Order #{order.id.slice(0, 8)}</p>
-            <p className="text-sm text-zinc-500">Date: {new Date(order.createdAt).toLocaleDateString()}</p>
+            <p className="text-sm text-zinc-500">Date: {formatOrderDateTime(order.createdAt, order.shippingCountry, order.shippingState)}</p>
             {order.payment?.provider && (
               <p className="text-sm text-zinc-500 mt-1">Payment: <span className="font-bold uppercase">{order.payment.provider}</span></p>
             )}

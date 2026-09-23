@@ -41,5 +41,17 @@ export const FALLBACK_WOMEN: FallbackTile[] = [
   { title: "Athletic Pants", image: "/images/women_swim.png", slug: "women-activewear", search: "/shop?gender=women&query=athletic" },
 ];
 
+// No bundled kids artwork exists yet, so every tile shares the same generic
+// stand-in image (the same one a category with no image of its own falls
+// back to elsewhere) until each Kids category gets its own photo uploaded in
+// Admin → Categories.
+export const FALLBACK_KIDS: FallbackTile[] = [
+  { title: "Kids Panjabi", image: "/images/hero.jpg", slug: "kids-panjabi", search: "/shop?query=kids+panjabi" },
+  { title: "Kids Panjabi Set", image: "/images/hero.jpg", slug: "kids-panjabi-set", search: "/shop?query=kids+panjabi+set" },
+  { title: "Kids Shirt", image: "/images/hero.jpg", slug: "kids-shirt", search: "/shop?query=kids+shirt" },
+  { title: "Kids T-Shirt", image: "/images/hero.jpg", slug: "kids-t-shirt", search: "/shop?query=kids+t-shirt" },
+  { title: "Kids Party Wear", image: "/images/hero.jpg", slug: "kids-party-wear", search: "/shop?query=kids+party+wear" },
+];
+
 /** Every slug the fallbacks might resolve, for a single lookup. */
-export const FALLBACK_SLUGS: string[] = [...FALLBACK_MEN, ...FALLBACK_WOMEN].map(t => t.slug);
+export const FALLBACK_SLUGS: string[] = [...FALLBACK_MEN, ...FALLBACK_WOMEN, ...FALLBACK_KIDS].map(t => t.slug);

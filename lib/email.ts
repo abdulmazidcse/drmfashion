@@ -1,5 +1,6 @@
 import { Resend } from "resend"
 import { getStoreName } from "@/lib/settings"
+import { formatOrderDateTime } from "@/lib/timezones"
 
 const resend = new Resend(process.env.RESEND_API_KEY || "re_123")
 
@@ -9,17 +10,30 @@ const FROM_EMAIL = process.env.EMAIL_FROM || "noreply@yourdomain.com"
 export async function sendOrderConfirmationEmail(to: string, data: {
   customerName: string
   orderId: string
-  items: { title: string; quantity: number; price: number; color?: string; size?: string }[]
+  items: { title: string; quantity: number; price: number; color?: string; size?: string; sku?: string }[]
   totalAmount: number
   shippingAddress: string
   paymentMethod: string
+  currencySymbol?: string
+  exchangeRate?: number
+  createdAt?: Date | string
+  shippingCountry?: string | null
+  shippingState?: string | null
 }) {
   const storeName = await getStoreName()
+  const symbol = data.currencySymbol || "$"
+  const rate = data.exchangeRate ?? 1
+  const orderDateTime = data.createdAt
+    ? formatOrderDateTime(data.createdAt, data.shippingCountry, data.shippingState)
+    : null
   const itemRows = data.items.map(item => `
     <tr style="border-bottom:1px solid #f0f0f0;">
-      <td style="padding:12px 8px;font-size:13px;color:#333;">${item.title} ${item.color ? `(${item.color}` : ""}${item.size ? `, ${item.size})` : ""}</td>
+      <td style="padding:12px 8px;font-size:13px;color:#333;">
+        ${item.title} ${item.color ? `(${item.color}` : ""}${item.size ? `, ${item.size})` : ""}
+        ${item.sku ? `<br/><span style="font-size:11px;color:#999;font-family:monospace;">SKU: ${item.sku}</span>` : ""}
+      </td>
       <td style="padding:12px 8px;font-size:13px;color:#555;text-align:center;">${item.quantity}</td>
-      <td style="padding:12px 8px;font-size:13px;color:#333;text-align:right;">৳${(item.price * item.quantity).toFixed(2)}</td>
+      <td style="padding:12px 8px;font-size:13px;color:#333;text-align:right;">${symbol}${(item.price * item.quantity * rate).toFixed(2)}</td>
     </tr>
   `).join("")
 
@@ -39,6 +53,7 @@ export async function sendOrderConfirmationEmail(to: string, data: {
       <div style="background:#f9f9f9;border-radius:6px;padding:16px 20px;margin-bottom:24px;">
         <p style="margin:0;font-size:12px;color:#888;text-transform:uppercase;letter-spacing:0.1em;">Order ID</p>
         <p style="margin:4px 0 0;font-size:14px;color:#09090b;font-weight:700;font-family:monospace;">#${data.orderId.slice(-8).toUpperCase()}</p>
+        ${orderDateTime ? `<p style="margin:10px 0 0;font-size:12px;color:#888;text-transform:uppercase;letter-spacing:0.1em;">Order Date &amp; Time</p><p style="margin:4px 0 0;font-size:14px;color:#09090b;font-weight:700;">${orderDateTime}</p>` : ""}
       </div>
 
       <table style="width:100%;border-collapse:collapse;margin-bottom:24px;">
@@ -53,7 +68,7 @@ export async function sendOrderConfirmationEmail(to: string, data: {
         <tfoot>
           <tr>
             <td colspan="2" style="padding:16px 8px 0;font-size:14px;font-weight:700;color:#09090b;text-align:right;border-top:2px solid #09090b;">Total</td>
-            <td style="padding:16px 8px 0;font-size:14px;font-weight:700;color:#09090b;text-align:right;border-top:2px solid #09090b;">৳${data.totalAmount.toFixed(2)}</td>
+            <td style="padding:16px 8px 0;font-size:14px;font-weight:700;color:#09090b;text-align:right;border-top:2px solid #09090b;">${symbol}${(data.totalAmount * rate).toFixed(2)}</td>
           </tr>
         </tfoot>
       </table>
