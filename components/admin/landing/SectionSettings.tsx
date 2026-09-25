@@ -97,6 +97,18 @@ export default function SectionSettings({ section, onChange, onStyleChange, onCl
                 <option value="lg">Large</option>
               </select>
             </Field>
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="section-full-width"
+                checked={section.style.fullWidth}
+                onChange={(e) => onStyleChange(section.id, { fullWidth: e.target.checked })}
+                className="w-4 h-4"
+              />
+              <label htmlFor="section-full-width" className="text-xs font-bold text-zinc-600">
+                Full width (ignore the theme&apos;s content width for this section)
+              </label>
+            </div>
           </div>
         )}
       </div>

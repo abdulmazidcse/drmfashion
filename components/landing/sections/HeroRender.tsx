@@ -1,13 +1,13 @@
 import type { HeroData, LandingTheme } from "@/lib/landing/sections"
 import { toEmbedUrl, whatsappLink } from "@/lib/landing/sections"
-import { RADIUS_CLASS } from "@/components/landing/shared"
+import { RADIUS_CLASS, contentWidthClass } from "@/components/landing/shared"
 
-export default function HeroRender({ data, theme }: { data: HeroData; theme: LandingTheme }) {
+export default function HeroRender({ data, theme, fullWidth = false }: { data: HeroData; theme: LandingTheme; fullWidth?: boolean }) {
   const embed = data.videoUrl ? toEmbedUrl(data.videoUrl) : ""
   const wa = data.showWhatsapp ? whatsappLink(theme.whatsapp, data.whatsappText) : ""
 
   return (
-    <div className="max-w-4xl mx-auto px-6 text-center flex flex-col items-center gap-5">
+    <div className={`${contentWidthClass(fullWidth, "max-w-4xl")} px-6 text-center flex flex-col items-center gap-5`}>
       {data.badge && (
         <span
           className="inline-block px-3 py-1 text-[10px] font-bold uppercase tracking-widest rounded-full"
@@ -25,7 +25,7 @@ export default function HeroRender({ data, theme }: { data: HeroData; theme: Lan
         </div>
       ) : data.image ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={data.image} alt={data.imageAlt || ""} className="w-full max-w-md mt-4 rounded-xl object-cover" />
+        <img src={data.image} alt={data.imageAlt || ""} className={`w-full mt-4 rounded-xl object-cover ${fullWidth ? "" : "max-w-md"}`} />
       ) : null}
 
       <div className="flex flex-wrap items-center justify-center gap-3 mt-2">

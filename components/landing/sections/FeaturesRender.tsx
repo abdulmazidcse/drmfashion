@@ -1,5 +1,6 @@
 import { Check, Star, ArrowRight } from "lucide-react"
 import type { FeaturesData, LandingTheme } from "@/lib/landing/sections"
+import { contentWidthClass } from "@/components/landing/shared"
 
 const COLS_CLASS: Record<FeaturesData["columns"], string> = {
   1: "grid-cols-1",
@@ -14,11 +15,11 @@ function IconFor({ icon, color }: { icon: FeaturesData["icon"]; color?: string }
   return null
 }
 
-export default function FeaturesRender({ data, theme }: { data: FeaturesData; theme: LandingTheme }) {
+export default function FeaturesRender({ data, theme, fullWidth = false }: { data: FeaturesData; theme: LandingTheme; fullWidth?: boolean }) {
   const items = data.items.filter(Boolean)
   if (items.length === 0) return null
   return (
-    <div className="max-w-3xl mx-auto px-6">
+    <div className={`${contentWidthClass(fullWidth, "max-w-3xl")} px-6`}>
       <div
         className="p-6 sm:p-8 rounded-xl"
         style={{ backgroundColor: data.cardBg || undefined }}

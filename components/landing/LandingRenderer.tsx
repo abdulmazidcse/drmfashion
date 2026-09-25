@@ -56,20 +56,20 @@ export default function LandingRenderer({
           .filter((s) => !s.hidden)
           .map((s) => (
             <div key={s.id} style={sectionColors(s.style, theme)} className={PADDING_CLASS[s.style.padding]}>
-              <div className={`mx-auto ${s.type === "order" ? "" : WIDTH_CLASS[theme.width]}`}>
-                {s.type === "hero" && <HeroRender data={s.data} theme={theme} />}
-                {s.type === "headline" && <HeadlineRender data={s.data} theme={theme} />}
-                {s.type === "text" && <TextRender data={s.data} />}
-                {s.type === "image" && <ImageRender data={s.data} />}
-                {s.type === "gallery" && <GalleryRender data={s.data} />}
-                {s.type === "video" && <VideoRender data={s.data} />}
-                {s.type === "features" && <FeaturesRender data={s.data} theme={theme} />}
-                {s.type === "countdown" && <CountdownRender id={s.id} data={s.data} theme={theme} />}
-                {s.type === "pricing" && <PricingRender data={s.data} theme={theme} />}
-                {s.type === "cta" && <CtaRender data={s.data} theme={theme} />}
-                {s.type === "faq" && <FaqRender data={s.data} />}
+              <div className={s.style.fullWidth || s.type === "order" ? "w-full" : `mx-auto ${WIDTH_CLASS[theme.width]}`}>
+                {s.type === "hero" && <HeroRender data={s.data} theme={theme} fullWidth={s.style.fullWidth} />}
+                {s.type === "headline" && <HeadlineRender data={s.data} theme={theme} fullWidth={s.style.fullWidth} />}
+                {s.type === "text" && <TextRender data={s.data} fullWidth={s.style.fullWidth} />}
+                {s.type === "image" && <ImageRender data={s.data} fullWidth={s.style.fullWidth} />}
+                {s.type === "gallery" && <GalleryRender data={s.data} fullWidth={s.style.fullWidth} />}
+                {s.type === "video" && <VideoRender data={s.data} fullWidth={s.style.fullWidth} />}
+                {s.type === "features" && <FeaturesRender data={s.data} theme={theme} fullWidth={s.style.fullWidth} />}
+                {s.type === "countdown" && <CountdownRender id={s.id} data={s.data} theme={theme} fullWidth={s.style.fullWidth} />}
+                {s.type === "pricing" && <PricingRender data={s.data} theme={theme} fullWidth={s.style.fullWidth} />}
+                {s.type === "cta" && <CtaRender data={s.data} theme={theme} fullWidth={s.style.fullWidth} />}
+                {s.type === "faq" && <FaqRender data={s.data} fullWidth={s.style.fullWidth} />}
                 {s.type === "spacer" && <SpacerRender data={s.data} />}
-                {s.type === "html" && <HtmlRender data={s.data} />}
+                {s.type === "html" && <HtmlRender data={s.data} fullWidth={s.style.fullWidth} />}
                 {s.type === "order" && (
                   <OrderRender
                     heading={s.data.heading}

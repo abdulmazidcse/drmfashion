@@ -1,9 +1,9 @@
 import type { PricingData, LandingTheme } from "@/lib/landing/sections"
-import { RADIUS_CLASS } from "@/components/landing/shared"
+import { RADIUS_CLASS, contentWidthClass } from "@/components/landing/shared"
 
-export default function PricingRender({ data, theme }: { data: PricingData; theme: LandingTheme }) {
+export default function PricingRender({ data, theme, fullWidth = false }: { data: PricingData; theme: LandingTheme; fullWidth?: boolean }) {
   return (
-    <div className="max-w-md mx-auto px-6 text-center">
+    <div className={`${contentWidthClass(fullWidth, "max-w-md")} px-6 text-center`}>
       {data.title && <h2 className="text-xl sm:text-2xl font-black mb-5">{data.title}</h2>}
       <div className={`border p-6 space-y-3 ${RADIUS_CLASS[theme.radius]}`} style={{ borderColor: theme.primary }}>
         {data.regularPrice && (

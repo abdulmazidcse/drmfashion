@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react"
 import type { CountdownData, LandingTheme } from "@/lib/landing/sections"
+import { contentWidthClass } from "@/components/landing/shared"
 
 interface Remaining {
   days: number
@@ -44,7 +45,7 @@ function evergreenDeadline(sectionKey: string, hours: number): number {
   }
 }
 
-export default function CountdownRender({ id, data, theme }: { id: string; data: CountdownData; theme: LandingTheme }) {
+export default function CountdownRender({ id, data, theme, fullWidth = false }: { id: string; data: CountdownData; theme: LandingTheme; fullWidth?: boolean }) {
   const [remaining, setRemaining] = useState<Remaining | null>(null)
 
   useEffect(() => {
@@ -71,7 +72,7 @@ export default function CountdownRender({ id, data, theme }: { id: string; data:
   ]
 
   return (
-    <div className="max-w-2xl mx-auto px-6 text-center">
+    <div className={`${contentWidthClass(fullWidth, "max-w-2xl")} px-6 text-center`}>
       {data.title && <h2 className="text-lg sm:text-xl font-black mb-1">{data.title}</h2>}
       {data.subtitle && <p className="text-sm opacity-70 mb-5">{data.subtitle}</p>}
       <div className="flex items-center justify-center gap-2 sm:gap-3">

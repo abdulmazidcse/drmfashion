@@ -7,13 +7,13 @@ const WIDTH_CLASS: Record<ImageData["width"], string> = {
   full: "max-w-none w-full",
 }
 
-export default function ImageRender({ data }: { data: ImageData }) {
+export default function ImageRender({ data, fullWidth = false }: { data: ImageData; fullWidth?: boolean }) {
   if (!data.src) return null
   // eslint-disable-next-line @next/next/no-img-element
-  const img = <img src={data.src} alt={data.alt || ""} className={`w-full object-cover ${data.rounded ? "rounded-xl" : ""}`} />
+  const img = <img src={data.src} alt={data.alt || ""} className={`w-full object-cover ${data.rounded && !fullWidth ? "rounded-xl" : ""}`} />
   return (
-    <div className="px-6">
-      <div className={`mx-auto ${WIDTH_CLASS[data.width]}`}>
+    <div className={fullWidth ? "" : "px-6"}>
+      <div className={fullWidth ? "w-full" : `mx-auto ${WIDTH_CLASS[data.width]}`}>
         {data.link ? (
           <a href={data.link} target="_blank" rel="noopener noreferrer">
             {img}

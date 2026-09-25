@@ -1,12 +1,12 @@
 import type { CtaData, LandingTheme } from "@/lib/landing/sections"
 import { whatsappLink } from "@/lib/landing/sections"
-import { RADIUS_CLASS } from "@/components/landing/shared"
+import { RADIUS_CLASS, contentWidthClass } from "@/components/landing/shared"
 
-export default function CtaRender({ data, theme }: { data: CtaData; theme: LandingTheme }) {
+export default function CtaRender({ data, theme, fullWidth = false }: { data: CtaData; theme: LandingTheme; fullWidth?: boolean }) {
   const wa = data.showWhatsapp ? whatsappLink(theme.whatsapp) : ""
   if (!data.heading && !data.text) return null
   return (
-    <div className="max-w-2xl mx-auto px-6 text-center flex flex-col items-center gap-4">
+    <div className={`${contentWidthClass(fullWidth, "max-w-2xl")} px-6 text-center flex flex-col items-center gap-4`}>
       {data.heading && <h2 className="text-xl sm:text-3xl font-black tracking-tight">{data.heading}</h2>}
       {data.text && <p className="text-sm sm:text-base opacity-80">{data.text}</p>}
       <div className="flex flex-wrap items-center justify-center gap-3 mt-1">

@@ -50,19 +50,19 @@ interface Props {
 
 function SectionPreview({ section, theme, productCount }: { section: Section; theme: LandingTheme; productCount: number }) {
   switch (section.type) {
-    case "hero": return <HeroRender data={section.data} theme={theme} />
-    case "headline": return <HeadlineRender data={section.data} theme={theme} />
-    case "text": return <TextRender data={section.data} />
-    case "image": return <ImageRender data={section.data} />
-    case "gallery": return <GalleryRender data={section.data} />
-    case "video": return <VideoRender data={section.data} />
-    case "features": return <FeaturesRender data={section.data} theme={theme} />
-    case "countdown": return <CountdownRender id={section.id} data={section.data} theme={theme} />
-    case "pricing": return <PricingRender data={section.data} theme={theme} />
-    case "cta": return <CtaRender data={section.data} theme={theme} />
-    case "faq": return <FaqRender data={section.data} />
+    case "hero": return <HeroRender data={section.data} theme={theme} fullWidth={section.style.fullWidth} />
+    case "headline": return <HeadlineRender data={section.data} theme={theme} fullWidth={section.style.fullWidth} />
+    case "text": return <TextRender data={section.data} fullWidth={section.style.fullWidth} />
+    case "image": return <ImageRender data={section.data} fullWidth={section.style.fullWidth} />
+    case "gallery": return <GalleryRender data={section.data} fullWidth={section.style.fullWidth} />
+    case "video": return <VideoRender data={section.data} fullWidth={section.style.fullWidth} />
+    case "features": return <FeaturesRender data={section.data} theme={theme} fullWidth={section.style.fullWidth} />
+    case "countdown": return <CountdownRender id={section.id} data={section.data} theme={theme} fullWidth={section.style.fullWidth} />
+    case "pricing": return <PricingRender data={section.data} theme={theme} fullWidth={section.style.fullWidth} />
+    case "cta": return <CtaRender data={section.data} theme={theme} fullWidth={section.style.fullWidth} />
+    case "faq": return <FaqRender data={section.data} fullWidth={section.style.fullWidth} />
     case "spacer": return <SpacerRender data={section.data} />
-    case "html": return <HtmlRender data={section.data} />
+    case "html": return <HtmlRender data={section.data} fullWidth={section.style.fullWidth} />
     case "order": return <OrderPreview data={section.data} productCount={productCount} />
     default: return null
   }
@@ -175,7 +175,7 @@ function SortableRow({
 
       <div className="pointer-events-none select-none" style={sectionColors(section.style, theme)}>
         <div className={PADDING_CLASS[section.style.padding]}>
-          <div className={`mx-auto ${section.type === "order" ? "" : WIDTH_CLASS[theme.width]}`}>
+          <div className={section.style.fullWidth || section.type === "order" ? "w-full" : `mx-auto ${WIDTH_CLASS[theme.width]}`}>
             <SectionPreview section={section} theme={theme} productCount={productCount} />
           </div>
         </div>

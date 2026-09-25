@@ -29,3 +29,15 @@ export function sectionColors(style: SectionStyle, theme: LandingTheme): CSSProp
     color: style.text || theme.text || undefined,
   }
 }
+
+/**
+ * Every section component hardcodes its own reading-width cap (e.g. "max-w-4xl
+ * mx-auto") — the outer wrapper in LandingRenderer/SectionCanvas skipping the
+ * theme's width alone isn't enough to make a section look full-bleed, since
+ * this inner cap re-constrains it. Sections call this instead of hardcoding
+ * the class so the section's own "Full width" style toggle actually reaches
+ * their content, not just their background.
+ */
+export function contentWidthClass(fullWidth: boolean, maxWidthClass: string): string {
+  return fullWidth ? "w-full" : `${maxWidthClass} mx-auto`
+}

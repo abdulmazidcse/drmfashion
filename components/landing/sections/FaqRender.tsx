@@ -1,10 +1,11 @@
 import type { FaqData } from "@/lib/landing/sections"
+import { contentWidthClass } from "@/components/landing/shared"
 
-export default function FaqRender({ data }: { data: FaqData }) {
+export default function FaqRender({ data, fullWidth = false }: { data: FaqData; fullWidth?: boolean }) {
   const items = data.items.filter((i) => i.q)
   if (items.length === 0) return null
   return (
-    <div className="max-w-2xl mx-auto px-6">
+    <div className={`${contentWidthClass(fullWidth, "max-w-2xl")} px-6`}>
       {data.title && <h2 className="text-xl sm:text-2xl font-black text-center mb-6">{data.title}</h2>}
       <div className="divide-y divide-zinc-200 border border-zinc-200 rounded-xl overflow-hidden">
         {items.map((item, i) => (

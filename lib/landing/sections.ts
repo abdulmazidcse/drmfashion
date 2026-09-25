@@ -32,6 +32,9 @@ export interface SectionStyle {
   bg: string
   text: string
   padding: Padding
+  /** Stretches the section's background and content edge-to-edge instead of
+   *  capping it at the theme's content width. */
+  fullWidth: boolean
 }
 
 export interface HeroData {
@@ -213,7 +216,7 @@ export const DEFAULT_THEME: LandingTheme = {
 
 // ─── Defaults ────────────────────────────────────────────────────────────────
 
-const DEFAULT_STYLE: SectionStyle = { bg: "", text: "", padding: "md" }
+const DEFAULT_STYLE: SectionStyle = { bg: "", text: "", padding: "md", fullWidth: false }
 
 export const DEFAULT_DATA: SectionDataMap = {
   hero: {
@@ -400,6 +403,7 @@ export function parseSections(raw: unknown): Section[] {
       bg: typeof styleRaw.bg === "string" ? styleRaw.bg : "",
       text: typeof styleRaw.text === "string" ? styleRaw.text : "",
       padding: typeof styleRaw.padding === "string" && PADDINGS.has(styleRaw.padding) ? (styleRaw.padding as Padding) : "md",
+      fullWidth: styleRaw.fullWidth === true,
     }
 
     const data = coerceLike(DEFAULT_DATA[type], item.data) as unknown as Record<string, unknown>
