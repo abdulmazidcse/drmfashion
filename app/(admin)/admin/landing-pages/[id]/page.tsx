@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react"
 import { useParams, useRouter } from "next/navigation"
 import Link from "next/link"
+import dynamic from "next/dynamic"
 import {
   ArrowLeft,
   ArrowDown,
@@ -26,6 +27,26 @@ import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
+import {
+  parseSections,
+  parseTheme,
+  starterTemplate,
+  DEFAULT_THEME,
+  type Section,
+  type LandingTheme,
+} from "@/lib/landing/sections"
+
+const LandingBuilder = dynamic(() => import("@/components/admin/landing/LandingBuilder"), {
+  ssr: false,
+  loading: () => (
+    <div className="flex h-[80vh] min-h-[600px] items-center justify-center border border-zinc-200 rounded-xl bg-zinc-50">
+      <div className="flex flex-col items-center gap-3">
+        <Loader2 className="h-8 w-8 animate-spin text-zinc-400" />
+        <p className="text-sm text-zinc-500">Loading Page Builder...</p>
+      </div>
+    </div>
+  ),
+})
 
 type LandingPageProductRow = {
   id: string
@@ -48,6 +69,8 @@ type LandingPage = {
   bannerImage: string | null
   metaTitle: string | null
   metaDescription: string | null
+  sections: unknown
+  theme: unknown
   products: { sortOrder: number; product: LandingPageProductRow }[]
 }
 
@@ -97,6 +120,10 @@ export default function EditLandingPagePage() {
 
   const [selected, setSelected] = useState<LandingPageProductRow[]>([])
 
+  const [activeTab, setActiveTab] = useState<"content" | "design">("content")
+  const [sections, setSections] = useState<Section[]>(starterTemplate())
+  const [theme, setTheme] = useState<LandingTheme>(DEFAULT_THEME)
+
   // Product search
   const [search, setSearch] = useState("")
   const [page, setPage] = useState(1)
@@ -136,6 +163,9 @@ export default function EditLandingPagePage() {
     setBannerImage(l.bannerImage ?? "")
     setBannerPreview(l.bannerImage || null)
     setSelected(l.products.map((row) => row.product))
+    const hasBuilderContent = Array.isArray(l.sections) && l.sections.length > 0
+    setSections(hasBuilderContent ? parseSections(l.sections) : starterTemplate({ heading: l.heading ?? undefined, image: l.bannerImage ?? undefined }))
+    setTheme(hasBuilderContent ? parseTheme(l.theme) : DEFAULT_THEME)
   }
 
   // `loading` starts true, and a refetch after save keeps the form on screen
@@ -223,6 +253,8 @@ export default function EditLandingPagePage() {
         bannerImage: bannerUrl,
         metaTitle,
         metaDescription,
+        sections,
+        theme,
       })
       await api.put(`/admin/landing-pages/${params.id}/products`, { productIds: selected.map((p) => p.id) })
 
@@ -277,6 +309,35 @@ export default function EditLandingPagePage() {
         </div>
       </div>
 
+      {/* Tabs */}
+      <div className="flex border border-border rounded-xl divide-x divide-border w-fit overflow-hidden">
+        {(["content", "design"] as const).map((t) => (
+          <button
+            key={t}
+            type="button"
+            onClick={() => setActiveTab(t)}
+            className={`px-4 py-2.5 text-xs font-bold uppercase tracking-wider transition-colors ${
+              activeTab === t ? "bg-primary text-primary-foreground" : "bg-card text-muted-foreground hover:text-foreground hover:bg-muted/50"
+            }`}
+          >
+            {t === "content" ? "Content & SEO" : "Design"}
+          </button>
+        ))}
+      </div>
+
+      {activeTab === "design" && (
+        <LandingBuilder
+          initialSections={sections}
+          initialTheme={theme}
+          productCount={selected.length}
+          onChange={(nextSections, nextTheme) => {
+            setSections(nextSections)
+            setTheme(nextTheme)
+          }}
+        />
+      )}
+
+      {activeTab === "content" && (
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Main column */}
         <div className="lg:col-span-2 space-y-6">
@@ -449,6 +510,7 @@ export default function EditLandingPagePage() {
           </Card>
         </div>
       </div>
+      )}
     </div>
   )
 }

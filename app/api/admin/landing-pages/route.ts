@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { Prisma } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
 import { getAdminPayload } from "@/lib/auth"
+import { starterTemplate, DEFAULT_THEME } from "@/lib/landing/sections"
 
 export async function GET(req: NextRequest) {
   try {
@@ -67,6 +68,10 @@ export async function POST(req: NextRequest) {
         active: active ?? true,
         metaTitle: metaTitle || null,
         metaDescription: metaDescription || null,
+        // Opens the builder pre-populated with a typical single-product COD
+        // layout instead of a blank canvas — see lib/landing/sections.ts.
+        sections: starterTemplate({ heading, image: bannerImage }) as unknown as Prisma.InputJsonValue,
+        theme: DEFAULT_THEME as unknown as Prisma.InputJsonValue,
       },
     })
 

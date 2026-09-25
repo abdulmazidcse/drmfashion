@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { Prisma } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
 import { getAdminPayload } from "@/lib/auth"
+import { parseSections, parseTheme, MAX_SECTIONS_BYTES } from "@/lib/landing/sections"
 
 type Params = {
   params: Promise<{ id: string }>
@@ -95,6 +96,19 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     if (body.active !== undefined) data.active = Boolean(body.active)
     if (body.metaTitle !== undefined) data.metaTitle = body.metaTitle || null
     if (body.metaDescription !== undefined) data.metaDescription = body.metaDescription || null
+
+    // Never trust raw client JSON for the builder content — sanitise through
+    // the same parsers the public renderer uses (lib/landing/sections.ts).
+    if (body.sections !== undefined) {
+      const sanitized = parseSections(body.sections)
+      if (JSON.stringify(sanitized).length > MAX_SECTIONS_BYTES) {
+        return NextResponse.json({ message: "Page content is too large" }, { status: 400 })
+      }
+      data.sections = sanitized as unknown as Prisma.InputJsonValue
+    }
+    if (body.theme !== undefined) {
+      data.theme = parseTheme(body.theme) as unknown as Prisma.InputJsonValue
+    }
 
     const landingPage = await prisma.landingPage.update({ where: { id }, data })
 

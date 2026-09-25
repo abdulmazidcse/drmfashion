@@ -920,10 +920,13 @@ body {
   color: transparent;
 }
 
-/* The page gutter every Signature section aligns to. */
+/* The page gutter every Signature section aligns to. Matches the header's
+   own mega-menu width (see HeaderClient.tsx's max-w-[1600px] panels) so a
+   wide monitor doesn't show the hero/category/footer sections floating in a
+   noticeably narrower column than the header sitting right above them. */
 .sig-wrap {
   width: 100%;
-  max-width: 1320px;
+  max-width: 1600px;
   margin-inline: auto;
   padding-inline: 20px;
 }

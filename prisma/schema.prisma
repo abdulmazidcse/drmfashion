@@ -696,6 +696,10 @@ model LandingPage {
   bannerImage     String?
   metaTitle       String?
   metaDescription String?              @db.Text
+  /// Page-builder content. Null on pages saved before the builder existed —
+  /// see lib/landing/sections.ts (legacySections/LEGACY_THEME) for the fallback.
+  sections        Json?
+  theme           Json?
   products        LandingPageProduct[]
   createdAt       DateTime             @default(now())
   updatedAt       DateTime             @default(now()) @updatedAt

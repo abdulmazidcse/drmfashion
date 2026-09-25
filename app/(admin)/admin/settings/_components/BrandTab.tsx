@@ -1,12 +1,14 @@
 "use client"
 
-import { Globe, Image as ImageIcon, MessageCircle, Package, UploadCloud } from "lucide-react"
+import { Fragment } from "react"
+import { Globe, Image as ImageIcon, MessageCircle, Package, Plus, Ruler, Trash2, UploadCloud } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import CollapsibleCard from "./CollapsibleCard"
 import AnnouncementBarCard from "./AnnouncementBarCard"
 import MediaField from "./MediaField"
 import { useSettingsForm } from "./SettingsFormContext"
+import { DEFAULT_HEIGHTS_GUIDE } from "@/lib/heightsGuide"
 
 export default function BrandTab() {
   const {
@@ -44,6 +46,17 @@ export default function BrandTab() {
     setUploadMaxMb,
     uploadMaxVideoMb,
     setUploadMaxVideoMb,
+    heightsGuide,
+    updateHeightsGuide,
+    updateHeightsCell,
+    addHeightsRow,
+    removeHeightsRow,
+    updateHeightsColumn,
+    addHeightsColumn,
+    removeHeightsColumn,
+    updateHeightsModel,
+    addHeightsModel,
+    removeHeightsModel,
     fieldLabel,
     helpText,
   } = useSettingsForm()
@@ -284,6 +297,184 @@ export default function BrandTab() {
                   Separate because a clip is far bigger than a photograph, and one shared number
                   would be either useless for video or pointless for images. 100 is the default.
                 </p>
+              </div>
+            </div>
+          </div>
+        </CollapsibleCard>
+
+        {/* HEIGHTS & FIT — the first tab of the size-chart modal on every product */}
+        <CollapsibleCard
+          title="Heights &amp; Fit Guide"
+          description="The &ldquo;Our Heights &amp; Fit&rdquo; panel of the size guide. Shown on every product page."
+          icon={Ruler}
+          defaultCollapsed
+        >
+          <div className="space-y-8">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-3">
+                <Label className={fieldLabel}>Heading</Label>
+                <Input
+                  type="text"
+                  value={heightsGuide.heading}
+                  onChange={(e) => updateHeightsGuide({ heading: e.target.value })}
+                  placeholder="Our Heights"
+                />
+              </div>
+              <div className="space-y-3">
+                <Label className={fieldLabel}>Subtitle</Label>
+                <Input
+                  type="text"
+                  value={heightsGuide.subtitle}
+                  onChange={(e) => updateHeightsGuide({ subtitle: e.target.value })}
+                  placeholder="Most of our customers use their height as a starting point…"
+                />
+              </div>
+            </div>
+
+            {/* Table */}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between gap-4 flex-wrap">
+                <div>
+                  <Label className={fieldLabel}>Height Table</Label>
+                  <p className={helpText}>
+                    Remove every row to hide the table entirely. The first column is left-aligned
+                    and the last right-aligned on the storefront.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={addHeightsColumn}
+                    className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest border border-zinc-200 px-3 py-2 rounded-md hover:bg-zinc-50 transition-colors cursor-pointer"
+                  >
+                    <Plus className="w-3.5 h-3.5" /> Add Column
+                  </button>
+                  <button
+                    type="button"
+                    onClick={addHeightsRow}
+                    className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest border border-zinc-200 px-3 py-2 rounded-md hover:bg-zinc-50 transition-colors cursor-pointer"
+                  >
+                    <Plus className="w-3.5 h-3.5" /> Add Row
+                  </button>
+                </div>
+              </div>
+
+              {heightsGuide.columns.length === 0 ? (
+                <p className="text-sm text-zinc-500 border border-dashed border-zinc-200 rounded-lg p-6 text-center">
+                  No columns. Add one to start building the table.
+                </p>
+              ) : (
+                /* Wide tables scroll rather than crushing the inputs. */
+                <div className="overflow-x-auto -mx-1 px-1 pb-1">
+                  <div
+                    className="grid gap-3 items-center min-w-max"
+                    style={{
+                      gridTemplateColumns: `repeat(${heightsGuide.columns.length}, minmax(180px, 1fr)) auto`,
+                    }}
+                  >
+                    {/* Header row — each cell is the column's own label, with its
+                        delete control sitting directly above the column it removes. */}
+                    {heightsGuide.columns.map((column, colIdx) => (
+                      <div key={`head-${colIdx}`} className="flex items-center justify-between gap-2">
+                        <Label className={fieldLabel}>Column {colIdx + 1}</Label>
+                        <button
+                          type="button"
+                          onClick={() => removeHeightsColumn(colIdx)}
+                          aria-label={`Remove column ${colIdx + 1}`}
+                          className="text-zinc-300 hover:text-red-600 transition-colors cursor-pointer"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </button>
+                      </div>
+                    ))}
+                    <span className="w-9" />
+
+                    {heightsGuide.columns.map((column, colIdx) => (
+                      <Input
+                        key={`header-input-${colIdx}`}
+                        type="text"
+                        value={column}
+                        onChange={(e) => updateHeightsColumn(colIdx, e.target.value)}
+                        placeholder={DEFAULT_HEIGHTS_GUIDE.columns[colIdx] || "Column heading"}
+                      />
+                    ))}
+                    <span className="w-9" />
+
+                    {heightsGuide.rows.map((row, rowIdx) => (
+                      <Fragment key={`row-${rowIdx}`}>
+                        {heightsGuide.columns.map((_, colIdx) => (
+                          <Input
+                            key={`cell-${rowIdx}-${colIdx}`}
+                            type="text"
+                            value={row[colIdx] ?? ""}
+                            onChange={(e) => updateHeightsCell(rowIdx, colIdx, e.target.value)}
+                            placeholder={DEFAULT_HEIGHTS_GUIDE.rows[rowIdx]?.[colIdx] || ""}
+                          />
+                        ))}
+                        <button
+                          type="button"
+                          onClick={() => removeHeightsRow(rowIdx)}
+                          aria-label={`Remove row ${rowIdx + 1}`}
+                          className="w-9 h-9 flex items-center justify-center border border-zinc-200 rounded-md text-zinc-400 hover:text-red-600 hover:border-red-200 transition-colors cursor-pointer"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </Fragment>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Model photos */}
+            <div className="space-y-4 border-t pt-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <Label className={fieldLabel}>Model Photos</Label>
+                  <p className={helpText}>
+                    The photo strip under the table. Models without a photo are skipped; the strip
+                    is hidden entirely when none are set.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={addHeightsModel}
+                  className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest border border-zinc-200 px-3 py-2 rounded-md hover:bg-zinc-50 transition-colors cursor-pointer"
+                >
+                  <Plus className="w-3.5 h-3.5" /> Add Model
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {heightsGuide.models.map((model, idx) => (
+                  <div key={idx} className="border border-zinc-200 rounded-lg p-4 space-y-4">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-black uppercase tracking-widest text-zinc-400">
+                        Model {idx + 1}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => removeHeightsModel(idx)}
+                        aria-label={`Remove model ${idx + 1}`}
+                        className="text-zinc-400 hover:text-red-600 transition-colors cursor-pointer"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                    <MediaField
+                      label="Photo"
+                      hint="Portrait 3:4. About 600×800."
+                      value={model.image}
+                      // MediaField types onChange as a state setter, so it may
+                      // hand back an updater rather than a plain string.
+                      onChange={(next) =>
+                        updateHeightsModel(idx, {
+                          image: typeof next === "function" ? next(model.image) : next,
+                        })
+                      }
+                    />
+                  </div>
+                ))}
               </div>
             </div>
           </div>

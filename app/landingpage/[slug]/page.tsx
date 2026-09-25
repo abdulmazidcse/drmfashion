@@ -3,7 +3,8 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { getSettings, getStoreName } from "@/lib/settings";
 import { formatImageUrl } from "@/lib/utils";
-import LandingPageBuy from "@/components/LandingPageBuy";
+import LandingRenderer from "@/components/landing/LandingRenderer";
+import { legacySections, LEGACY_THEME, parseSections, parseTheme } from "@/lib/landing/sections";
 import { bkashFreeShippingMaxFromSettings, freeShippingThresholdFromSettings, shippingMethodsFromSettings } from "@/lib/shipping";
 import { taxSettingsFromSettings } from "@/lib/tax";
 
@@ -48,6 +49,8 @@ export default async function LandingPage({ params }: LandingPageProps) {
         heading: true,
         subheading: true,
         bannerImage: true,
+        sections: true,
+        theme: true,
         products: {
           orderBy: { sortOrder: "asc" },
           select: {
@@ -89,11 +92,23 @@ export default async function LandingPage({ params }: LandingPageProps) {
 
   if (products.length === 0) notFound();
 
+  // Pages saved before the section builder existed have no `sections` — render
+  // them as the equivalent section list instead, so they keep their exact old
+  // look (see lib/landing/sections.ts's legacySections/LEGACY_THEME).
+  const hasBuilderContent = Array.isArray(page.sections) && page.sections.length > 0;
+  const sections = hasBuilderContent
+    ? parseSections(page.sections)
+    : legacySections({
+        heading: page.heading || page.title,
+        subheading: page.subheading || "",
+        bannerImage: page.bannerImage ? formatImageUrl(page.bannerImage) : "",
+      });
+  const theme = hasBuilderContent ? parseTheme(page.theme) : LEGACY_THEME;
+
   return (
-    <LandingPageBuy
-      heading={page.heading || page.title}
-      subheading={page.subheading || ""}
-      bannerImage={page.bannerImage ? formatImageUrl(page.bannerImage) : ""}
+    <LandingRenderer
+      sections={sections}
+      theme={theme}
       products={products}
       showLowStockNotice={settings.product_low_stock_notice_enabled !== "false"}
       payments={{
