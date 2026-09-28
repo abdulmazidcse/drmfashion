@@ -17,6 +17,7 @@ import { useRegions } from "@/lib/useRegions";
 import { resolveTax, taxLineLabel, type TaxSettings } from "@/lib/tax";
 import Swal from "@/lib/swal";
 import { startBkashCheckout } from "@/lib/bkashCheckoutClient";
+import { startSslcommerzCheckout } from "@/lib/sslcommerzCheckoutClient";
 import {
   applyBkashFreeShipping,
   applyFreeShippingThreshold,
@@ -58,6 +59,7 @@ interface QuickBuyProps {
     bkash: boolean;
     nagad: boolean;
     square: boolean;
+    sslcommerz: boolean;
   };
   shipping: {
     enabled: boolean;
@@ -115,9 +117,11 @@ export default function QuickBuy({ product, payments, shipping, tax: taxSettings
       ? "card"
       : payments.bkash
         ? "bkash"
-        : payments.nagad
-          ? "nagad"
-          : "square";
+        : payments.sslcommerz
+          ? "sslcommerz"
+          : payments.nagad
+            ? "nagad"
+            : "square";
 
   const [form, setForm] = useState({
     fullName: "",
@@ -267,6 +271,19 @@ export default function QuickBuy({ product, payments, shipping, tax: taxSettings
     }
   }
 
+  async function handleSslcommerzCheckout() {
+    if (!validate()) return;
+    setPlacing(true);
+    try {
+      await startSslcommerzCheckout(buildCheckoutPayload());
+      // On success the browser navigates away to SSLCommerz.
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to start SSLCommerz payment.";
+      Swal.fire({ text: message, confirmButtonColor: "#18181b", icon: "error" });
+      setPlacing(false);
+    }
+  }
+
   async function placeOrder(paymentIntentId?: string) {
     if (!validate()) return;
     setPlacing(true);
@@ -341,6 +358,7 @@ export default function QuickBuy({ product, payments, shipping, tax: taxSettings
     { key: "cod", label: "Cash on Delivery", on: payments.cod },
     { key: "card", label: "Card", on: payments.stripe },
     { key: "bkash", label: "bKash", on: payments.bkash },
+    { key: "sslcommerz", label: "SSLCommerz", on: payments.sslcommerz },
     { key: "nagad", label: "Nagad", on: payments.nagad },
     { key: "square", label: "Square", on: payments.square },
   ].filter((m) => m.on);
@@ -550,6 +568,10 @@ export default function QuickBuy({ product, payments, shipping, tax: taxSettings
                 <p className="text-xs text-zinc-500">You&apos;ll be redirected to bKash to complete payment securely.</p>
               )}
 
+              {form.paymentMethod === "sslcommerz" && (
+                <p className="text-xs text-zinc-500">You&apos;ll be redirected to SSLCommerz to complete payment securely.</p>
+              )}
+
               {form.paymentMethod === "nagad" && (
                 <div>
                   <label className={labelClass}>Nagad Number</label>
@@ -657,16 +679,24 @@ export default function QuickBuy({ product, payments, shipping, tax: taxSettings
               )
             ) : (
               <button
-                onClick={() => (form.paymentMethod === "bkash" ? handleBkashCheckout() : placeOrder())}
+                onClick={() =>
+                  form.paymentMethod === "bkash"
+                    ? handleBkashCheckout()
+                    : form.paymentMethod === "sslcommerz"
+                    ? handleSslcommerzCheckout()
+                    : placeOrder()
+                }
                 disabled={placing}
                 className="w-full bg-zinc-950 text-white py-4 text-xs font-black tracking-widest uppercase hover:bg-zinc-800 disabled:opacity-60 disabled:cursor-wait transition-colors flex items-center justify-center gap-2"
               >
                 {placing ? (
                   <>
-                    <Loader2 className="w-4 h-4 animate-spin" /> {form.paymentMethod === "bkash" ? "Redirecting to bKash…" : "Placing Order…"}
+                    <Loader2 className="w-4 h-4 animate-spin" /> {form.paymentMethod === "bkash" ? "Redirecting to bKash…" : form.paymentMethod === "sslcommerz" ? "Redirecting to SSLCommerz…" : "Placing Order…"}
                   </>
                 ) : form.paymentMethod === "bkash" ? (
                   <>Pay with bKash · {formatPrice(total)}</>
+                ) : form.paymentMethod === "sslcommerz" ? (
+                  <>Pay with SSLCommerz · {formatPrice(total)}</>
                 ) : (
                   <>Place Order · {formatPrice(total)}</>
                 )}

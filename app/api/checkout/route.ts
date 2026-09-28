@@ -16,13 +16,20 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    // bKash is a redirect-based gateway — the order can't exist until the
-    // customer returns and app/api/checkout/bkash/callback has verified the
-    // payment. A direct POST here with paymentMethod "bkash" would have no
-    // way to prove money actually moved, so it's refused rather than trusted.
+    // bKash and SSLCommerz are redirect-based gateways — the order can't exist
+    // until the customer returns and the matching .../callback route has
+    // verified the payment. A direct POST here with one of these methods
+    // would have no way to prove money actually moved, so it's refused rather
+    // than trusted.
     if (paymentMethod === "bkash") {
       return NextResponse.json(
         { message: "bKash checkout must go through /api/checkout/bkash/create-payment." },
+        { status: 400 }
+      )
+    }
+    if (paymentMethod === "sslcommerz") {
+      return NextResponse.json(
+        { message: "SSLCommerz checkout must go through /api/checkout/sslcommerz/create-payment." },
         { status: 400 }
       )
     }

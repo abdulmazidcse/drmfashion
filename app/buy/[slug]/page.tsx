@@ -72,6 +72,7 @@ export default async function BuyPage({ params }: BuyPageProps) {
         bkash: settings.payment_bkash_enabled !== "false",
         nagad: settings.payment_nagad_enabled !== "false",
         square: settings.payment_square_enabled !== "false",
+        sslcommerz: settings.payment_sslcommerz_enabled !== "false",
       }}
       shipping={{
         enabled: settings.shipping_enabled !== "false",

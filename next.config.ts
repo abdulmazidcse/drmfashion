@@ -32,6 +32,13 @@ const nextConfig: NextConfig = {
     remotePatterns: [
       { protocol: "https", hostname: "storage.tallplus.co" },
       { protocol: "https", hostname: "tallplus.co" },
+      // This store's own domain. At least one Setting/homepage-content row
+      // holds an absolute https://www.drmfashion.com/uploads/... image URL
+      // rather than a relative path, and next/image 500s the whole page on
+      // any host not on this list — see MediaField.tsx/handleFieldFileUpload
+      // if tracking down how that URL became absolute in the first place.
+      { protocol: "https", hostname: "drmfashion.com" },
+      { protocol: "https", hostname: "www.drmfashion.com" },
       { protocol: "https", hostname: "images.unsplash.com" },
       // Grey fallback shown wherever a product or category has no image of its
       // own. Third-party, so every one of those slots depends on placehold.co

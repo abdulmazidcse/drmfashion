@@ -30,13 +30,13 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "", {
 
 /**
  * Payment already confirmed by a gateway *before* this function is called —
- * today only bKash, whose redirect flow means the order cannot exist until
- * app/api/checkout/bkash/callback/route.ts has verified the payment.
- * `card`/`square` are still verified inline below because their confirmation
- * completes client-side before /api/checkout is ever called.
+ * bKash and SSLCommerz, whose redirect flows mean the order cannot exist
+ * until app/api/checkout/{bkash,sslcommerz}/callback/route.ts has verified
+ * the payment. `card`/`square` are still verified inline below because their
+ * confirmation completes client-side before /api/checkout is ever called.
  */
 export interface VerifiedGatewayPayment {
-  method: "bkash"
+  method: "bkash" | "sslcommerz"
   transactionId: string
 }
 
@@ -191,10 +191,10 @@ export async function createOrderFromCheckout(
     exchangeRate,
   } = body
 
-  if (paymentMethod === "bkash" && !verifiedPayment && !dryRun) {
-    // Safety net: bKash orders must never be created without a confirmed
-    // gateway response — this is exactly the bug this function replaces.
-    throw new Error("bKash payment has not been verified.")
+  if ((paymentMethod === "bkash" || paymentMethod === "sslcommerz") && !verifiedPayment && !dryRun) {
+    // Safety net: redirect-gateway orders must never be created without a
+    // confirmed gateway response — this is exactly the bug this function replaces.
+    throw new Error(`${paymentMethod} payment has not been verified.`)
   }
 
   // Refetch user inside transaction to get latest rewardPoints and prevent race conditions
@@ -609,7 +609,7 @@ export async function createOrderFromCheckout(
   // If not Cash on Delivery, record Payment transaction details
   if (paymentMethod !== "cod") {
     const transactionId =
-      paymentMethod === "bkash"
+      paymentMethod === "bkash" || paymentMethod === "sslcommerz"
         ? (verifiedPayment as VerifiedGatewayPayment).transactionId
         : paymentMethod === "nagad"
         ? paymentDetails?.nagadNumber || "NAGAD_PAY"

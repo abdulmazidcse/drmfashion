@@ -20,6 +20,8 @@ export default function PaymentsTab() {
     setPaymentNagadEnabled,
     paymentSquareEnabled,
     setPaymentSquareEnabled,
+    paymentSslcommerzEnabled,
+    setPaymentSslcommerzEnabled,
   } = useSettingsForm()
 
   return (
@@ -122,6 +124,21 @@ export default function PaymentsTab() {
                 </div>
                 <button type="button" className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${paymentSquareEnabled === "true" ? 'bg-primary' : 'bg-muted-foreground/30'}`}>
                   <span className={`inline-block h-4 w-4 transform rounded-full bg-background transition-transform ${paymentSquareEnabled === "true" ? 'translate-x-6' : 'translate-x-1'}`} />
+                </button>
+              </div>
+
+              <div className={`p-5 border rounded-lg transition-all flex items-center justify-between cursor-pointer ${paymentSslcommerzEnabled === "true" ? 'border-primary bg-muted/50' : 'border-border bg-card opacity-60'}`} onClick={() => setPaymentSslcommerzEnabled(prev => prev === "true" ? "false" : "true")}>
+                <div className="flex items-center gap-4">
+                  <div className={`p-3 rounded-lg ${paymentSslcommerzEnabled === "true" ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}>
+                    <Smartphone className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-sm tracking-widest uppercase text-foreground mb-1">SSLCommerz</h3>
+                    <p className="text-xs text-muted-foreground">Online payment via SSLCommerz Payment Gateway</p>
+                  </div>
+                </div>
+                <button type="button" className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${paymentSslcommerzEnabled === "true" ? 'bg-primary' : 'bg-muted-foreground/30'}`}>
+                  <span className={`inline-block h-4 w-4 transform rounded-full bg-background transition-transform ${paymentSslcommerzEnabled === "true" ? 'translate-x-6' : 'translate-x-1'}`} />
                 </button>
               </div>
           </div>

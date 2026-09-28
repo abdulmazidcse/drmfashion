@@ -86,11 +86,11 @@ export default function HeroVideo({ src, poster, alt, priority = false }: HeroVi
         // Dual hero = two half-width columns; single hero spans the viewport.
         sizes="(max-width: 767px) 100vw, 50vw"
         priority={priority}
-        className="h-full w-full object-cover"
+        className="h-full w-full object-contain"
       />
       {videoSrc && (
         <video
-          className="absolute inset-0 h-full w-full object-cover"
+          className="absolute inset-0 h-full w-full object-contain"
           src={videoSrc}
           preload="none"
           autoPlay

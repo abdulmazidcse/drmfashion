@@ -543,9 +543,9 @@ model Payment {
 }
 
 // Holds a checkout's full form payload while the customer is off-site
-// completing a redirect-based gateway payment (bKash today). The real Order
-// is only created once the gateway confirms payment server-side — see
-// lib/orderCreation.ts and app/api/checkout/bkash/callback/route.ts.
+// completing a redirect-based gateway payment (bKash, SSLCommerz). The real
+// Order is only created once the gateway confirms payment server-side — see
+// lib/orderCreation.ts and app/api/checkout/{bkash,sslcommerz}/callback/route.ts.
 model PendingCheckout {
   id                     String    @id @default(cuid())
 

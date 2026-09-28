@@ -214,6 +214,7 @@ function useSettingsFormState() {
   const [paymentBkashEnabled, setPaymentBkashEnabled] = useState("true")
   const [paymentNagadEnabled, setPaymentNagadEnabled] = useState("true")
   const [paymentSquareEnabled, setPaymentSquareEnabled] = useState("true")
+  const [paymentSslcommerzEnabled, setPaymentSslcommerzEnabled] = useState("true")
 
   // Flash Sale state
   const [flashSaleEnabled, setFlashSaleEnabled] = useState("true")
@@ -758,6 +759,7 @@ function useSettingsFormState() {
           if (res.data.payment_bkash_enabled !== undefined) setPaymentBkashEnabled(res.data.payment_bkash_enabled)
           if (res.data.payment_nagad_enabled !== undefined) setPaymentNagadEnabled(res.data.payment_nagad_enabled)
           if (res.data.payment_square_enabled !== undefined) setPaymentSquareEnabled(res.data.payment_square_enabled)
+          if (res.data.payment_sslcommerz_enabled !== undefined) setPaymentSslcommerzEnabled(res.data.payment_sslcommerz_enabled)
 
           if (res.data.seo_meta_title !== undefined) setSeoMetaTitle(res.data.seo_meta_title)
           if (res.data.seo_meta_description !== undefined) setSeoMetaDescription(res.data.seo_meta_description)
@@ -1158,6 +1160,7 @@ function useSettingsFormState() {
         payment_bkash_enabled: paymentBkashEnabled,
         payment_nagad_enabled: paymentNagadEnabled,
         payment_square_enabled: paymentSquareEnabled,
+        payment_sslcommerz_enabled: paymentSslcommerzEnabled,
         seo_meta_title: seoMetaTitle,
         seo_meta_description: seoMetaDescription,
         seo_share_image: seoShareImage,
@@ -1333,6 +1336,8 @@ function useSettingsFormState() {
     setPaymentNagadEnabled,
     paymentSquareEnabled,
     setPaymentSquareEnabled,
+    paymentSslcommerzEnabled,
+    setPaymentSslcommerzEnabled,
     flashSaleEnabled,
     setFlashSaleEnabled,
     flashSaleTitle,

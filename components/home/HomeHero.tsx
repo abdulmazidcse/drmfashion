@@ -147,7 +147,24 @@ export default function HomeHero({ slides, rotationInterval = 0, highlight }: Ho
           </div>
 
           {/* ── Media ── */}
-          <div className="relative min-h-[340px] lg:min-h-0">
+          {/* Mobile stacks copy above media in one column, so this box's own
+              size (not the grid row) decides its height. A fixed min-h alone
+              made it nearly square on most phones — much narrower than a
+              landscape photo — so a cropping fit cut hard off the left/right
+              edges. Deliberately no min-h alongside the aspect-ratio: on a
+              narrow phone a floor height wins over the ratio-computed one,
+              which quietly makes the box taller/narrower than intended and
+              re-introduces the same side-crop. aspect-[3/2] alone matches the
+              3:2 a camera/product photo typically ships at (not 16:9, which
+              is video-shaped); lg: hands sizing back to the grid row once
+              side-by-side columns apply. Admin-uploaded photos aren't
+              guaranteed to match that ratio (e.g. a taller full-length
+              fashion shot), so HeroVideo renders with object-contain rather
+              than object-cover — nothing is ever cropped out of frame, at the
+              cost of letterboxing on off-ratio photos. bg-sig-cream fills
+              that letterbox space so it reads as a mat/frame rather than
+              empty space. */}
+          <div className="relative aspect-[3/2] bg-sig-cream lg:aspect-auto lg:min-h-0">
             <HeroVideo
               key={displayIndex}
               src={shown.video}

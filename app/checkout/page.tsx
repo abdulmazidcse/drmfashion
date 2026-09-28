@@ -12,6 +12,7 @@ import Footer from "@/components/Footer";
 import StripeCheckout from "@/components/StripeCheckout";
 import SquareCheckout from "@/components/SquareCheckout";
 import { startBkashCheckout } from "@/lib/bkashCheckoutClient";
+import { startSslcommerzCheckout } from "@/lib/sslcommerzCheckoutClient";
 import { useCurrency } from "@/providers/CurrencyProvider";
 import Swal from "@/lib/swal";
 import { COUNTRIES } from "@/lib/countries";
@@ -98,7 +99,20 @@ export default function CheckoutPage() {
       email: params.get("email") || "",
     };
   });
-  const [placed, setPlaced] = useState(() => bkashOrderInfo !== null);
+  // Same lazy-read-from-URL trick as bkashOrderInfo, for SSLCommerz's success
+  // redirect back from app/api/checkout/sslcommerz/callback.
+  const [sslcommerzOrderInfo] = useState<{ total: number; fullName: string; email: string } | null>(() => {
+    if (typeof window === "undefined") return null;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("sslcommerz") !== "success") return null;
+    return {
+      total: Number(params.get("value")) || 0,
+      fullName: params.get("name") || "",
+      email: params.get("email") || "",
+    };
+  });
+  const gatewayOrderInfo = bkashOrderInfo || sslcommerzOrderInfo;
+  const [placed, setPlaced] = useState(() => gatewayOrderInfo !== null);
 
   // Scroll to top of window on step changes
   useEffect(() => {
@@ -117,24 +131,27 @@ export default function CheckoutPage() {
     }
   }, [placed, router]);
 
-  // Picks up where the customer left off after a bKash redirect: success lands
-  // here via app/api/checkout/bkash/callback with the order already created
-  // server-side, so this just mirrors what handlePlaceOrder does for the
-  // synchronous payment methods (track, clear cart) — `placed` itself and
-  // `bkashOrderInfo` are already set from the URL by the lazy state
-  // initializers above, so this effect only runs the side effects that can't
-  // happen during render.
+  // Picks up where the customer left off after a bKash or SSLCommerz
+  // redirect: success lands here via the matching .../callback route with the
+  // order already created server-side, so this just mirrors what
+  // handlePlaceOrder does for the synchronous payment methods (track, clear
+  // cart) — `placed` itself and `bkashOrderInfo`/`sslcommerzOrderInfo` are
+  // already set from the URL by the lazy state initializers above, so this
+  // effect only runs the side effects that can't happen during render.
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const bkashStatus = params.get("bkash");
-    if (!bkashStatus) return;
+    const sslcommerzStatus = params.get("sslcommerz");
+    const gateway = bkashStatus ? "bKash" : sslcommerzStatus ? "SSLCommerz" : null;
+    const status = bkashStatus || sslcommerzStatus;
+    if (!gateway || !status) return;
 
-    if (bkashStatus === "success") {
+    if (status === "success") {
       const cartItems = getCart();
 
       trackPurchase({
         transaction_id: params.get("orderId") || "",
-        value: bkashOrderInfo?.total || cartTotal(cartItems),
+        value: gatewayOrderInfo?.total || cartTotal(cartItems),
         currency: params.get("currency") || storeCurrency(),
         shipping: Number(params.get("shipping")) || 0,
         items: cartItems.map((i) => ({
@@ -147,14 +164,20 @@ export default function CheckoutPage() {
       });
 
       clearCart();
-    } else if (bkashStatus === "failed" || bkashStatus === "payment_captured_error") {
+    } else if (status === "failed" || status === "payment_captured_error") {
       Swal.fire({
         text:
-          bkashStatus === "payment_captured_error"
-            ? "Your bKash payment was received, but we hit a snag finishing your order. Our support team will contact you shortly — please don't pay again."
-            : "Your bKash payment didn't go through. Please try again.",
+          status === "payment_captured_error"
+            ? `Your ${gateway} payment was received, but we hit a snag finishing your order. Our support team will contact you shortly — please don't pay again.`
+            : `Your ${gateway} payment didn't go through. Please try again.`,
         confirmButtonColor: "#18181b",
-        icon: bkashStatus === "payment_captured_error" ? "warning" : "error",
+        icon: status === "payment_captured_error" ? "warning" : "error",
+      });
+    } else if (status === "cancelled") {
+      Swal.fire({
+        text: `You cancelled the ${gateway} payment. Your order was not placed.`,
+        confirmButtonColor: "#18181b",
+        icon: "info",
       });
     }
 
@@ -194,6 +217,7 @@ export default function CheckoutPage() {
     bkash: true,
     nagad: true,
     square: true,
+    sslcommerz: true,
   });
   const [paymentCodCountry, setPaymentCodCountry] = useState("");
 
@@ -512,6 +536,7 @@ export default function CheckoutPage() {
             bkash: data.payment_bkash_enabled !== "false",
             nagad: data.payment_nagad_enabled !== "false",
             square: data.payment_square_enabled !== "false",
+            sslcommerz: data.payment_sslcommerz_enabled !== "false",
           };
           setPaymentMethods(pMethods);
 
@@ -802,6 +827,19 @@ export default function CheckoutPage() {
     }
   };
 
+  const handleSslcommerzCheckout = async () => {
+    setPlacing(true);
+    try {
+      await startSslcommerzCheckout(buildCheckoutPayload());
+      // On success the browser navigates away to SSLCommerz — nothing left to
+      // do here. setPlacing(false) only matters for the error path below.
+    } catch (err: any) {
+      console.error(err);
+      Swal.fire({ text: err.message || "Failed to start SSLCommerz payment. Please try again.", confirmButtonColor: "#18181b", icon: "error" });
+      setPlacing(false);
+    }
+  };
+
   const handlePlaceOrder = async (paymentIntentId?: string) => {
     setPlacing(true);
     try {
@@ -876,13 +914,13 @@ export default function CheckoutPage() {
         <div>
           <h1 className="text-3xl sm:text-4xl font-extrabold uppercase tracking-tight mb-3">Order Confirmed!</h1>
           <p className="text-zinc-400 text-sm font-light max-w-md mx-auto">
-            Thank you, <strong className="text-zinc-700">{bkashOrderInfo?.fullName || form.fullName || "valued customer"}</strong>! Your order has been placed successfully.
-            You'll receive a confirmation at <strong className="text-zinc-700">{bkashOrderInfo?.email || form.email || "your email"}</strong>.
+            Thank you, <strong className="text-zinc-700">{gatewayOrderInfo?.fullName || form.fullName || "valued customer"}</strong>! Your order has been placed successfully.
+            You'll receive a confirmation at <strong className="text-zinc-700">{gatewayOrderInfo?.email || form.email || "your email"}</strong>.
           </p>
         </div>
         <div className="bg-white border border-zinc-100 px-8 py-6 max-w-sm w-full">
-          <div className="flex justify-between text-xs mb-2 text-zinc-500"><span>Order Total</span><span className="font-black text-zinc-950">{formatPrice(bkashOrderInfo?.total ?? total)}</span></div>
-          <div className="flex justify-between text-xs text-zinc-500"><span>Payment</span><span className="font-bold text-zinc-700 uppercase">{bkashOrderInfo ? "bKash (Online Payment)" : form.paymentMethod === "cod" ? "Cash on Delivery" : form.paymentMethod === "card" ? "Credit / Debit Card" : form.paymentMethod === "square" ? "Square" : form.paymentMethod}</span></div>
+          <div className="flex justify-between text-xs mb-2 text-zinc-500"><span>Order Total</span><span className="font-black text-zinc-950">{formatPrice(gatewayOrderInfo?.total ?? total)}</span></div>
+          <div className="flex justify-between text-xs text-zinc-500"><span>Payment</span><span className="font-bold text-zinc-700 uppercase">{bkashOrderInfo ? "bKash (Online Payment)" : sslcommerzOrderInfo ? "SSLCommerz (Online Payment)" : form.paymentMethod === "cod" ? "Cash on Delivery" : form.paymentMethod === "card" ? "Credit / Debit Card" : form.paymentMethod === "square" ? "Square" : form.paymentMethod}</span></div>
         </div>
         <div className="flex gap-4">
           <Link href="/account" className="border border-zinc-950 text-zinc-950 px-8 py-3 text-xs font-bold tracking-widest uppercase hover:bg-zinc-50 transition-colors">Go to Account</Link>
@@ -1333,6 +1371,7 @@ export default function CheckoutPage() {
                   { value: "card", label: "Credit / Debit Card (Stripe)", desc: "Visa, Mastercard, Amex", enabled: paymentMethods.card },
                   { value: "square", label: "Square", desc: "Pay securely with Square", enabled: paymentMethods.square },
                   { value: "bkash", label: "bKash", desc: "Pay securely online via bKash", enabled: paymentMethods.bkash },
+                  { value: "sslcommerz", label: "SSLCommerz", desc: "Cards, mobile banking & more via SSLCommerz", enabled: paymentMethods.sslcommerz },
                   { value: "nagad", label: "Nagad", desc: "Pay via Nagad account", enabled: paymentMethods.nagad },
                 ].filter(opt => opt.enabled).map((opt) => (
                   <label
@@ -1357,6 +1396,12 @@ export default function CheckoutPage() {
                 {form.paymentMethod === "bkash" && (
                   <div className="pt-2 text-xs text-zinc-500">
                     <p>You&apos;ll be redirected to bKash to complete payment securely, then brought back here.</p>
+                  </div>
+                )}
+
+                {form.paymentMethod === "sslcommerz" && (
+                  <div className="pt-2 text-xs text-zinc-500">
+                    <p>You&apos;ll be redirected to SSLCommerz to complete payment securely, then brought back here.</p>
                   </div>
                 )}
 
@@ -1429,7 +1474,7 @@ export default function CheckoutPage() {
                 <div className="bg-zinc-50 p-4">
                   <p className="text-[10px] font-black uppercase tracking-widest text-zinc-400 mb-2">Payment Method</p>
                   <p className="text-sm font-bold text-zinc-900">
-                    {form.paymentMethod === "cod" ? "Cash on Delivery" : form.paymentMethod === "card" ? "Credit/Debit Card (Stripe)" : form.paymentMethod === "square" ? "Square Payment" : form.paymentMethod === "bkash" ? "bKash (Online Payment)" : `Nagad — ${form.nagadNumber}`}
+                    {form.paymentMethod === "cod" ? "Cash on Delivery" : form.paymentMethod === "card" ? "Credit/Debit Card (Stripe)" : form.paymentMethod === "square" ? "Square Payment" : form.paymentMethod === "bkash" ? "bKash (Online Payment)" : form.paymentMethod === "sslcommerz" ? "SSLCommerz (Online Payment)" : `Nagad — ${form.nagadNumber}`}
                   </p>
                 </div>
 
@@ -1460,14 +1505,22 @@ export default function CheckoutPage() {
                     </div>
                   ) : (
                     <button
-                      onClick={() => (form.paymentMethod === "bkash" ? handleBkashCheckout() : handlePlaceOrder())}
+                      onClick={() =>
+                        form.paymentMethod === "bkash"
+                          ? handleBkashCheckout()
+                          : form.paymentMethod === "sslcommerz"
+                          ? handleSslcommerzCheckout()
+                          : handlePlaceOrder()
+                      }
                       disabled={placing}
                       className="flex-[2] bg-zinc-950 text-white py-4 text-xs font-black tracking-widest uppercase hover:bg-zinc-800 disabled:opacity-60 disabled:cursor-wait transition-all flex items-center justify-center gap-2"
                     >
                       {placing ? (
-                        <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> {form.paymentMethod === "bkash" ? "Redirecting to bKash…" : "Placing Order…"}</>
+                        <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> {form.paymentMethod === "bkash" ? "Redirecting to bKash…" : form.paymentMethod === "sslcommerz" ? "Redirecting to SSLCommerz…" : "Placing Order…"}</>
                       ) : form.paymentMethod === "bkash" ? (
                         <>Pay with bKash · {formatPrice(total)}</>
+                      ) : form.paymentMethod === "sslcommerz" ? (
+                        <>Pay with SSLCommerz · {formatPrice(total)}</>
                       ) : (
                         <>Place Order · {formatPrice(total)}</>
                       )}
