@@ -70,7 +70,13 @@ export default function HomeHero({ slides, rotationInterval = 0, highlight }: Ho
     <section className="bg-sig-cream pb-3 pt-8">
       <div className="sig-wrap">
         <div
-          className="grid min-h-[520px] overflow-hidden rounded-[26px] bg-sig-card shadow-sig lg:grid-cols-[1fr_1.02fr] lg:rounded-sig-lg"
+          // min-h only matters once copy and media sit side by side at lg: it
+          // keeps that row tall enough for the image column. Applied
+          // unconditionally it forced the mobile grid (copy and media
+          // stacked in two auto rows) to stretch to fill it, which the copy
+          // row's `justify-center` turned into a large blank gap below the
+          // button rather than a shorter, tighter section.
+          className="grid overflow-hidden rounded-[26px] bg-sig-card shadow-sig lg:min-h-[520px] lg:grid-cols-[1fr_1.02fr] lg:rounded-sig-lg"
           onMouseEnter={() => setPaused(true)}
           onMouseLeave={() => setPaused(false)}
           onFocusCapture={() => setPaused(true)}
@@ -78,7 +84,11 @@ export default function HomeHero({ slides, rotationInterval = 0, highlight }: Ho
         >
 
           {/* ── Copy ── */}
-          <div className="flex flex-col justify-center px-7 py-12 sm:px-14 sm:py-16">
+          {/* order-2 below lg: media (the actual banner) is the first thing a
+              phone visitor sees, copy follows underneath it. lg: restores DOM
+              order — copy left, media right — since the grid-cols split only
+              takes effect there. */}
+          <div className="order-2 flex flex-col justify-center px-6 py-6 sm:px-14 sm:py-16 lg:order-1">
             {/* Every slide's copy is mounted in the same grid cell and
                 crossfaded — CSS Grid (not position:absolute) so the column
                 still sizes itself to the current slide's content instead of
@@ -99,16 +109,16 @@ export default function HomeHero({ slides, rotationInterval = 0, highlight }: Ho
                     </span>
                   )}
 
-                  <h1 className="mb-[18px] mt-5 text-[38px] font-extrabold leading-[1.04] tracking-[-0.035em] text-sig-ink sm:text-[clamp(38px,4.4vw,60px)]">
+                  <h1 className="mb-3 mt-4 text-[32px] font-extrabold leading-[1.06] tracking-[-0.035em] text-sig-ink sm:mb-[18px] sm:mt-5 sm:text-[clamp(38px,4.4vw,60px)]">
                     {slide.title}
                   </h1>
 
-                  <p className="max-w-[42ch] text-base leading-[1.75] text-sig-soft">
+                  <p className="max-w-[42ch] text-[14px] leading-[1.65] text-sig-soft sm:text-base sm:leading-[1.75]">
                     {slide.subtitle}
                   </p>
 
                   {slide.buttonText && slide.shopLink && (
-                    <div className="mt-8 flex flex-wrap gap-3">
+                    <div className="mt-5 flex flex-wrap gap-3 sm:mt-8">
                       <Link
                         href={slide.shopLink}
                         tabIndex={!canBrowse || i === displayIndex ? undefined : -1}
@@ -123,7 +133,7 @@ export default function HomeHero({ slides, rotationInterval = 0, highlight }: Ho
             </div>
 
             {canBrowse && (
-              <div className="mt-6 flex gap-2">
+              <div className="mt-4 flex gap-2 sm:mt-6">
                 {slides.map((_, i) => (
                   <button
                     key={i}
@@ -147,8 +157,11 @@ export default function HomeHero({ slides, rotationInterval = 0, highlight }: Ho
           </div>
 
           {/* ── Media ── */}
-          {/* Mobile stacks copy above media in one column, so this box's own
-              size (not the grid row) decides its height. A fixed min-h alone
+          {/* Mobile stacks media above copy in one column (the `order-1`
+              above puts it first in visual order despite following copy in
+              the DOM, so lg:'s side-by-side columns keep their original
+              left-to-right source order), so this box's own size (not the
+              grid row) decides its height. A fixed min-h alone
               made it nearly square on most phones — much narrower than a
               landscape photo — so a cropping fit cut hard off the left/right
               edges. Deliberately no min-h alongside the aspect-ratio: on a
@@ -164,7 +177,7 @@ export default function HomeHero({ slides, rotationInterval = 0, highlight }: Ho
               cost of letterboxing on off-ratio photos. bg-sig-cream fills
               that letterbox space so it reads as a mat/frame rather than
               empty space. */}
-          <div className="relative aspect-[3/2] bg-sig-cream lg:aspect-auto lg:min-h-0">
+          <div className="relative order-1 aspect-[3/2] bg-sig-cream lg:order-2 lg:aspect-auto lg:min-h-0">
             <HeroVideo
               key={displayIndex}
               src={shown.video}

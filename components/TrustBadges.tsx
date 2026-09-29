@@ -60,7 +60,7 @@ export default function TrustBadges({ variant }: { variant: "hero" | "cards" }) 
     if (heroBadges.length === 0) return null
 
     return (
-      <div className="mt-9 flex flex-wrap gap-x-[22px] gap-y-3 border-t border-sig-line pt-[26px]">
+      <div className="mt-5 flex flex-wrap gap-x-[22px] gap-y-3 border-t border-sig-line pt-4 sm:mt-9 sm:pt-[26px]">
         {heroBadges.map((badge) => (
           <div
             key={badge.label}

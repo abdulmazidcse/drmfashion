@@ -18,11 +18,6 @@ import {
 // other, and the two have completely different dismissal windows.
 const STORAGE_KEY = "ag_promo_banner";
 
-// Flows that must not be interrupted by a full-screen poster. Same list the
-// drawer uses; "/admin-login" is named separately because the match below is
-// segment-wise, so the sign-in page does not fall under the "/admin" entry.
-const EXCLUDED_PREFIXES = ["/admin", "/admin-login", "/login", "/register", "/checkout"];
-
 type BannerState = { dismissedAt?: number };
 
 function readState(): BannerState {
@@ -86,10 +81,9 @@ export default function PromoBannerPopup() {
   const [isOpen, setIsOpen] = useState(false);
 
   const config = parsePromoBanner(settings[PROMO_BANNER_SETTING_KEY]);
-  const isExcludedRoute = EXCLUDED_PREFIXES.some(
-    (p) => pathname === p || pathname?.startsWith(`${p}/`)
-  );
-  const active = !loading && isPromoBannerRenderable(config) && !isExcludedRoute;
+  // The poster is a homepage-arrival moment, not a site-wide interruption —
+  // it should never fire mid-browse on a product, category or checkout page.
+  const active = !loading && isPromoBannerRenderable(config) && pathname === "/";
 
   const { delaySeconds, reshowHours } = config;
 

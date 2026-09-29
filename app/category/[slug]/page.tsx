@@ -49,7 +49,7 @@ const SHOW_CATEGORY_HEADER = true;
  * has its <h1>. With no artwork the heading needs no scrim and no white-on-dark
  * — it renders as plain type on the page instead of a dark box.
  */
-const SHOW_CATEGORY_BANNER_IMAGE = false;
+const SHOW_CATEGORY_BANNER_IMAGE = true;
 
 /**
  * Home › Men › Tops › … trail above the category title. `trail` is the ancestor
