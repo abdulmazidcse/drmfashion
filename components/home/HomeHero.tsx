@@ -70,13 +70,19 @@ export default function HomeHero({ slides, rotationInterval = 0, highlight }: Ho
     <section className="bg-sig-cream pb-3 pt-8">
       <div className="sig-wrap">
         <div
-          // min-h only matters once copy and media sit side by side at lg: it
+          // The media box is held at ~3:2 on every screen so one upload size
+          // (1800×1200, see the admin hint) fills it edge to edge: stacked
+          // below xl it is aspect-[3/2] outright; side by side, its column is
+          // 1.25fr and the row height scales at 35vw, which keeps it near 3:2
+          // from 1366px up to 2560px.
+          //
+          // min-h only matters once copy and media sit side by side at xl: it
           // keeps that row tall enough for the image column. Applied
           // unconditionally it forced the mobile grid (copy and media
           // stacked in two auto rows) to stretch to fill it, which the copy
           // row's `justify-center` turned into a large blank gap below the
           // button rather than a shorter, tighter section.
-          className="grid overflow-hidden rounded-[26px] bg-sig-card shadow-sig lg:min-h-[520px] 3xl:min-h-[640px] lg:grid-cols-[1fr_1.02fr] lg:rounded-sig-lg"
+          className="grid overflow-hidden rounded-[26px] bg-sig-card shadow-sig xl:min-h-[clamp(520px,35vw,900px)] xl:grid-cols-[1fr_1.25fr] lg:rounded-sig-lg"
           onMouseEnter={() => setPaused(true)}
           onMouseLeave={() => setPaused(false)}
           onFocusCapture={() => setPaused(true)}
@@ -88,7 +94,7 @@ export default function HomeHero({ slides, rotationInterval = 0, highlight }: Ho
               phone visitor sees, copy follows underneath it. lg: restores DOM
               order — copy left, media right — since the grid-cols split only
               takes effect there. */}
-          <div className="order-2 flex flex-col justify-center px-6 py-6 sm:px-14 sm:py-16 lg:order-1">
+          <div className="order-2 flex flex-col justify-center px-6 py-6 sm:px-14 sm:py-16 xl:order-1 xl:py-10 2xl:py-16">
             {/* Every slide's copy is mounted in the same grid cell and
                 crossfaded — CSS Grid (not position:absolute) so the column
                 still sizes itself to the current slide's content instead of
@@ -109,7 +115,7 @@ export default function HomeHero({ slides, rotationInterval = 0, highlight }: Ho
                     </span>
                   )}
 
-                  <h1 className="mb-3 mt-4 text-[32px] font-extrabold leading-[1.06] tracking-[-0.035em] text-sig-ink sm:mb-[18px] sm:mt-5 sm:text-[clamp(38px,4.4vw,60px)]">
+                  <h1 className="mb-3 mt-4 text-[32px] font-extrabold leading-[1.06] tracking-[-0.035em] text-sig-ink sm:mb-[18px] sm:mt-5 sm:text-[clamp(38px,4.4vw,60px)] xl:text-[clamp(40px,3vw,64px)]">
                     {slide.title}
                   </h1>
 
@@ -170,14 +176,11 @@ export default function HomeHero({ slides, rotationInterval = 0, highlight }: Ho
               re-introduces the same side-crop. aspect-[3/2] alone matches the
               3:2 a camera/product photo typically ships at (not 16:9, which
               is video-shaped); lg: hands sizing back to the grid row once
-              side-by-side columns apply. Admin-uploaded photos aren't
-              guaranteed to match that ratio (e.g. a taller full-length
-              fashion shot), so HeroVideo renders with object-contain rather
-              than object-cover — nothing is ever cropped out of frame, at the
-              cost of letterboxing on off-ratio photos. bg-sig-cream fills
-              that letterbox space so it reads as a mat/frame rather than
-              empty space. */}
-          <div className="relative order-1 aspect-[3/2] bg-sig-cream lg:order-2 lg:aspect-auto lg:min-h-0">
+              side-by-side columns apply. HeroVideo renders with
+              object-cover so the photo always fills the box with no blank
+              bands; the admin hint asks for a 3:2 upload so the crop stays
+              a thin edge strip. */}
+          <div className="relative order-1 aspect-[3/2] bg-sig-cream xl:order-2 xl:aspect-auto xl:min-h-0">
             <HeroVideo
               key={displayIndex}
               src={shown.video}

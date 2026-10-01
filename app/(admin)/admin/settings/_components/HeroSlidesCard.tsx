@@ -95,7 +95,7 @@ export default function HeroSlidesCard() {
                   <MediaField
                     label="Image"
                     kind="image"
-                    hint="About 1600×1600. Required — a slide with no image is skipped on the storefront."
+                    hint="1800×1200 px (3:2 landscape). Fills the box edge to edge, so keep faces and products in the middle — a thin strip at the edges may be trimmed on some screens. Required — a slide with no image is skipped."
                     value={slide.image}
                     onChange={(next) =>
                       updateHeroSlide(index, { image: typeof next === "function" ? next(slide.image) : next })

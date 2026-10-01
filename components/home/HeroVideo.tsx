@@ -78,19 +78,7 @@ export default function HeroVideo({ src, poster, alt, priority = false }: HeroVi
   }, [src]);
 
   return (
-    <div ref={containerRef} className="absolute inset-0 overflow-hidden">
-      {/* Backdrop for the letterbox. The photo below is object-contain so it is
-          never cropped, which on a wide column left plain bands either side of
-          it. The same image, covered and heavily blurred, fills those bands
-          instead. Identical src + sizes means the browser reuses the download. */}
-      <Image
-        src={poster}
-        alt=""
-        aria-hidden
-        fill
-        sizes="(max-width: 767px) 100vw, 50vw"
-        className="scale-110 object-cover blur-2xl"
-      />
+    <div ref={containerRef} className="absolute inset-0">
       <Image
         src={poster}
         alt={alt}
@@ -98,11 +86,15 @@ export default function HeroVideo({ src, poster, alt, priority = false }: HeroVi
         // Dual hero = two half-width columns; single hero spans the viewport.
         sizes="(max-width: 767px) 100vw, 50vw"
         priority={priority}
-        className="h-full w-full object-contain"
+        // Cover, not contain: the uploaded photo always fills the box edge to
+        // edge. Admin is asked for a 3:2 image (Settings → Hero slides), the
+        // shape this box roughly has at every breakpoint, so only a thin strip
+        // is trimmed. Anchored to the top so heads are never cut; any trim falls at the bottom.
+        className="h-full w-full object-cover object-top"
       />
       {videoSrc && (
         <video
-          className="absolute inset-0 h-full w-full object-contain"
+          className="absolute inset-0 h-full w-full object-cover object-top"
           src={videoSrc}
           preload="none"
           autoPlay
