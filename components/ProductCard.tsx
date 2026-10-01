@@ -490,7 +490,7 @@ export default function ProductCard({
       </div>
 
       {/* ── Info ── */}
-      <div className="flex flex-1 flex-col px-4 pb-[19px] pt-4 sm:px-[17px]">
+      <div className="flex min-w-0 flex-1 flex-col px-3 pb-4 pt-3 sm:px-[17px] sm:pb-[19px] sm:pt-4">
         {(() => {
           const name = typeof storeName !== 'undefined' ? storeName : "Store";
           return (
@@ -564,14 +564,17 @@ export default function ProductCard({
 
         {/* Price row. The trailing chip is the reference's "+" affordance: it
             opens the same size/length selector the Quick Add overlay does, so
-            the card has one add path on touch, where there is no hover. */}
-        <div className="mt-auto flex items-center justify-between gap-2.5 select-none">
-          <div className="flex items-baseline">
-            <span className="text-[17px] font-extrabold text-sig-copper-700">
+            the card has one add path on touch, where there is no hover.
+            On a 2-up phone grid the card is ~150px wide, too narrow for both
+            prices and the chip on one line, so the prices wrap under each
+            other rather than shoving the chip out of the card. */}
+        <div className="mt-auto flex items-center justify-between gap-2 select-none sm:gap-2.5">
+          <div className="flex min-w-0 flex-wrap items-baseline gap-x-[7px]">
+            <span className="text-[15px] font-extrabold text-sig-copper-700 sm:text-[17px]">
               {formatPrice(activePrice)}
             </span>
             {hasDiscount && (
-              <s className="ml-[7px] text-[13px] font-medium text-sig-copper-200">
+              <s className="text-[12px] font-medium text-sig-copper-200 sm:text-[13px]">
                 {formatPrice(originalPrice)}
               </s>
             )}
@@ -589,7 +592,7 @@ export default function ProductCard({
                   setShowQuickAdd(true);
                 }
               }}
-              className="grid h-[38px] w-[38px] shrink-0 cursor-pointer place-items-center rounded-full bg-sig-copper-50 text-[19px] font-bold leading-none text-sig-copper-700 transition-colors group-hover:bg-sig-copper-600 group-hover:text-white"
+              className="grid h-8 w-8 shrink-0 cursor-pointer place-items-center rounded-full bg-sig-copper-50 text-[17px] sm:h-[38px] sm:w-[38px] sm:text-[19px] font-bold leading-none text-sig-copper-700 transition-colors group-hover:bg-sig-copper-600 group-hover:text-white"
             >
               +
             </button>

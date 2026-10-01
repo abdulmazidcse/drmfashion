@@ -310,7 +310,7 @@ export default function PillarsCarousel({ initialTabs }: PillarsCarouselProps) {
   const showToggle = activeType === "sizes" || activeType === "compare";
 
   return (
-    <section className="mx-auto max-w-[1920px] px-4 py-[15px] md:px-6 md:py-5">
+    <section className="mx-auto max-w-(--site-max) px-4 py-[15px] md:px-6 md:py-5">
       <div className="flex flex-col md:grid md:grid-cols-2 md:grid-rows-[auto_1fr] md:gap-x-10">
         {/* Tabs at top of LEFT column: 3px track, 2px progress bar filling over the slide duration */}
         <div className="order-1 flex gap-[5px] px-2.5 py-[5px] md:col-start-1 md:row-start-1">

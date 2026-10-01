@@ -6,6 +6,10 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
+  /* Storefront content width. 1600px up to 1800px screens, then it widens to
+     2560px so big monitors are filled instead of showing wide empty margins
+     beside the hero and product rows. Every storefront container reads this. */
+  --site-max: 1600px;
   --background: #ffffff;
   --foreground: #171717;
 }
@@ -680,6 +684,10 @@ body {
 
 /* ── American Tall home design tokens (at- namespaced, home page only) ── */
 @theme {
+  /* Wide-monitor breakpoints: 3xl = 1800px, 4xl = 2200px. Used to add product
+     columns once the page container grows past 1600px (see --site-max). */
+  --breakpoint-3xl: 112.5rem;
+  --breakpoint-4xl: 137.5rem;
   --color-at-ink: #101010;
   --color-at-muted: #717171;
   --color-at-peach: #ffddbf;
@@ -926,10 +934,48 @@ body {
    noticeably narrower column than the header sitting right above them. */
 .sig-wrap {
   width: 100%;
-  max-width: 1600px;
+  max-width: var(--site-max);
   margin-inline: auto;
   padding-inline: 20px;
 }
 @media (min-width: 640px) {
   .sig-wrap { padding-inline: 28px; }
+}
+@media (min-width: 1800px) {
+  .sig-wrap { padding-inline: clamp(28px, 2.5vw, 64px); }
+}
+
+/* ─── Admin-authored HTML on small screens ───────────────────────────────────
+   CMS pages, landing sections, journal posts and product descriptions are
+   pasted HTML with inline desktop layouts (e.g. about-us: a 2-column inline
+   grid inside a block padded 70px/50px), which pushed the page to ~505px wide
+   on a 375px phone. Inline styles can only be beaten with !important, so this
+   is kept to layout alone: multi-column grids stack, flex rows wrap, and media
+   never exceeds its column. Typography and colours are left as authored. */
+@media (max-width: 640px) {
+  :is(.page-content, .custom-html, .journal-content, .product-prose) [style*="grid-template-columns"] {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+  :is(.page-content, .custom-html, .journal-content, .product-prose) [style*="display:flex"],
+  :is(.page-content, .custom-html, .journal-content, .product-prose) [style*="display: flex"] {
+    flex-wrap: wrap !important;
+  }
+  :is(.page-content, .custom-html, .journal-content, .product-prose) :is(div, section, article) {
+    min-width: 0 !important;
+  }
+  :is(.page-content, .custom-html, .journal-content, .product-prose) [style*="padding"] {
+    padding-left: min(1.25rem, 6vw) !important;
+    padding-right: min(1.25rem, 6vw) !important;
+  }
+  :is(.page-content, .custom-html, .journal-content, .product-prose) :is(img, video, iframe, embed, object) {
+    max-width: 100% !important;
+    height: auto;
+  }
+  :is(.page-content, .custom-html, .journal-content, .product-prose) {
+    overflow-wrap: anywhere;
+  }
+}
+
+@media (min-width: 1800px) {
+  :root { --site-max: 2560px; }
 }

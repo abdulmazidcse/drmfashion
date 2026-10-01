@@ -78,7 +78,19 @@ export default function HeroVideo({ src, poster, alt, priority = false }: HeroVi
   }, [src]);
 
   return (
-    <div ref={containerRef} className="absolute inset-0">
+    <div ref={containerRef} className="absolute inset-0 overflow-hidden">
+      {/* Backdrop for the letterbox. The photo below is object-contain so it is
+          never cropped, which on a wide column left plain bands either side of
+          it. The same image, covered and heavily blurred, fills those bands
+          instead. Identical src + sizes means the browser reuses the download. */}
+      <Image
+        src={poster}
+        alt=""
+        aria-hidden
+        fill
+        sizes="(max-width: 767px) 100vw, 50vw"
+        className="scale-110 object-cover blur-2xl"
+      />
       <Image
         src={poster}
         alt={alt}

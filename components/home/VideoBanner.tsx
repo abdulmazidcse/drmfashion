@@ -93,7 +93,7 @@ export default function VideoBanner({ banner }: { banner: HomeVideoBanner }) {
   const videoClass = "absolute inset-0 h-full w-full object-cover";
 
   return (
-    <section ref={rootRef} className={`relative w-full overflow-hidden bg-at-ink ${HEIGHTS[banner.height]}`}>
+    <section ref={rootRef} className={`relative w-full overflow-hidden bg-at-ink max-h-[88vh] ${HEIGHTS[banner.height]}`}>
       {split ? (
         <>
           <HomeVideoMedia

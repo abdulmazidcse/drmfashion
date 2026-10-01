@@ -115,7 +115,7 @@ export default async function CollectionPage({ params }: CollectionPageProps) {
               its height, so whatever the admin uploads is shown whole. */}
           <img src={heroImage} alt={collection.name} className="block h-auto w-full" />
           <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/10 to-transparent" />
-          <div className="absolute inset-x-0 bottom-0 z-10 mx-auto w-full max-w-[1600px] px-6 pb-8 sm:pb-12">
+          <div className="absolute inset-x-0 bottom-0 z-10 mx-auto w-full max-w-(--site-max) px-6 pb-8 sm:pb-12">
             <nav aria-label="Breadcrumb" className="mb-3 flex flex-wrap items-center gap-2 text-[10px] font-bold uppercase tracking-widest">
               <Link href="/" className="text-white/60 hover:text-white transition-colors">Home</Link>
               <ChevronRight className="h-3 w-3 text-white/40" />
@@ -134,7 +134,7 @@ export default async function CollectionPage({ params }: CollectionPageProps) {
           </div>
         </section>
       ) : (
-        <section className="mx-auto w-full max-w-[1600px] px-6 pb-4 pt-10">
+        <section className="mx-auto w-full max-w-(--site-max) px-6 pb-4 pt-10">
           <nav aria-label="Breadcrumb" className="mb-3 flex flex-wrap items-center gap-2 text-[10px] font-bold uppercase tracking-widest">
             <Link href="/" className="text-zinc-400 hover:text-zinc-800 transition-colors">Home</Link>
             <ChevronRight className="h-3 w-3 text-zinc-300" />
@@ -153,7 +153,7 @@ export default async function CollectionPage({ params }: CollectionPageProps) {
         </section>
       )}
 
-      <main className="max-w-[1600px] mx-auto px-6 py-10 w-full flex-1">
+      <main className="max-w-(--site-max) mx-auto px-6 py-10 w-full flex-1">
         <div className="min-w-0">
           <p className="mb-6 text-[11px] font-bold uppercase tracking-widest text-zinc-400">
             {products.length} {products.length === 1 ? "item" : "items"}

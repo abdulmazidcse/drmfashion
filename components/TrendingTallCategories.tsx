@@ -49,7 +49,7 @@ export default function TrendingTallCategories() {
       </div>
 
       {/* Grid Content with transitions */}
-      <div key={activeGender} className="grid grid-cols-2 md:grid-cols-6 gap-6 w-full max-w-[1600px] mx-auto animate-fade-up">
+      <div key={activeGender} className="grid grid-cols-2 md:grid-cols-6 gap-6 w-full max-w-(--site-max) mx-auto animate-fade-up">
         {data[activeGender].map((cat, idx) => (
           <Link href={cat.link} key={idx} className="text-center group cursor-pointer flex flex-col items-center">
             <div className="aspect-[3/4] w-full bg-[#F5F5F5] mb-4 overflow-hidden relative border border-zinc-100 rounded-sm">

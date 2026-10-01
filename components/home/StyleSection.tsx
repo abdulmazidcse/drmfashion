@@ -55,7 +55,7 @@ export default function StyleSection({ title, highlight, men, women }: StyleSect
   const active = tiles[activeGender];
 
   return (
-    <section className="w-full py-[15px] md:py-5">
+    <section className="mx-auto w-full max-w-(--site-max) py-[15px] md:py-5">
       {/* Part 1: title + tabs (padded) */}
       <div className="mb-5 flex flex-col items-center gap-3 px-6 md:flex-row md:items-center md:justify-between lg:px-8">
         <SectionHeading

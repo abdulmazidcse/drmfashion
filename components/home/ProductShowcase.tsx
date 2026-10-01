@@ -98,7 +98,13 @@ export default function ProductShowcase({
   const handleScroll = (direction: "left" | "right") => {
     const el = scrollRef.current;
     if (!el) return;
-    const amount = el.clientWidth * 0.8;
+    // Whole cards only, with equal gutters either side (no half-card peeking
+    // at the edge), so a click advances exactly one row of visible cards.
+    const card = el.firstElementChild as HTMLElement | null;
+    const cs = getComputedStyle(el);
+    const inner = el.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+    const step = card ? card.offsetWidth + 5 : inner;
+    const amount = Math.max(1, Math.round((inner + 5) / step)) * step;
     el.scrollBy({ left: direction === "left" ? -amount : amount, behavior: "smooth" });
   };
 
@@ -112,7 +118,7 @@ export default function ProductShowcase({
   if (products.length === 0) return null;
 
   return (
-    <section className="w-full py-[15px] md:py-5">
+    <section className="mx-auto w-full max-w-(--site-max) py-[15px] md:py-5">
       <div className="mb-7 flex flex-col gap-3 px-6 md:flex-row md:items-end md:justify-between lg:px-8">
         <div className="flex flex-col gap-2">
           <SectionHeading title={title} highlight={highlight} highlightStyle="muted" />
@@ -129,7 +135,10 @@ export default function ProductShowcase({
         )}
       </div>
 
-      <div className="relative">
+      {/* Gutter lives on this wrapper, not the scroller: padding inside an
+          overflow box still shows content scrolled into it, which left a sliver
+          of the next card visible beside the arrow. */}
+      <div className="relative px-6 lg:px-8">
         <button
           type="button"
           aria-label="Previous"
@@ -190,7 +199,7 @@ export default function ProductShowcase({
                     item_category: product.category?.name,
                   })
                 }
-                className="at-card-up group flex shrink-0 snap-start flex-col w-[calc((100%-11.25px)/2.25)] md:w-[calc((100%-21.25px)/4.25)]"
+                className="at-card-up group flex shrink-0 snap-start flex-col w-[calc((100%-5px)/2)] md:w-[calc((100%-15px)/4)] xl:w-[calc((100%-20px)/5)] 3xl:w-[calc((100%-25px)/6)] 4xl:w-[calc((100%-30px)/7)]"
                 style={{ animationDelay: `${i * 60}ms` }}
               >
                 <div className="relative aspect-3/4 w-full overflow-hidden bg-[#F0F0F0]">
@@ -202,7 +211,7 @@ export default function ProductShowcase({
                       color: primaryColor,
                     })}
                     fill
-                    sizes="(max-width: 768px) 45vw, 24vw"
+                    sizes="(max-width: 768px) 45vw, (max-width: 1280px) 24vw, 19vw"
                     className={`object-cover transition-opacity duration-500 ${
                       hoverImage ? "group-hover:opacity-0" : ""
                     }`}
@@ -213,7 +222,7 @@ export default function ProductShowcase({
                       alt=""
                       aria-hidden
                       fill
-                      sizes="(max-width: 768px) 45vw, 24vw"
+                      sizes="(max-width: 768px) 45vw, (max-width: 1280px) 24vw, 19vw"
                       className="object-cover opacity-0 transition-opacity duration-500 group-hover:opacity-100"
                     />
                   )}
@@ -226,7 +235,7 @@ export default function ProductShowcase({
                   {colorLabel && (
                     <p className="text-[13px] font-light text-at-muted">{colorLabel}</p>
                   )}
-                  <p className="flex items-baseline gap-2 text-[14px] font-bold text-at-ink">
+                  <p className="flex flex-wrap items-baseline gap-x-2 text-[14px] font-bold text-at-ink">
                     {formatPrice(price)}
                     {hasDiscount && (
                       <span className="text-[12px] font-light text-at-muted line-through">

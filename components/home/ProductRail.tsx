@@ -118,7 +118,7 @@ export function RailTrack({
       {products.map((product, i) => (
         <div
           key={product.id}
-          className="at-card-up w-[calc((100%-16px)/1.7)] shrink-0 snap-start sm:w-[calc((100%-32px)/3)] lg:w-[calc((100%-60px)/4)]"
+          className="at-card-up w-[calc((100%-16px)/1.7)] shrink-0 snap-start sm:w-[calc((100%-32px)/3)] lg:w-[calc((100%-60px)/4)] 3xl:w-[calc((100%-80px)/5)] 4xl:w-[calc((100%-100px)/6)]"
           style={{ animationDelay: `${i * 60}ms` }}
         >
           <ProductCard product={product} idPrefix={idPrefix} />

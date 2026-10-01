@@ -32,7 +32,7 @@ export default function WishlistPage() {
     <div className="flex flex-col min-h-screen bg-white">
       <Header />
       
-      <main className="flex-1 max-w-[1600px] mx-auto px-6 py-16 w-full">
+      <main className="flex-1 max-w-(--site-max) mx-auto px-6 py-16 w-full">
         <h1 className="text-3xl font-extrabold uppercase tracking-tight mb-2">My Wishlist</h1>
         <p className="text-zinc-500 mb-12">
           {items.length} {items.length === 1 ? "item" : "items"} saved for later

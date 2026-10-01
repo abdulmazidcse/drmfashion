@@ -258,7 +258,7 @@ export default async function ShopPage({ searchParams }: ShopPageProps) {
 
       <PromoBanners position="shop_top" />
 
-      <main className="max-w-[1600px] mx-auto px-6 py-12 w-full flex-1">
+      <main className="max-w-(--site-max) mx-auto px-6 py-12 w-full flex-1">
 
         {/* BREADCRUMB */}
         <div className="text-[10px] text-zinc-400 font-bold uppercase tracking-widest mb-8 flex items-center gap-2">

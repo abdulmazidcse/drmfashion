@@ -92,7 +92,7 @@ export default function Reels({ title, highlight, subtitle, reels }: ReelsProps)
     }`;
 
   return (
-    <section className="w-full py-[15px] md:py-5">
+    <section className="mx-auto w-full max-w-(--site-max) py-[15px] md:py-5">
       <div className="mb-7 flex flex-col gap-2 px-6 lg:px-8">
         <SectionHeading title={title} highlight={highlight} highlightStyle="muted" />
         {subtitle && <p className="text-[13px] font-light text-at-muted">{subtitle}</p>}
@@ -148,7 +148,7 @@ export default function Reels({ title, highlight, subtitle, reels }: ReelsProps)
             );
 
             const shell =
-              "group at-card-up relative aspect-9/16 shrink-0 snap-start overflow-hidden bg-[#F0F0F0] w-[calc((100%-11.25px)/2.25)] md:w-[calc((100%-21.25px)/4.25)] xl:w-[calc((100%-26.25px)/5.25)]";
+              "group at-card-up relative aspect-9/16 shrink-0 snap-start overflow-hidden bg-[#F0F0F0] w-[calc((100%-11.25px)/2.25)] md:w-[calc((100%-21.25px)/4.25)] xl:w-[calc((100%-26.25px)/5.25)] 4xl:w-[calc((100%-31.25px)/6.25)]";
 
             return reel.href ? (
               <Link

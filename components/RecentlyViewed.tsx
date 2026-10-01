@@ -61,7 +61,10 @@ export default function RecentlyViewed({ currentProductId }: RecentlyViewedProps
   const handleScroll = (direction: "left" | "right") => {
     const el = scrollRef.current;
     if (!el) return;
-    const amount = el.clientWidth * 0.8;
+    // Advance by exactly one screenful of whole cards.
+    const card = el.firstElementChild as HTMLElement | null;
+    const step = card ? card.offsetWidth + 5 : el.clientWidth;
+    const amount = Math.max(1, Math.round((el.clientWidth + 5) / step)) * step;
     el.scrollBy({ left: direction === "left" ? -amount : amount, behavior: "smooth" });
   };
 
@@ -75,14 +78,14 @@ export default function RecentlyViewed({ currentProductId }: RecentlyViewedProps
   if (viewedProducts.length === 0) return null;
 
   return (
-    <section className="w-full py-[15px] md:py-5">
+    <section className="mx-auto w-full max-w-(--site-max) py-[15px] md:py-5">
       <div className="mb-7 px-6 lg:px-8">
         <h2 className="at-heading text-at-subheading text-at-ink text-left">
           Recently Viewed
         </h2>
       </div>
 
-      <div className="relative">
+      <div className="relative px-6 lg:px-8">
         <button
           type="button"
           aria-label="Previous"
@@ -110,7 +113,7 @@ export default function RecentlyViewed({ currentProductId }: RecentlyViewedProps
           {viewedProducts.map((prod, i) => (
             <div
               key={prod.id}
-              className="at-card-up shrink-0 snap-start w-[calc((100%-11.25px)/2.25)] md:w-[calc((100%-21.25px)/4.25)]"
+              className="at-card-up shrink-0 snap-start w-[calc((100%-5px)/2)] md:w-[calc((100%-15px)/4)] xl:w-[calc((100%-20px)/5)] 3xl:w-[calc((100%-25px)/6)] 4xl:w-[calc((100%-30px)/7)]"
               style={{ animationDelay: `${i * 60}ms` }}
             >
               <ProductCard product={prod} idPrefix="rv" />

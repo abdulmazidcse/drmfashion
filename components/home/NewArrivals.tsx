@@ -74,7 +74,13 @@ export default function NewArrivals({ products }: NewArrivalsProps) {
   const handleScroll = (direction: "left" | "right") => {
     const el = scrollRef.current;
     if (!el) return;
-    const amount = el.clientWidth * 0.8;
+    // Whole cards only, with equal gutters either side (no half-card peeking
+    // at the edge), so a click advances exactly one row of visible cards.
+    const card = el.firstElementChild as HTMLElement | null;
+    const cs = getComputedStyle(el);
+    const inner = el.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+    const step = card ? card.offsetWidth + 5 : inner;
+    const amount = Math.max(1, Math.round((inner + 5) / step)) * step;
     el.scrollBy({ left: direction === "left" ? -amount : amount, behavior: "smooth" });
   };
 
@@ -88,7 +94,7 @@ export default function NewArrivals({ products }: NewArrivalsProps) {
   if (visibleProducts.length === 0) return null;
 
   return (
-    <section className="w-full py-[15px] md:py-5">
+    <section className="mx-auto w-full max-w-(--site-max) py-[15px] md:py-5">
       <div className="mb-7 flex flex-col items-start gap-3 px-6 sm:flex-row sm:items-end sm:justify-between lg:px-8">
         <div>
           <h2 className="at-heading text-at-subheading text-at-ink text-left">New Arrivals</h2>
@@ -99,7 +105,10 @@ export default function NewArrivals({ products }: NewArrivalsProps) {
         </Link>
       </div>
 
-      <div className="relative">
+      {/* Gutter lives on this wrapper, not the scroller: padding inside an
+          overflow box still shows content scrolled into it, which left a sliver
+          of the next card visible beside the arrow. */}
+      <div className="relative px-6 lg:px-8">
         <button
           type="button"
           aria-label="Previous"
@@ -127,7 +136,7 @@ export default function NewArrivals({ products }: NewArrivalsProps) {
           {visibleProducts.map((product, i) => (
             <div
               key={product.id}
-              className="at-card-up shrink-0 snap-start w-[calc((100%-11.25px)/2.25)] md:w-[calc((100%-21.25px)/4.25)]"
+              className="at-card-up shrink-0 snap-start w-[calc((100%-5px)/2)] md:w-[calc((100%-15px)/4)] xl:w-[calc((100%-20px)/5)] 3xl:w-[calc((100%-25px)/6)] 4xl:w-[calc((100%-30px)/7)]"
               style={{ animationDelay: `${i * 60}ms` }}
             >
               <ProductCard product={product} idPrefix="new-arrival" />

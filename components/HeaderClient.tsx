@@ -62,7 +62,7 @@ function AboutMenuContent({ category, storeName }: { category: any; storeName: s
   const headingClass = "text-base font-bold tracking-tight text-zinc-950";
 
   return (
-    <div className="max-w-[1600px] mx-auto px-4 xl:px-8 py-8 flex flex-col lg:flex-row gap-8 xl:gap-12 w-full">
+    <div className="max-w-(--site-max) mx-auto px-4 xl:px-8 py-8 flex flex-col lg:flex-row gap-8 xl:gap-12 w-full">
       {/* Left: heading + text links */}
       <div className="w-full lg:w-[230px] xl:w-[270px] shrink-0">
         {aboutEntry ? (
@@ -181,7 +181,7 @@ function MegaMenuContent({ category }: { category: any }) {
   });
 
   return (
-    <div className="max-w-[1600px] mx-auto px-4 xl:px-8 py-6 flex justify-between gap-6 xl:gap-8 w-full overflow-hidden">
+    <div className="max-w-(--site-max) mx-auto px-4 xl:px-8 py-6 flex justify-between gap-6 xl:gap-8 w-full overflow-hidden">
       {/* Left Link Columns Container */}
       <div
         className="grid gap-y-8 gap-x-6 xl:gap-x-12 flex-1"
@@ -260,7 +260,7 @@ export default function HeaderClient({
   // to hide one on small screens can swap in `hidden sm:grid` without the
   // display mode fighting the centring.
   const sigIcon =
-    "grid h-10 w-10 shrink-0 place-items-center rounded-full border border-sig-line bg-sig-card text-sig-ink transition-colors hover:border-sig-copper-400 cursor-pointer lg:h-[42px] lg:w-[42px]";
+    "grid h-9 w-9 shrink-0 place-items-center rounded-full border border-sig-line bg-sig-card text-sig-ink transition-colors hover:border-sig-copper-400 cursor-pointer min-[380px]:h-10 min-[380px]:w-10 xl:h-[42px] xl:w-[42px]";
 
   const [categories, setCategories] = useState<any[]>(menus || []);
   const [cartItemsCount, setCartItemsCount] = useState(0);
@@ -524,12 +524,12 @@ export default function HeaderClient({
       >
         {/* Signature bar: mark on the left, the nav as a floating pill centred
             between them, and the actions as round chips on the right. */}
-        <div className="sig-wrap flex items-center gap-3 py-3 lg:gap-6">
+        <div className="sig-wrap flex items-center gap-2 py-3 min-[380px]:gap-3 lg:gap-4 xl:gap-6">
 
           {/* Menu Icon (Mobile) */}
           <button
             onClick={() => setIsMenuOpen(true)}
-            className="grid h-10 w-10 shrink-0 place-items-center rounded-full border border-sig-line bg-sig-card text-sig-ink transition-colors hover:border-sig-copper-400 cursor-pointer lg:hidden"
+            className="grid h-9 w-9 shrink-0 place-items-center rounded-full border border-sig-line bg-sig-card text-sig-ink transition-colors hover:border-sig-copper-400 cursor-pointer min-[380px]:h-10 min-[380px]:w-10 lg:hidden"
             aria-label="Open Menu"
           >
             <Menu className="w-5 h-5" />
@@ -551,14 +551,14 @@ export default function HeaderClient({
           <Link
             href="/"
             onClick={handleHomeClick}
-            className="hover:opacity-90 transition-opacity flex-shrink-0"
+            className="min-w-0 shrink hover:opacity-90 transition-opacity"
           >
             <Image
               src={logoSrc}
               alt={storeName}
               width={144}
               height={48}
-              className="h-10 w-auto max-w-[8rem] object-contain lg:h-12 lg:max-w-[9rem]"
+              className="h-9 w-auto max-w-full object-contain object-left min-[380px]:h-10 sm:max-w-[8rem] lg:max-w-[7.5rem] xl:h-12 xl:max-w-[9rem]"
               unoptimized={logoIsSvg}
               priority
             />
@@ -568,13 +568,18 @@ export default function HeaderClient({
               between the mark and the actions — the same trick the reference
               uses — so it stays centred regardless of how wide the logo is.
               The mega menu is still positioned against <header> (sticky counts
-              as positioned), so it spans the full width, not the pill. */}
-          <nav className="mx-auto hidden items-center gap-1 rounded-full border border-sig-line bg-sig-card p-1.5 lg:flex">
+              as positioned), so it spans the full width, not the pill.
+              `min-w-0 overflow-x-auto` is the safety net for 1024–1279px: with
+              a long admin-defined menu the pill used to push the action chips
+              past the viewport edge; now it scrolls sideways instead. The
+              dropdowns are not clipped by it because their containing block is
+              <header>, not this nav. */}
+          <nav className="mx-auto hidden min-w-0 items-center gap-0.5 overflow-x-auto rounded-full border border-sig-line bg-sig-card p-1.5 [scrollbar-width:none] lg:flex xl:gap-1 [&::-webkit-scrollbar]:hidden">
             {categories.map((cat) => (
               <div key={cat.id} className="group/cat flex items-center">
                 <Link
                   href={cat.url || `/category/${cat.slug}`}
-                  className="whitespace-nowrap rounded-full px-4 py-2.5 text-sm font-semibold text-sig-soft transition-colors hover:bg-sig-copper-50 hover:text-sig-ink xl:px-[18px]"
+                  className="whitespace-nowrap rounded-full px-3 py-2.5 text-[13px] font-semibold text-sig-soft transition-colors hover:bg-sig-copper-50 hover:text-sig-ink xl:px-4 xl:text-sm 2xl:px-[18px]"
                 >
                   {cat.title || cat.name}
                 </Link>
@@ -590,7 +595,7 @@ export default function HeaderClient({
           </nav>
 
           {/* Right header actions — round chips, per the reference's 42px icons */}
-          <div className="ml-auto flex items-center justify-end gap-2 lg:ml-0">
+          <div className="ml-auto flex shrink-0 items-center justify-end gap-1.5 min-[380px]:gap-2 lg:ml-0">
             <button
               onClick={() => setIsSearchOpen(!isSearchOpen)}
               className={sigIcon}

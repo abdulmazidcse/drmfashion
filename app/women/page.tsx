@@ -83,7 +83,7 @@ export default async function WomenPage() {
           <div className="absolute inset-0 w-full h-full bg-zinc-900" />
         )}
         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
-        <div className="relative z-10 max-w-[1600px] mx-auto px-8 pb-16 w-full">
+        <div className="relative z-10 max-w-(--site-max) mx-auto px-8 pb-16 w-full">
           <span className="text-[10px] font-bold tracking-[0.35em] uppercase text-zinc-300 block mb-3">
             Designed for Height · 5&apos;9&quot; – 6&apos;6&quot;
           </span>
@@ -105,7 +105,7 @@ export default async function WomenPage() {
       <PromoBanners position="women_top" />
 
       {/* ── BREADCRUMB ── */}
-      <div className="max-w-[1600px] mx-auto px-8 py-5 w-full">
+      <div className="max-w-(--site-max) mx-auto px-8 py-5 w-full">
         <div className="text-[10px] text-zinc-400 font-bold uppercase tracking-widest flex items-center gap-2">
           <Link href="/" className="hover:text-zinc-800 transition-colors">Home</Link>
           <ChevronRight className="w-3 h-3" />
@@ -114,7 +114,7 @@ export default async function WomenPage() {
       </div>
 
       {/* ── COLLECTIONS GRID ── */}
-      <section className="max-w-[1600px] mx-auto px-8 pb-20 w-full">
+      <section className="max-w-(--site-max) mx-auto px-8 pb-20 w-full">
         <div className="flex items-end justify-between mb-8">
           <div>
             <p className="text-[10px] font-bold tracking-[0.3em] uppercase text-zinc-400 mb-1">Explore</p>
@@ -174,7 +174,7 @@ export default async function WomenPage() {
       </section>
 
       {/* ── FEATURED PRODUCTS ── */}
-      <section className="max-w-[1600px] mx-auto px-8 pb-24 w-full">
+      <section className="max-w-(--site-max) mx-auto px-8 pb-24 w-full">
         <div className="flex items-end justify-between mb-8">
           <div>
             <p className="text-[10px] font-bold tracking-[0.3em] uppercase text-zinc-400 mb-1">Curated for You</p>

@@ -9,6 +9,12 @@ interface FlashSaleProps {
   products: any[]
 }
 
+// Index → classes that show the card only once the grid has a column for it.
+const ROW_VISIBILITY = [
+  "", "", "hidden md:block", "hidden md:block",
+  "hidden xl:block", "hidden 3xl:block", "hidden 4xl:block",
+]
+
 export default function FlashSale({ products }: FlashSaleProps) {
   const { settings, loading } = useSettings()
 
@@ -132,9 +138,15 @@ export default function FlashSale({ products }: FlashSaleProps) {
         </div>
 
         {/* ── What is actually on offer ── */}
-        <div className="mt-5 grid grid-cols-2 gap-4 lg:grid-cols-4 lg:gap-5">
-          {products.slice(0, 4).map((product) => (
-            <ProductCard key={product.id} product={product} idPrefix="flash" />
+        {/* One row, same count per screen as every other product section on
+            the home page (2 / 4 / 5 / 6 / 7). Up to seven are rendered; the
+            ones past the current column count stay hidden so the row never
+            wraps into a half-empty second line. */}
+        <div className="mt-5 grid grid-cols-2 md:grid-cols-4 xl:grid-cols-5 3xl:grid-cols-6 4xl:grid-cols-7 gap-4 lg:gap-5">
+          {products.slice(0, 7).map((product, i) => (
+            <div key={product.id} className={ROW_VISIBILITY[i]}>
+              <ProductCard product={product} idPrefix="flash" />
+            </div>
           ))}
         </div>
 

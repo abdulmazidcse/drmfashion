@@ -35,7 +35,7 @@ export default function IconsGrid({
   const [activeGender, setActiveGender] = useState<Gender>(men.length ? "men" : "women");
 
   return (
-    <section className="w-full py-[15px] md:py-5">
+    <section className="mx-auto w-full max-w-(--site-max) py-[15px] md:py-5">
       <div className="mb-5 flex flex-col items-center gap-3 px-6 md:flex-row md:items-end md:justify-between lg:px-8">
         <div className="flex flex-col gap-2">
           <SectionHeading title={title} highlight={highlight} highlightStyle="muted" />

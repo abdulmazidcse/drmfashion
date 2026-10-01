@@ -234,7 +234,7 @@ export default function CartPage() {
 
       <Header />
 
-      <main className="max-w-[1600px] mx-auto px-4 sm:px-6 py-10 w-full flex-1">
+      <main className="max-w-(--site-max) mx-auto px-4 sm:px-6 py-10 w-full flex-1">
 
         {/* BREADCRUMB */}
         <div className="flex items-center gap-2 text-[10px] text-zinc-400 font-bold uppercase tracking-widest mb-8">

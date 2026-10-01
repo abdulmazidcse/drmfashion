@@ -23,8 +23,8 @@ export default async function PromoBanners({
 
   if (banners.length === 1) {
     return (
-      <section aria-label="Promotions" className="w-full px-4 py-6 sm:px-6 lg:px-8">
-        <div className="mx-auto max-w-[1600px]">
+      <section aria-label="Promotions" className="mx-auto w-full max-w-(--site-max) px-4 py-6 sm:px-6 lg:px-8">
+        <div className="mx-auto max-w-(--site-max)">
           <BannerCard banner={banners[0]} hero />
         </div>
       </section>
@@ -33,8 +33,8 @@ export default async function PromoBanners({
 
   if (variant === "slider") {
     return (
-      <section aria-label="Promotions" className="w-full px-4 py-6 sm:px-6 lg:px-8">
-        <div className="mx-auto max-w-[1600px]">
+      <section aria-label="Promotions" className="mx-auto w-full max-w-(--site-max) px-4 py-6 sm:px-6 lg:px-8">
+        <div className="mx-auto max-w-(--site-max)">
           <BannerSlider banners={banners} />
         </div>
       </section>
@@ -44,8 +44,8 @@ export default async function PromoBanners({
   const grid = `grid grid-cols-1 gap-4 md:grid-cols-2${banners.length >= 3 ? " xl:grid-cols-3" : ""}`
 
   return (
-    <section aria-label="Promotions" className="w-full px-4 py-6 sm:px-6 lg:px-8">
-      <div className={`mx-auto max-w-[1600px] ${grid}`}>
+    <section aria-label="Promotions" className="mx-auto w-full max-w-(--site-max) px-4 py-6 sm:px-6 lg:px-8">
+      <div className={`mx-auto max-w-(--site-max) ${grid}`}>
         {banners.map((banner) => (
           <BannerCard key={banner.id} banner={banner} hero={false} />
         ))}

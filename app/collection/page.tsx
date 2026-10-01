@@ -54,7 +54,7 @@ export default async function CollectionsPage() {
     <div className="flex flex-col min-h-screen bg-white text-zinc-950 font-sans antialiased">
       <Header />
 
-      <main className="max-w-[1600px] mx-auto px-6 py-10 w-full flex-1">
+      <main className="max-w-(--site-max) mx-auto px-6 py-10 w-full flex-1">
         {/* BREADCRUMB */}
         <nav
           aria-label="Breadcrumb"

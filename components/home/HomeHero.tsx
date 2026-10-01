@@ -76,7 +76,7 @@ export default function HomeHero({ slides, rotationInterval = 0, highlight }: Ho
           // stacked in two auto rows) to stretch to fill it, which the copy
           // row's `justify-center` turned into a large blank gap below the
           // button rather than a shorter, tighter section.
-          className="grid overflow-hidden rounded-[26px] bg-sig-card shadow-sig lg:min-h-[520px] lg:grid-cols-[1fr_1.02fr] lg:rounded-sig-lg"
+          className="grid overflow-hidden rounded-[26px] bg-sig-card shadow-sig lg:min-h-[520px] 3xl:min-h-[640px] lg:grid-cols-[1fr_1.02fr] lg:rounded-sig-lg"
           onMouseEnter={() => setPaused(true)}
           onMouseLeave={() => setPaused(false)}
           onFocusCapture={() => setPaused(true)}

@@ -433,7 +433,7 @@ export default async function CategoryPage({ params, searchParams }: CategoryPag
               {/* Only the lower strip is darkened — enough to keep the title
                   legible without washing out the artwork above it. */}
               <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/10 to-transparent" />
-              <div className="absolute inset-x-0 bottom-0 z-10 mx-auto w-full max-w-[1600px] px-6 pb-8 sm:pb-12">
+              <div className="absolute inset-x-0 bottom-0 z-10 mx-auto w-full max-w-(--site-max) px-6 pb-8 sm:pb-12">
                 <CategoryBreadcrumb trail={breadcrumbTrail} current={category.name} dark />
                 <h1 className="mb-3 text-4xl font-extrabold uppercase leading-none tracking-tight text-white sm:text-6xl">
                   {category.name}
@@ -449,13 +449,13 @@ export default async function CategoryPage({ params, searchParams }: CategoryPag
             {/* Banner caption — below the artwork rather than over it: the
                 lower strip already carries the title and count. */}
             {categoryImageCaption(category.bannerImageCaption) && (
-              <p className="mx-auto w-full max-w-[1600px] px-6 pt-3 text-xs font-light leading-relaxed text-zinc-500">
+              <p className="mx-auto w-full max-w-(--site-max) px-6 pt-3 text-xs font-light leading-relaxed text-zinc-500">
                 {categoryImageCaption(category.bannerImageCaption)}
               </p>
             )}
           </>
         ) : (
-          <section className="mx-auto w-full max-w-[1600px] px-6 pb-4 pt-10">
+          <section className="mx-auto w-full max-w-(--site-max) px-6 pb-4 pt-10">
             <CategoryBreadcrumb trail={breadcrumbTrail} current={category.name} />
             {/* A step down from the banner's size: over artwork the title has
                 a whole photograph to hold its own against, on a white page it
@@ -478,7 +478,7 @@ export default async function CategoryPage({ params, searchParams }: CategoryPag
           so with no images uploaded the strip simply doesn't render. */}
       {category.parent && category.children.some((c) => c.image) && (
         <div className="border-b border-zinc-100">
-          <div className="mx-auto max-w-[1600px] px-6 py-6">
+          <div className="mx-auto max-w-(--site-max) px-6 py-6">
             <div className="flex gap-4 overflow-x-auto scrollbar-none pb-1">
               {category.children.map((sub) => (
                 <Link
@@ -509,7 +509,7 @@ export default async function CategoryPage({ params, searchParams }: CategoryPag
         </div>
       )}
 
-      <main className="max-w-[1600px] mx-auto px-6 py-10 w-full flex-1">
+      <main className="max-w-(--site-max) mx-auto px-6 py-10 w-full flex-1">
 
         {/* One column now. Browsing sideways used to be a sidebar of category
             links; it is the drawer's Category facet instead, which is where

@@ -34,9 +34,17 @@ interface BestSellersProps {
 
 type Gender = "men" | "women";
 
+/** Show a card only when it falls within two rows at the current column count. */
+function twoRowVisibility(i: number) {
+  if (i < 8) return "";
+  if (i < 10) return "hidden xl:block";
+  if (i < 12) return "hidden 3xl:block";
+  return "hidden 4xl:block";
+}
+
 /**
  * The best-seller row, as a grid rather than the horizontal scroller it used to
- * be. Two rows of four on a desktop: the reference lays this section out as a
+ * be. Two rows at the shared per-screen count: the reference lays this section out as a
  * static grid, and a scroller hides most of its stock behind a gesture on the
  * one section of the page where the products have earned their place.
  */
@@ -93,7 +101,10 @@ export default function BestSellers({ products }: BestSellersProps) {
   }
 
   // Two full rows of the four-column grid.
-  const visibleProducts = filteredProducts.slice(0, 8);
+  // Two full rows at the shared per-screen count (4 / 5 / 6 / 7 per row), so
+  // up to 14 are rendered; cards beyond two rows at the current breakpoint
+  // stay hidden (see twoRowVisibility).
+  const visibleProducts = filteredProducts.slice(0, 14);
 
   return (
     <section className="bg-sig-cream pb-12 pt-2.5 lg:pb-[70px]">
@@ -121,13 +132,13 @@ export default function BestSellers({ products }: BestSellersProps) {
         </SigSectionHead>
 
         {/* Re-mounted on tab change so the staggered reveal replays. */}
-        <div key={activeTab} className="grid grid-cols-2 gap-4 lg:grid-cols-4 lg:gap-5">
+        <div key={activeTab} className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-5 3xl:grid-cols-6 4xl:grid-cols-7 gap-4 lg:gap-5">
           {visibleProducts.map((prod, i) => (
-            <div key={prod.id} className="at-card-up" style={{ animationDelay: `${i * 60}ms` }}>
+            <div key={prod.id} className={`at-card-up ${twoRowVisibility(i)}`} style={{ animationDelay: `${i * 60}ms` }}>
               <ProductCard
                 product={prod}
                 idPrefix="bestseller"
-                sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
+                sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, (max-width: 1800px) 25vw, 17vw"
               />
             </div>
           ))}

@@ -92,7 +92,7 @@ export default function AnnouncementBar({ config }: { config: AnnouncementBarCon
     >
       {/* Every slide is rendered and cross-faded in place. The tallest one sets
           the height, so the header below never jumps as the copy changes. */}
-      <div className="relative mx-auto grid max-w-[1600px] place-items-center px-10 py-2.5">
+      <div className="relative mx-auto grid max-w-(--site-max) place-items-center px-10 py-2.5">
         {slides.map((slide, i) => {
           const body = (
             <span className="block text-center text-[11px] font-semibold uppercase tracking-[0.12em]">

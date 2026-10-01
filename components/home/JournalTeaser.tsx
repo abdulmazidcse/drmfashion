@@ -10,8 +10,8 @@ import JournalCard, { type JournalCardPost } from "../journal/JournalCard";
  */
 export default function JournalTeaser({ posts }: { posts: JournalCardPost[] }) {
   return (
-    <section className="w-full py-[15px] md:py-5">
-      <div className="mx-auto max-w-[1600px] px-6 lg:px-8">
+    <section className="mx-auto w-full max-w-(--site-max) py-[15px] md:py-5">
+      <div className="mx-auto max-w-(--site-max) px-6 lg:px-8">
         <div className="mb-7 flex flex-col items-start gap-2 md:flex-row md:items-end md:justify-between">
           <div className="flex flex-col gap-2">
             <SectionHeading title="From The Journal" highlight="The Journal" highlightStyle="muted" />

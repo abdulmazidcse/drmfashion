@@ -27,7 +27,7 @@ export default function HeroHighlightCard({ highlight }: { highlight: HeroHighli
   return (
     <Link
       href={`/product/${highlight.slug}`}
-      className="absolute bottom-5 left-5 flex items-center gap-3 rounded-[18px] bg-white/95 px-[18px] py-[15px] shadow-sig backdrop-blur-[8px] transition-transform duration-200 hover:-translate-y-0.5 sm:bottom-[26px] sm:left-[26px]"
+      className="absolute bottom-4 left-4 right-4 flex max-w-max items-center gap-3 rounded-[18px] bg-white/95 px-3.5 py-3 sm:right-auto sm:px-[18px] sm:py-[15px] shadow-sig backdrop-blur-[8px] transition-transform duration-200 hover:-translate-y-0.5 sm:bottom-[26px] sm:left-[26px]"
     >
       <span className="relative block h-11 w-11 shrink-0 overflow-hidden rounded-xl bg-sig-copper-50">
         <Image
@@ -38,8 +38,8 @@ export default function HeroHighlightCard({ highlight }: { highlight: HeroHighli
           className="object-cover"
         />
       </span>
-      <span className="block">
-        <b className="block max-w-[22ch] truncate text-[13px] font-extrabold text-sig-ink">
+      <span className="block min-w-0">
+        <b className="block truncate sm:max-w-[22ch] text-[13px] font-extrabold text-sig-ink">
           {highlight.title}
         </b>
         <span className="text-xs text-sig-soft">

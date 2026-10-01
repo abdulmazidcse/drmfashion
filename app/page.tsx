@@ -770,7 +770,10 @@ export default async function Home() {
 
     brands: (
       <ScrollReveal>
-        <section className="w-full grid grid-cols-1 md:grid-cols-2 bg-zinc-950 text-white min-h-[50vh] overflow-hidden">
+        <section className="w-full bg-zinc-950 text-white overflow-hidden">
+          {/* Band stays full-bleed; the content keeps to the same 1600px column
+              as the header, so on a wide monitor it does not drift to the edges. */}
+          <div className="mx-auto grid max-w-(--site-max) grid-cols-1 md:grid-cols-2 min-h-[min(50vh,560px)]">
           <div className="flex flex-col justify-center p-8 sm:p-24 max-w-xl">
             <span className="text-zinc-400 text-xs font-bold tracking-widest uppercase mb-3 block">Our Brand Collection</span>
             <h2 className="at-heading text-at-subheading mb-4">
@@ -805,6 +808,7 @@ export default async function Home() {
                 <span className="text-zinc-600 font-bold uppercase tracking-widest text-xs">Premium Fashion</span>
               </div>
             )}
+          </div>
           </div>
         </section>
       </ScrollReveal>

@@ -29,7 +29,7 @@ export default function CustomerReviews({ reviews }: CustomerReviewsProps) {
           ctaHref="/reviews"
         />
 
-        <div className="grid gap-[18px] md:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-[18px] md:grid-cols-2 lg:grid-cols-3 3xl:grid-cols-4">
           {visible.map((review, i) => (
             <div key={review.id} className="at-card-up" style={{ animationDelay: `${i * 60}ms` }}>
               <ReviewCard review={review} />

@@ -45,7 +45,7 @@ export default function SummerStyles() {
       </div>
 
       {/* Grid Content with transitions */}
-      <div key={activeGender} className="grid grid-cols-2 md:grid-cols-4 gap-6 lg:gap-8 xl:gap-10 w-full max-w-[1600px] mx-auto animate-fade-up">
+      <div key={activeGender} className="grid grid-cols-2 md:grid-cols-4 gap-6 lg:gap-8 xl:gap-10 w-full max-w-(--site-max) mx-auto animate-fade-up">
         {data[activeGender].map((item, idx) => (
           <Link href={item.link} key={idx} className="group cursor-pointer flex flex-col items-center">
             <div className="aspect-[3/4] w-full bg-zinc-100 overflow-hidden mb-6 relative border border-zinc-100 rounded-sm">
