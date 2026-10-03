@@ -6,6 +6,7 @@ import { getWishlist, toggleWishlist, WishlistItem } from "@/lib/wishlist";
 import { Heart, Trash2, ArrowRight } from "lucide-react";
 import Header from "@/components/HeaderClient";
 import Footer from "@/components/Footer";
+import { PRODUCT_GRID_COLS } from "@/lib/collectionView";
 
 export default function WishlistPage() {
   const [items, setItems] = useState<WishlistItem[]>([]);
@@ -50,7 +51,7 @@ export default function WishlistPage() {
             </Link>
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+          <div className={`grid ${PRODUCT_GRID_COLS} gap-6`}>
             {items.map((item) => (
               <div key={item.productId} className="group relative border border-zinc-100 flex flex-col">
                 <button

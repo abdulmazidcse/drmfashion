@@ -641,6 +641,7 @@ export default function HeaderClient({
               href="/cart"
               className={`${sigIcon} relative`}
               aria-label="Cart"
+              data-cart-icon
             >
               <svg
                 className="w-5 h-5"

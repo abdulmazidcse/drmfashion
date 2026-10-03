@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { Loader2, X } from "lucide-react"
 import api from "@/lib/axios"
+import { MediaLibraryButton } from "@/components/admin/MediaLibraryPicker"
 
 export const inp = "w-full px-3 py-2 text-sm border border-zinc-200 rounded-md bg-white focus:outline-none focus:border-zinc-900 transition-colors"
 
@@ -95,6 +96,12 @@ export function ImageField({ label, value, onChange, hint }: { label: string; va
           {uploading ? "Uploading…" : value ? "Replace image" : "Upload image"}
           <input type="file" accept="image/*" className="hidden" onChange={handleFile} disabled={uploading} />
         </label>
+        <MediaLibraryButton
+          disabled={uploading}
+          onSelect={([url]) => onChange(url)}
+          label="Choose from Media Library"
+          className="flex w-full items-center justify-center gap-2 rounded-md border border-zinc-200 py-2.5 text-xs font-bold text-zinc-500 transition-colors hover:border-zinc-400 hover:text-zinc-700 disabled:opacity-50"
+        />
         {hint && <p className="text-[10px] text-zinc-400">{hint}</p>}
       </div>
     </Field>

@@ -10,6 +10,7 @@ import Header from "@/components/Header"
 import Footer from "@/components/Footer"
 import ProductCard from "@/components/ProductCard"
 import { Stars } from "@/components/reviews/ReviewCard"
+import { PRODUCT_GRID_COLS } from "@/lib/collectionView"
 
 export const revalidate = 300
 
@@ -166,7 +167,7 @@ export default async function ReviewsPage({ searchParams }: { searchParams: Sear
               </Link>
             </div>
           ) : (
-            <div className="grid grid-cols-2 gap-x-5 gap-y-10 lg:grid-cols-3 xl:grid-cols-4">
+            <div className={`grid ${PRODUCT_GRID_COLS} gap-x-5 gap-y-10`}>
               {items.map((item, i) => (
                 <div key={item.productId} className="flex flex-col">
                   <ProductCard

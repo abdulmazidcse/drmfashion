@@ -1,9 +1,11 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
+import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
 import { addToCart, getCart } from "@/lib/cart";
+import { flyToCart } from "@/lib/flyToCart";
 import { existsWith, findVariant, sortLengths, sortSizes } from "@/lib/variants";
 import { toggleWishlist, isInWishlist } from "@/lib/wishlist";
 import { useCurrency } from "@/providers/CurrencyProvider";
@@ -219,6 +221,9 @@ export default function ProductCard({
   const isLowStock = totalStock > 0 && totalStock <= 5;
   const isGiftCard = product.category?.slug === 'gift-cards' || product.category?.name === 'Gift Cards';
 
+  // Launch point for the add-to-bag flight (see flyToCart).
+  const thumbRef = useRef<HTMLDivElement>(null);
+
   const handleAddToCart = (overrideSize?: string, overrideLength?: string) => {
     const finalSize = overrideSize !== undefined ? overrideSize : (selectedSize || uniqueSizes[0] || "");
     const finalLength = overrideLength !== undefined ? overrideLength : (selectedLength || uniqueLengths[0] || "");
@@ -259,6 +264,8 @@ export default function ProductCard({
       length: finalLength,
       price: activePrice,
     });
+    // The photo on screen (current colourway) flies from the card to the bag.
+    flyToCart(thumbRef.current);
 
     setAdded(true);
     // Reset after 1.8 s
@@ -275,7 +282,7 @@ export default function ProductCard({
       onMouseLeave={() => setShowQuickAdd(false)}
     >
       {/* ── Thumbnail ── */}
-      <div className="relative aspect-[4/5] bg-sig-copper-50 w-full overflow-hidden">
+      <div ref={thumbRef} className="relative aspect-[4/5] bg-sig-copper-50 w-full overflow-hidden">
         <Link href={`/product/${product.slug}`} onClick={reportSelect} className="absolute inset-0 block z-0">
           <Image
             src={formatImageUrl(gallery[imageIndex] ?? product.thumbnail)}
@@ -370,9 +377,9 @@ export default function ProductCard({
                 e.stopPropagation();
                 setImageIndex((i) => (i - 1 + gallery.length) % gallery.length);
               }}
-              className="absolute top-1/2 -translate-y-1/2 left-3 z-10 opacity-0 group-hover:opacity-100 transition-opacity duration-300 text-white text-2xl font-light cursor-pointer select-none bg-black/10 hover:bg-black/30 w-8 h-8 rounded-full flex items-center justify-center"
+              className="absolute top-1/2 -translate-y-1/2 left-3 z-10 opacity-0 group-hover:opacity-100 transition-opacity duration-300 text-white cursor-pointer select-none bg-black/10 hover:bg-black/30 w-8 h-8 rounded-full grid place-items-center"
             >
-              &lt;
+              <ChevronLeft className="h-5 w-5" strokeWidth={1.75} aria-hidden />
             </button>
             <button
               type="button"
@@ -382,9 +389,9 @@ export default function ProductCard({
                 e.stopPropagation();
                 setImageIndex((i) => (i + 1) % gallery.length);
               }}
-              className="absolute top-1/2 -translate-y-1/2 right-3 z-10 opacity-0 group-hover:opacity-100 transition-opacity duration-300 text-white text-2xl font-light cursor-pointer select-none bg-black/10 hover:bg-black/30 w-8 h-8 rounded-full flex items-center justify-center"
+              className="absolute top-1/2 -translate-y-1/2 right-3 z-10 opacity-0 group-hover:opacity-100 transition-opacity duration-300 text-white cursor-pointer select-none bg-black/10 hover:bg-black/30 w-8 h-8 rounded-full grid place-items-center"
             >
-              &gt;
+              <ChevronRight className="h-5 w-5" strokeWidth={1.75} aria-hidden />
             </button>
           </>
         )}
@@ -592,9 +599,9 @@ export default function ProductCard({
                   setShowQuickAdd(true);
                 }
               }}
-              className="grid h-8 w-8 shrink-0 cursor-pointer place-items-center rounded-full bg-sig-copper-50 text-[17px] sm:h-[38px] sm:w-[38px] sm:text-[19px] font-bold leading-none text-sig-copper-700 transition-colors group-hover:bg-sig-copper-600 group-hover:text-white"
+              className="grid h-8 w-8 shrink-0 cursor-pointer place-items-center rounded-full bg-sig-copper-50 sm:h-[38px] sm:w-[38px] text-sig-copper-700 transition-colors group-hover:bg-sig-copper-600 group-hover:text-white"
             >
-              +
+              <Plus className="h-4 w-4 sm:h-[18px] sm:w-[18px]" strokeWidth={2.5} aria-hidden />
             </button>
           )}
         </div>

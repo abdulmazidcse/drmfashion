@@ -23,16 +23,27 @@ export const DEFAULT_VIEW: CollectionView = "default"
  * Tailwind cannot see a class it has to build at runtime, so the grid classes
  * are written out per density rather than interpolated from `cols`.
  */
+/**
+ * Products per row, shared by every product grid on the storefront (home page
+ * sections, shop, men/women, category, collection, wishlist, …) so a given
+ * screen shows the same count everywhere: 2 phone · 4 tablet · 5 from 1280px ·
+ * 6 from 1800px · 7 from 2200px.
+ */
+export const PRODUCT_GRID_COLS = "grid-cols-2 md:grid-cols-4 xl:grid-cols-5 3xl:grid-cols-6 4xl:grid-cols-7"
+
+/** `sizes` matching PRODUCT_GRID_COLS. */
+export const PRODUCT_GRID_IMAGE_SIZES = "(max-width: 767px) 50vw, (max-width: 1279px) 25vw, (max-width: 1799px) 20vw, 16vw"
+
 export const VIEW_GRID_CLASS: Record<CollectionView, string> = {
   large: "grid-cols-1 sm:grid-cols-2 gap-5 sm:gap-6",
-  default: "grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6",
+  default: "grid-cols-2 md:grid-cols-4 xl:grid-cols-5 3xl:grid-cols-6 4xl:grid-cols-7 gap-4 sm:gap-6",
   compact: "grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-6 gap-2 sm:gap-3",
 }
 
 /** `sizes` for the card image, which changes with how many fit across. */
 export const VIEW_IMAGE_SIZES: Record<CollectionView, string> = {
   large: "(max-width: 640px) 100vw, 45vw",
-  default: "(max-width: 640px) 50vw, (max-width: 1280px) 33vw, 25vw",
+  default: "(max-width: 767px) 50vw, (max-width: 1279px) 25vw, (max-width: 1799px) 20vw, 16vw",
   compact: "(max-width: 640px) 50vw, (max-width: 1280px) 25vw, 16vw",
 }
 

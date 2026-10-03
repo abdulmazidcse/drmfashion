@@ -9,6 +9,7 @@ import { hasVariant, firstAvailableSize, sortLengths, sortSizes } from "@/lib/va
 import MeasureFigure, { type FigureGender } from "@/components/MeasureFigure";
 import { useCurrency } from "@/providers/CurrencyProvider";
 import { addToCart, getCart } from "@/lib/cart";
+import { flyToCart } from "@/lib/flyToCart";
 import { toggleWishlist, isInWishlist } from "@/lib/wishlist";
 import { useSettings } from "@/providers/SettingsProvider";
 import { parseHeightsGuide, HEIGHTS_GUIDE_SETTING_KEY } from "@/lib/heightsGuide";
@@ -1232,6 +1233,12 @@ export default function ProductDetailsClient({ product, categories, relatedProdu
         }
         : {}),
     });
+    // Thumbnail flies from the Add button to the header bag. 700ms, so it
+    // lands just before the 800ms hop to /cart below.
+    flyToCart(
+      document.querySelector("[data-add-to-bag]"),
+      formatImageUrl(product.thumbnail || "")
+    );
     setAddedToBag(true);
     setTimeout(() => {
       router.push("/cart");
@@ -1650,6 +1657,7 @@ export default function ProductDetailsClient({ product, categories, relatedProdu
               <div className="mt-6 flex gap-2">
                 <button
                   onClick={() => handleAddToBag()}
+                  data-add-to-bag
                   disabled={addedToBag || !canAddToBag}
                   className={`flex h-[54px] flex-1 items-center justify-center gap-2 rounded-[2px] px-4 text-[14px] font-semibold leading-[14px] tracking-[0.02em] transition-colors ${
                     !canAddToBag
@@ -2062,9 +2070,11 @@ export default function ProductDetailsClient({ product, categories, relatedProdu
             style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
           >
             {(activeRelatedTab === "recommended" ? relatedProducts : recentlyViewed)
-              .slice(0, 5)
+              .slice(0, 12)
               .map((prod) => (
-                <div key={prod.id} className="w-[260px] min-w-[260px] flex-shrink-0 sm:w-[300px] sm:min-w-[300px]">
+                // Same per-screen count as every other product grid (see
+                // PRODUCT_GRID_COLS): 2 / 4 / 5 / 6 / 7 whole cards, gap-5.
+                <div key={prod.id} className="shrink-0 w-[calc((100%-20px)/2)] md:w-[calc((100%-60px)/4)] xl:w-[calc((100%-80px)/5)] 3xl:w-[calc((100%-100px)/6)] 4xl:w-[calc((100%-120px)/7)]">
                   <ProductCard product={prod} idPrefix="related" />
                 </div>
               ))}

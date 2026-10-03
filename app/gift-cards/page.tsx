@@ -8,6 +8,7 @@ import Footer from "@/components/Footer"
 import { getStoreName } from "@/lib/settings"
 import { PRODUCT_CARD_SELECT } from "@/lib/productSelect"
 import { footerCategories } from "@/lib/utils"
+import { PRODUCT_GRID_COLS } from "@/lib/collectionView"
 
 export const revalidate = 300
 
@@ -151,7 +152,7 @@ export default async function GiftCardsPage() {
               </Link>
             </div>
           ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 gap-6 sm:gap-8">
+            <div className={`grid ${PRODUCT_GRID_COLS} gap-6 sm:gap-8`}>
               {products.map((product, idx) => (
                 <div key={product.id} className="relative group">
                   {/* First grid row is above the fold — opt it out of lazy loading. */}

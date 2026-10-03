@@ -11,6 +11,7 @@ import { getStoreName } from "@/lib/settings";
 import { PRODUCT_CARD_SELECT } from "@/lib/productSelect";
 import { footerCategories } from "@/lib/utils";
 import { getGenderCategory } from "@/lib/categoryTree";
+import { PRODUCT_GRID_COLS } from "@/lib/collectionView";
 
 export async function generateMetadata() {
   const storeName = await getStoreName();
@@ -249,7 +250,7 @@ export default async function MenPage() {
         ) : (
           <>
           <ViewItemListTracker listId="men" listName="Men" products={allProducts} />
-          <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 3xl:grid-cols-5 4xl:grid-cols-6 gap-4 sm:gap-6">
+          <div className={`grid ${PRODUCT_GRID_COLS} gap-4 sm:gap-6`}>
             {allProducts.map((product, idx) => (
               // First grid row is above the fold — opt it out of lazy loading.
 

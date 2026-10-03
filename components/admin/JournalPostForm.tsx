@@ -9,6 +9,7 @@ import Swal from "sweetalert2"
 import api from "@/lib/axios"
 import { slugify } from "@/lib/journal"
 import JournalProductPicker from "@/components/admin/JournalProductPicker"
+import { MediaLibraryButton } from "@/components/admin/MediaLibraryPicker"
 
 const RichTextEditor = dynamic(() => import("@/components/admin/RichTextEditor"), {
   ssr: false,
@@ -365,6 +366,12 @@ export default function JournalPostForm({
                 <input type="file" accept="image/*" onChange={handleCoverUpload} className="hidden" />
               </label>
             )}
+            <MediaLibraryButton
+              disabled={uploading}
+              onSelect={([url]) => set("coverImage", url)}
+              label={values.coverImage ? "Replace from Media Library" : "Choose from Media Library"}
+              className="mt-2 flex w-full items-center justify-center gap-2 rounded-lg border border-zinc-200 py-2 text-[10px] font-bold uppercase tracking-widest text-zinc-500 transition-colors hover:border-zinc-950 hover:text-zinc-800 disabled:opacity-50"
+            />
             <p className="mt-2 text-[11px] text-zinc-400">Recommended 1600×900px, max 2MB.</p>
           </div>
 

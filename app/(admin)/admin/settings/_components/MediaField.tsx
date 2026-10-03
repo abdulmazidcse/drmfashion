@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { useSettingsForm } from "./SettingsFormContext"
 import { isExternalVideoUrl, parseYouTubeId, youtubeThumbnailUrl } from "@/lib/externalVideo"
+import { MediaLibraryButton } from "@/components/admin/MediaLibraryPicker"
 
 /**
  * Thumbnail + Upload + Remove, in place of a raw URL box.
@@ -110,6 +111,13 @@ export default function MediaField({
                 )}
                 <span className="text-xs font-bold">{value ? "Replace" : "Upload"}</span>
               </label>
+
+              {/* Second route in: reuse a file already in storage. */}
+              <MediaLibraryButton
+                accept={kind}
+                disabled={uploading}
+                onSelect={([url]) => onChange(url)}
+              />
 
               {allowUrl && (
                 <button
