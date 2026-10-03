@@ -252,7 +252,26 @@ export async function GET(req: NextRequest) {
     }
 
     const listQuery =
-      view === "picker"
+      view === "table"
+        ? // Admin → Products list: only what a row shows. The full shape
+          // carried every description, brand blurb and size-chart table —
+          // ~680 KB for 20 rows, almost none of it on screen.
+          prisma.product.findMany({
+            ...listArgs,
+            select: {
+              id: true,
+              title: true,
+              productCode: true,
+              thumbnail: true,
+              basePrice: true,
+              published: true,
+              category: { select: { id: true, name: true, slug: true } },
+              brand: { select: { id: true, name: true } },
+              sizeChart: { select: { id: true, name: true } },
+              variants: { select: { id: true, stock: true } },
+            },
+          })
+        : view === "picker"
         ? prisma.product.findMany({
             ...listArgs,
             select: { id: true, title: true, thumbnail: true },

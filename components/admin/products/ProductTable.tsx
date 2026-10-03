@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react"
 import Link from "next/link"
+import NextImage from "next/image"
+import { formatImageUrl } from "@/lib/utils"
 import { Edit, Trash2, Layers, Image, CheckCircle, HelpCircle, Loader2, Eye, EyeOff, X, AlertTriangle, Gift, MoreVertical } from "lucide-react"
 import api from "@/lib/axios"
 import { useCurrency } from "@/providers/CurrencyProvider"
@@ -126,10 +128,12 @@ export default function ProductTable({ categorySlug }: { categorySlug?: string }
       const params = new URLSearchParams({
         page: String(currentPage),
         limit: String(itemsPerPage),
-        search: searchQuery,
+        search: debouncedSearch,
         categoryId: categoryFilter,
         brandId: brandFilter,
         categorySlug: categorySlug || "",
+        // Slim row shape — see the "table" view in app/api/admin/products.
+        view: "table",
       })
       const res = await api.get(`/admin/products?${params.toString()}`)
       setProducts(res.data.data || res.data)
@@ -144,13 +148,22 @@ export default function ProductTable({ categorySlug }: { categorySlug?: string }
     }
   }
 
-  // Debounced fetch
+  // Only typing in search waits (so each keystroke is not a request); first
+  // load, paging and the filter dropdowns fetch straight away.
+  const [debouncedSearch, setDebouncedSearch] = useState(searchQuery)
   useEffect(() => {
-    const handler = setTimeout(() => {
-      fetchProducts()
-    }, 500)
+    if (searchQuery === debouncedSearch) return
+    const handler = setTimeout(() => setDebouncedSearch(searchQuery), 400)
     return () => clearTimeout(handler)
-  }, [currentPage, searchQuery, categoryFilter, brandFilter, categorySlug])
+  }, [searchQuery, debouncedSearch])
+
+  useEffect(() => {
+    // The fetch flips `loading` before its await — the start of a request,
+    // not a render loop.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    fetchProducts()
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- fetchProducts reads these
+  }, [currentPage, debouncedSearch, categoryFilter, brandFilter, categorySlug])
 
   // FETCH PRODUCT DETAILS FOR MODAL
   async function showDetails(id: string) {
@@ -310,9 +323,14 @@ export default function ProductTable({ categorySlug }: { categorySlug?: string }
                     <TableCell className="py-4 pl-4">
                       <div className="flex items-center gap-4">
                         <div className="w-16 h-16 rounded-lg bg-muted border border-border overflow-hidden shrink-0 flex items-center justify-center transition duration-300">
-                          <img
-                            src={product.thumbnail}
+                          {/* Resized by next/image: the stored file is the full
+                              upload (250–500 KB each), shown here at 64 px. */}
+                          <NextImage
+                            src={formatImageUrl(product.thumbnail)}
                             alt={product.title}
+                            width={64}
+                            height={64}
+                            sizes="64px"
                             className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
                           />
                         </div>
