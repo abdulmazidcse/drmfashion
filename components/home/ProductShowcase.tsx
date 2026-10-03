@@ -2,12 +2,9 @@
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import Image from "next/image";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import SectionHeading from "./SectionHeading";
-import { useCurrency } from "@/providers/CurrencyProvider";
-import { productImageAlt } from "@/lib/imageMeta";
-import { trackSelectItem } from "@/lib/analytics";
+import ProductCard from "@/components/ProductCard";
 
 interface Variant {
   id: string;
@@ -26,7 +23,7 @@ interface Product {
   thumbnail: string;
   basePrice: number;
   discountPrice: number | null;
-  featured?: boolean;
+  featured: boolean;
   brand?: { name: string } | null;
   category?: { name: string; slug: string } | null;
   variants: Variant[];
@@ -44,11 +41,9 @@ interface ProductShowcaseProps {
 }
 
 /**
- * An editorial strip of products under a headline ("Our Bestselling Jeans").
- *
- * Deliberately not <ProductCard>: this row is a shop-window, so the card is
- * just the photograph, the name, the colourway line and the price — no quick
- * add, no wishlist heart, no badges competing with the picture.
+ * An editorial strip of products under a headline ("Our Bestselling Jeans"),
+ * using the shared <ProductCard> so hover swatches, photo arrows and quick
+ * add work here exactly as in the other product rows.
  */
 export default function ProductShowcase({
   title,
@@ -59,7 +54,6 @@ export default function ProductShowcase({
   products,
   listId = "showcase",
 }: ProductShowcaseProps) {
-  const { formatPrice } = useCurrency();
   const scrollRef = useRef<HTMLDivElement>(null);
   const [canLeft, setCanLeft] = useState(false);
   // Assumed true until layout can be measured: the server cannot know whether
@@ -163,90 +157,18 @@ export default function ProductShowcase({
           className="no-scrollbar flex snap-x snap-mandatory gap-[5px] overflow-x-auto scroll-smooth"
           style={{ scrollbarWidth: "none" }}
         >
-          {products.map((product, i) => {
-            const colors = Array.from(
-              new Set(product.variants.map((v) => v.color).filter(Boolean))
-            );
-            const primaryColor = colors[0] || "";
-            const extraColors = colors.length - 1;
-            const colorLabel = primaryColor
-              ? extraColors > 0
-                ? `${primaryColor}, +${extraColors} ${extraColors === 1 ? "color" : "colors"}`
-                : primaryColor
-              : "";
-
-            // The second shot is whatever colourway photo the product carries
-            // first — enough for a hover swap, and it costs no extra query.
-            const hoverImage =
-              product.variants.find((v) => v.image?.trim() && v.image !== product.thumbnail)?.image ||
-              null;
-
-            const price = product.discountPrice ?? product.basePrice;
-            const hasDiscount =
-              product.discountPrice != null && product.discountPrice < product.basePrice;
-
-            return (
-              <Link
-                key={product.id}
-                href={`/product/${product.slug}`}
-                id={`${listId}-${product.id}`}
-                onClick={() =>
-                  trackSelectItem(listId, title, {
-                    item_id: product.id,
-                    item_name: product.title,
-                    price,
-                    item_brand: product.brand?.name,
-                    item_category: product.category?.name,
-                  })
-                }
-                className="at-card-up group flex shrink-0 snap-start flex-col w-[calc((100%-5px)/2)] md:w-[calc((100%-15px)/4)] xl:w-[calc((100%-20px)/5)] 3xl:w-[calc((100%-25px)/6)] 4xl:w-[calc((100%-30px)/7)]"
-                style={{ animationDelay: `${i * 60}ms` }}
-              >
-                <div className="relative aspect-3/4 w-full overflow-hidden bg-[#F0F0F0]">
-                  <Image
-                    src={product.thumbnail}
-                    alt={productImageAlt({
-                      title: product.title,
-                      brand: product.brand?.name,
-                      color: primaryColor,
-                    })}
-                    fill
-                    sizes="(max-width: 768px) 45vw, (max-width: 1280px) 24vw, 19vw"
-                    className={`object-cover transition-opacity duration-500 ${
-                      hoverImage ? "group-hover:opacity-0" : ""
-                    }`}
-                  />
-                  {hoverImage && (
-                    <Image
-                      src={hoverImage}
-                      alt=""
-                      aria-hidden
-                      fill
-                      sizes="(max-width: 768px) 45vw, (max-width: 1280px) 24vw, 19vw"
-                      className="object-cover opacity-0 transition-opacity duration-500 group-hover:opacity-100"
-                    />
-                  )}
-                </div>
-
-                <div className="flex flex-col gap-1 px-1 pt-3">
-                  <h3 className="text-[14px] font-bold leading-snug text-at-ink group-hover:underline">
-                    {product.title}
-                  </h3>
-                  {colorLabel && (
-                    <p className="text-[13px] font-light text-at-muted">{colorLabel}</p>
-                  )}
-                  <p className="flex flex-wrap items-baseline gap-x-2 text-[14px] font-bold text-at-ink">
-                    {formatPrice(price)}
-                    {hasDiscount && (
-                      <span className="text-[12px] font-light text-at-muted line-through">
-                        {formatPrice(product.basePrice)}
-                      </span>
-                    )}
-                  </p>
-                </div>
-              </Link>
-            );
-          })}
+          {products.map((product, i) => (
+            // The same card as every other product row (colour swatches on
+            // hover, photo arrows, the "+" quick add), so the sections behave
+            // alike; only the row around it is this component's own.
+            <div
+              key={product.id}
+              className="at-card-up shrink-0 snap-start w-[calc((100%-5px)/2)] md:w-[calc((100%-15px)/4)] xl:w-[calc((100%-20px)/5)] 3xl:w-[calc((100%-25px)/6)] 4xl:w-[calc((100%-30px)/7)]"
+              style={{ animationDelay: `${i * 60}ms` }}
+            >
+              <ProductCard product={product} idPrefix={listId} listId={listId} listName={title} />
+            </div>
+          ))}
         </div>
       </div>
     </section>
