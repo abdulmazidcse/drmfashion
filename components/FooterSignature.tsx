@@ -6,6 +6,7 @@ import { MapPin } from "lucide-react";
 import FooterEmailSignup from "./FooterEmailSignup";
 import FooterSocialIcons from "./FooterSocialIcons";
 import { useSettings } from "@/providers/SettingsProvider";
+import { CONTACT_PAGE_SETTING_KEY, parseContactPage } from "@/lib/contactPage";
 
 interface Category {
   id: string;
@@ -34,6 +35,10 @@ export default function FooterSignature({ categories }: { categories: Category[]
 
   const logoSrc = settings["brand_logo_url"] || "/logo.svg";
   const logoIsSvg = /\.svg(\?|$)/i.test(logoSrc);
+
+  // Office address + map link, shared with the Contact page and edited in
+  // Admin → Settings → Brand → Contact Page.
+  const contact = parseContactPage(settings[CONTACT_PAGE_SETTING_KEY], { legacy: settings });
 
   const tagline =
     settings["brand_slogan"]?.trim() ||
@@ -132,15 +137,17 @@ export default function FooterSignature({ categories }: { categories: Category[]
               <p className="mt-[18px] max-w-[32ch] text-sm leading-[1.75] text-sig-soft">
                 {tagline}
               </p>
-              <a
-                href="https://maps.app.goo.gl/SFniRK51kLArf1Sh9"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="mt-4 flex max-w-[32ch] items-start gap-2 text-sm leading-[1.6] text-sig-soft transition-colors hover:text-sig-copper-700"
-              >
-                <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-sig-copper-600" />
-                <span>House #55, 3rd Floor, Eastern Mollika Lane, New Elephant Road, Dhaka-1205</span>
-              </a>
+              {contact.address && (
+                <a
+                  href={contact.mapUrl || undefined}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-4 flex max-w-[32ch] items-start gap-2 text-sm leading-[1.6] text-sig-soft transition-colors hover:text-sig-copper-700"
+                >
+                  <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-sig-copper-600" />
+                  <span>{contact.address}</span>
+                </a>
+              )}
               <div className="mt-5">
                 <FooterSocialIcons variant="signature" />
               </div>

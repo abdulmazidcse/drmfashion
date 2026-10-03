@@ -77,6 +77,12 @@ import {
   type AnnouncementSlide,
 } from "@/lib/announcementBar"
 import {
+  CONTACT_PAGE_SETTING_KEY,
+  DEFAULT_CONTACT_PAGE,
+  parseContactPage,
+  type ContactPageConfig,
+} from "@/lib/contactPage"
+import {
   DEFAULT_HOME_SECTIONS,
   HOME_SECTIONS_SETTING_KEY,
   parseHomeSections,
@@ -493,6 +499,13 @@ function useSettingsFormState() {
     })
   }
 
+  // Contact page copy + office address (lib/contactPage.ts)
+  const [contactPage, setContactPage] = useState<ContactPageConfig>(DEFAULT_CONTACT_PAGE)
+
+  function updateContactPage(patch: Partial<ContactPageConfig>) {
+    setContactPage(prev => ({ ...prev, ...patch }))
+  }
+
   // Site-wide announcement strip
   const [announcementBar, setAnnouncementBar] =
     useState<AnnouncementBarConfig>(DEFAULT_ANNOUNCEMENT_BAR)
@@ -905,6 +918,12 @@ function useSettingsFormState() {
             setTrustBadges(parseTrustBadges(res.data[TRUST_BADGES_SETTING_KEY], { keepEmpty: true }))
           }
 
+          // Always parsed: with nothing saved it yields the defaults the page
+          // already shows (plus any legacy contact_phone/address/hours).
+          setContactPage(
+            parseContactPage(res.data[CONTACT_PAGE_SETTING_KEY], { keepEmpty: true, legacy: res.data })
+          )
+
           // keepEmpty so a message the admin just added survives a reload
           // before they have typed anything into it.
           if (res.data[ANNOUNCEMENT_BAR_SETTING_KEY]) {
@@ -1253,6 +1272,10 @@ function useSettingsFormState() {
         [HOME_VIDEO_BANNERS_SETTING_KEY]: JSON.stringify(videoBanners),
         [HOME_SECTIONS_SETTING_KEY]: JSON.stringify(homeSections),
         [ANNOUNCEMENT_BAR_SETTING_KEY]: JSON.stringify(announcementBar),
+        [CONTACT_PAGE_SETTING_KEY]: JSON.stringify({
+          ...contactPage,
+          faqs: contactPage.faqs.filter((f) => f.q.trim()),
+        }),
         [HOME_ICONS_SETTING_KEY]: JSON.stringify(homeIcons),
         [TRUST_BADGES_SETTING_KEY]: JSON.stringify(trustBadges),
         [PROMO_BANNER_SETTING_KEY]: JSON.stringify(promoBanner),
@@ -1532,6 +1555,8 @@ function useSettingsFormState() {
     addTrustBadge,
     removeTrustBadge,
     moveTrustBadge,
+    contactPage,
+    updateContactPage,
     announcementBar,
     updateAnnouncementBar,
     updateAnnouncementSlide,

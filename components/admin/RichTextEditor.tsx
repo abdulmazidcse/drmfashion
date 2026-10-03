@@ -1,6 +1,7 @@
 "use client"
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
+import { MediaLibraryButton } from '@/components/admin/MediaLibraryPicker';
 import { CKEditor } from '@ckeditor/ckeditor5-react';
 import {
     ClassicEditor,
@@ -67,13 +68,15 @@ export default function RichTextEditor({
   // That's what made multi-line toolbar actions (indent/outdent, etc.)
   // seem to apply one line at a time: the selection reset after each one.
   const [seedContent] = useState(initialContent || '');
+  // Kept so the Media Library button can insert at the editor's cursor.
+  const editorRef = useRef<{ execute: (command: string, options?: unknown) => void } | null>(null);
 
   return (
     <div className="border border-zinc-200 rounded-xl overflow-hidden">
       <CKEditor
         editor={ ClassicEditor }
         data={seedContent}
-        onReady={ (editor) => onReady?.(editor) }
+        onReady={ (editor) => { editorRef.current = editor; onReady?.(editor); } }
         config={ {
           licenseKey: 'GPL',
           ...(enableImages ? { simpleUpload: { uploadUrl: '/api/upload' } } : {}),
@@ -135,6 +138,18 @@ export default function RichTextEditor({
           onChange(data);
         } }
       />
+      {enableImages && (
+        // Second way in, beside the toolbar's upload: reuse an image already
+        // in storage. Inserted at the cursor by CKEditor's own command.
+        <div className="flex justify-end border-t border-zinc-200 bg-zinc-50 px-3 py-2">
+          <MediaLibraryButton
+            multiple
+            label="Insert from Media Library"
+            onSelect={(urls) => editorRef.current?.execute('insertImage', { source: urls })}
+            className="inline-flex items-center gap-2 rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-[11px] font-bold text-zinc-600 transition hover:bg-zinc-100"
+          />
+        </div>
+      )}
       <style jsx global>{`
         .ck-editor__editable_inline {
           min-height: ${height}px;

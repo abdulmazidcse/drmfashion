@@ -4,6 +4,7 @@ import Header from "@/components/Header"
 import Footer from "@/components/Footer"
 import ContactForm from "@/components/ContactForm"
 import { getSettings, getStoreName } from "@/lib/settings"
+import { CONTACT_PAGE_SETTING_KEY, parseContactPage } from "@/lib/contactPage"
 import {
   Mail, Phone, MapPin, Clock, Package, RotateCcw, Truck, Ruler,
   ChevronDown, ChevronRight, MessageSquare, ShieldCheck,
@@ -26,38 +27,19 @@ const QUICK_LINKS = [
   { icon: Ruler, title: "Size charts", desc: "Measurements and fit guidance for tall sizing.", href: "/pages/size-charts" },
 ]
 
-const FAQS = [
-  {
-    q: "How long does it take to get a reply?",
-    a: "Most messages are answered within one business day. Enquiries sent over a weekend or public holiday are picked up the next working day.",
-  },
-  {
-    q: "I need to change or cancel an order — what now?",
-    a: "Message us with your order number as soon as possible. While the order is still marked Pending we can usually change the size, update the address or cancel it outright.",
-  },
-  {
-    q: "Can you help me pick a size?",
-    a: "Yes. Send your height, your usual size, and the measurements of a garment that already fits you well — we'll recommend the closest fit from our tall sizing.",
-  },
-  {
-    q: "My parcel hasn't arrived. What should I include?",
-    a: "Your order number and the delivery address on the order. Check the tracking status first, then message us and we'll open a case with the courier.",
-  },
-]
-
 export default async function ContactPage() {
   const settings = await getSettings()
   const storeName = await getStoreName()
 
+  // Editable in Admin → Settings → Brand → Contact Page (lib/contactPage.ts).
+  const page = parseContactPage(settings[CONTACT_PAGE_SETTING_KEY], { legacy: settings })
   const email = settings.contact_email || "support@store.local"
-  const phone = settings.contact_phone || ""
-  const address = settings.contact_address || ""
-  const hours = settings.contact_hours || "Sun – Thu, 10:00 AM – 6:00 PM"
+  const { phone, address, hours, faqs } = page
 
   const channels = [
     { icon: Mail, label: "Email", value: email, href: `mailto:${email}`, note: "Best for anything with an order number." },
     ...(phone ? [{ icon: Phone, label: "Phone", value: phone, href: `tel:${phone.replace(/\s+/g, "")}`, note: "Available during working hours." }] : []),
-    ...(address ? [{ icon: MapPin, label: "Address", value: address, href: undefined, note: "Returns are only accepted by prior arrangement." }] : []),
+    ...(address ? [{ icon: MapPin, label: "Address", value: address, href: page.mapUrl || undefined, note: page.mapUrl ? "Open in Google Maps." : "Returns are only accepted by prior arrangement." }] : []),
     { icon: Clock, label: "Working Hours", value: hours, href: undefined, note: "Replies pause outside these hours." },
   ]
 
@@ -79,18 +61,17 @@ export default async function ContactPage() {
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:items-end">
             <div className="lg:col-span-8">
               <h1 className="text-3xl md:text-5xl font-black uppercase tracking-tight leading-[1.05]">
-                How can we help?
+                {page.heroTitle}
               </h1>
               <p className="text-sm md:text-base text-zinc-400 mt-5 max-w-xl leading-relaxed">
-                Questions about an order, sizing or a return — the {storeName} support team reads every message
-                and replies personally.
+                {page.heroText.replaceAll("{store}", storeName)}
               </p>
             </div>
 
             <div className="lg:col-span-4 flex flex-wrap gap-x-8 gap-y-4 lg:justify-end">
               <div>
                 <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-500 mb-1.5">Typical reply</p>
-                <p className="text-sm font-bold">Within 1 business day</p>
+                <p className="text-sm font-bold">{page.replyTime}</p>
               </div>
               <div>
                 <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-500 mb-1.5">Support hours</p>
@@ -173,7 +154,14 @@ export default async function ContactPage() {
                     </div>
                   )
                   return channel.href ? (
-                    <a key={channel.label} href={channel.href} className="block hover:bg-zinc-50 transition-colors">{inner}</a>
+                    <a
+                      key={channel.label}
+                      href={channel.href}
+                      {...(channel.href.startsWith("http") ? { target: "_blank", rel: "noopener noreferrer" } : {})}
+                      className="block hover:bg-zinc-50 transition-colors"
+                    >
+                      {inner}
+                    </a>
                   ) : (
                     <div key={channel.label}>{inner}</div>
                   )
@@ -199,15 +187,16 @@ export default async function ContactPage() {
         </section>
 
         {/* ── FAQs ────────────────────────────────────────────────────────── */}
+        {faqs.length > 0 && (
         <section className="border-t border-zinc-100 bg-zinc-50/60">
           <div className="max-w-3xl mx-auto px-4 sm:px-6 py-14 md:py-20">
             <h2 className="text-xl md:text-2xl font-black uppercase tracking-tight text-center">Before you write</h2>
             <p className="text-sm text-zinc-500 text-center mt-3 mb-9">
-              The four questions our team gets asked most often.
+              The questions our team gets asked most often.
             </p>
 
             <div className="space-y-3">
-              {FAQS.map((faq) => (
+              {faqs.map((faq) => (
                 <details key={faq.q} className="group bg-white border border-zinc-200 rounded-xl overflow-hidden">
                   <summary className="flex items-center justify-between gap-4 px-5 py-4 cursor-pointer list-none marker:content-none [&::-webkit-details-marker]:hidden">
                     <span className="text-sm font-bold text-zinc-900">{faq.q}</span>
@@ -227,6 +216,7 @@ export default async function ContactPage() {
             </p>
           </div>
         </section>
+        )}
       </main>
 
       <Footer />

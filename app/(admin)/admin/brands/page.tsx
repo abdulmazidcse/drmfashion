@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card } from "@/components/ui/card"
+import { MediaLibraryButton } from "@/components/admin/MediaLibraryPicker"
 
 const RichTextEditor = dynamic(() => import("@/components/admin/RichTextEditor"), { ssr: false, loading: () => <div className="p-4 text-center text-xs text-zinc-400 border border-zinc-200 rounded-xl">Loading editor...</div> })
 
@@ -167,7 +168,10 @@ export default function BrandsPage() {
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Logo Image (Max 1MB)</Label>
-                <Input type="file" accept="image/*" onChange={(e) => handleFileChange(e, setAddFile, setAddPreview)} />
+                <div className="flex items-center gap-2">
+                  <Input type="file" className="flex-1" accept="image/*" onChange={(e) => handleFileChange(e, setAddFile, setAddPreview)} />
+                  <MediaLibraryButton label="Library" onSelect={([url]) => { setAddFile(null); setAddPreview(url); setValue("image", url) }} />
+                </div>
                 {addPreview && <img src={addPreview} alt="Preview" className="mt-3 h-16 w-16 object-cover rounded-lg border border-border shadow-sm" />}
               </div>
               <div className="space-y-1.5">
@@ -210,7 +214,10 @@ export default function BrandsPage() {
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Logo Image (Max 1MB)</Label>
-                <Input type="file" accept="image/*" onChange={(e) => handleFileChange(e, setEditFile, setEditPreview)} />
+                <div className="flex items-center gap-2">
+                  <Input type="file" className="flex-1" accept="image/*" onChange={(e) => handleFileChange(e, setEditFile, setEditPreview)} />
+                  <MediaLibraryButton label="Library" onSelect={([url]) => { setEditFile(null); setEditPreview(url); editForm.setValue("image", url) }} />
+                </div>
                 {editPreview && <img src={editPreview} alt="Preview" className="mt-3 h-16 w-16 object-cover rounded-lg border border-border shadow-sm" />}
               </div>
               <div className="space-y-1.5">

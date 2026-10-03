@@ -24,6 +24,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent } from "@/components/ui/card"
 import ParentCategorySelect, { type ParentCategoryOption } from "@/components/admin/categories/ParentCategorySelect"
+import { MediaLibraryButton } from "@/components/admin/MediaLibraryPicker"
 
 const RichTextEditor = dynamic(() => import("@/components/admin/RichTextEditor"), {
   ssr: false,
@@ -310,7 +311,10 @@ export default function CategoriesPage() {
               <div className="space-y-2">
                 <Label>Card Image (Max 1MB)</Label>
                 <p className="text-xs text-muted-foreground">The portrait card in the homepage grids (Trending, Summer) and the category lists. About 700×980.</p>
-                <Input type="file" accept="image/*" onChange={(e) => handleFileChange(e, setAddFile, setAddPreview)} className="file:text-foreground file:font-medium" />
+                <div className="flex items-center gap-2">
+                  <Input type="file" accept="image/*" onChange={(e) => handleFileChange(e, setAddFile, setAddPreview)} className="flex-1 file:text-foreground file:font-medium" />
+                  <MediaLibraryButton label="Library" onSelect={([url]) => { setAddFile(null); setAddPreview(url); setValue("image", url) }} />
+                </div>
                 {addPreview && (
                   <div className="mt-3 flex items-center gap-3">
                     <img src={addPreview} alt="Preview" className="h-16 w-16 object-cover rounded-md border border-border shadow-sm" />
@@ -345,7 +349,10 @@ export default function CategoriesPage() {
               <div className="space-y-2">
                 <Label>Banner Image (Optional)</Label>
                 <p className="text-xs text-muted-foreground">Wide artwork across the top of the category page. About 1920×600. Leave empty to reuse the card image.</p>
-                <Input type="file" accept="image/*" onChange={(e) => handleFileChange(e, setAddBannerFile, setAddBannerPreview)} className="file:text-foreground file:font-medium" />
+                <div className="flex items-center gap-2">
+                  <Input type="file" accept="image/*" onChange={(e) => handleFileChange(e, setAddBannerFile, setAddBannerPreview)} className="flex-1 file:text-foreground file:font-medium" />
+                  <MediaLibraryButton label="Library" onSelect={([url]) => { setAddBannerFile(null); setAddBannerPreview(url); setValue("bannerImage", url) }} />
+                </div>
                 {addBannerPreview && (
                   <div className="mt-3 flex items-center gap-3">
                     <img src={addBannerPreview} alt="Preview" className="h-16 w-24 object-cover rounded-md border border-border shadow-sm" />
@@ -388,7 +395,10 @@ export default function CategoriesPage() {
               <div className="space-y-2">
                 <Label>How To Measure Figure (Optional)</Label>
                 <p className="text-xs text-muted-foreground">The numbered body illustration shown beside the guide. Portrait PNG/SVG on white, about 600×1100. Number the points in the same order as the steps above. Inherited by child categories; leave empty to use the built-in drawing.</p>
-                <Input type="file" accept="image/*" onChange={(e) => handleFileChange(e, setAddHowToImageFile, setAddHowToImagePreview)} className="file:text-foreground file:font-medium" />
+                <div className="flex items-center gap-2">
+                  <Input type="file" accept="image/*" onChange={(e) => handleFileChange(e, setAddHowToImageFile, setAddHowToImagePreview)} className="flex-1 file:text-foreground file:font-medium" />
+                  <MediaLibraryButton label="Library" onSelect={([url]) => { setAddHowToImageFile(null); setAddHowToImagePreview(url); setAddHowToImageUrl(url) }} />
+                </div>
                 {addHowToImagePreview && (
                   <div className="mt-3 flex items-center gap-3">
                     <img src={addHowToImagePreview} alt="How to measure figure preview" className="h-28 w-20 object-contain rounded-md border border-border bg-white shadow-sm" />
@@ -488,7 +498,10 @@ export default function CategoriesPage() {
               <div className="space-y-2">
                 <Label>Card Image (Max 1MB)</Label>
                 <p className="text-xs text-muted-foreground">The portrait card in the homepage grids (Trending, Summer) and the category lists. About 700×980.</p>
-                <Input type="file" accept="image/*" onChange={(e) => handleFileChange(e, setEditFile, setEditPreview)} className="file:text-foreground file:font-medium" />
+                <div className="flex items-center gap-2">
+                  <Input type="file" accept="image/*" onChange={(e) => handleFileChange(e, setEditFile, setEditPreview)} className="flex-1 file:text-foreground file:font-medium" />
+                  <MediaLibraryButton label="Library" onSelect={([url]) => { setEditFile(null); setEditPreview(url); editForm.setValue("image", url) }} />
+                </div>
                 {editPreview ? (
                   <div className="mt-3 flex items-center gap-3">
                     <img src={editPreview} alt="Preview" className="h-16 w-16 object-cover rounded-md border border-border shadow-sm" />
@@ -527,7 +540,10 @@ export default function CategoriesPage() {
               <div className="space-y-2">
                 <Label>Banner Image (Optional)</Label>
                 <p className="text-xs text-muted-foreground">Wide artwork across the top of the category page. About 1920×600. Leave empty to reuse the card image.</p>
-                <Input type="file" accept="image/*" onChange={(e) => handleFileChange(e, setEditBannerFile, setEditBannerPreview)} className="file:text-foreground file:font-medium" />
+                <div className="flex items-center gap-2">
+                  <Input type="file" accept="image/*" onChange={(e) => handleFileChange(e, setEditBannerFile, setEditBannerPreview)} className="flex-1 file:text-foreground file:font-medium" />
+                  <MediaLibraryButton label="Library" onSelect={([url]) => { setEditBannerFile(null); setEditBannerPreview(url); editForm.setValue("bannerImage", url) }} />
+                </div>
                 {editBannerPreview && (
                   <div className="mt-3 flex items-center gap-3">
                     <img src={editBannerPreview} alt="Preview" className="h-16 w-24 object-cover rounded-md border border-border shadow-sm" />
@@ -570,7 +586,10 @@ export default function CategoriesPage() {
               <div className="space-y-2">
                 <Label>How To Measure Figure (Optional)</Label>
                 <p className="text-xs text-muted-foreground">The numbered body illustration shown beside the guide. Portrait PNG/SVG on white, about 600×1100. Number the points in the same order as the steps above. Inherited by child categories; leave empty to use the built-in drawing.</p>
-                <Input type="file" accept="image/*" onChange={(e) => handleFileChange(e, setEditHowToImageFile, setEditHowToImagePreview)} className="file:text-foreground file:font-medium" />
+                <div className="flex items-center gap-2">
+                  <Input type="file" accept="image/*" onChange={(e) => handleFileChange(e, setEditHowToImageFile, setEditHowToImagePreview)} className="flex-1 file:text-foreground file:font-medium" />
+                  <MediaLibraryButton label="Library" onSelect={([url]) => { setEditHowToImageFile(null); setEditHowToImagePreview(url); setEditHowToImageUrl(url) }} />
+                </div>
                 {editHowToImagePreview && (
                   <div className="mt-3 flex items-center gap-3">
                     <img src={editHowToImagePreview} alt="How to measure figure preview" className="h-28 w-20 object-contain rounded-md border border-border bg-white shadow-sm" />

@@ -6,6 +6,7 @@ import { Plus, Layers, Check, Images, X } from "lucide-react"
 import Swal from "sweetalert2";
 import { swatchStyle, type SwatchColor } from "@/lib/colorStyle"
 import { stagePendingFile, releasePendingUrl } from "@/lib/pendingUploads"
+import { MediaLibraryButton } from "@/components/admin/MediaLibraryPicker"
 
 type Variant = {
   size: string
@@ -665,6 +666,13 @@ export default function VariantForm({ onAdd, existing = [], defaultPrefix = "" }
             className="hidden"
           />
         </label>
+        <MediaLibraryButton
+          multiple
+          label="Add from Media Library"
+          // Library files are already in storage, so they go in as-is.
+          onSelect={(urls) => setImages((prev) => [...prev, ...urls.filter((u) => !prev.includes(u))])}
+          className="w-full bg-white border border-zinc-200 hover:bg-zinc-50 text-zinc-700 font-bold py-2.5 px-4 rounded-xl cursor-pointer text-xs transition flex items-center justify-center gap-2"
+        />
 
         {images.length > 0 && (
           <div className="flex flex-wrap gap-2">

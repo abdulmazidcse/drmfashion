@@ -42,9 +42,11 @@ import {
 } from "@/lib/homeSections";
 import { categoryImageAlt } from "@/lib/imageMeta";
 import { FALLBACK_MEN, FALLBACK_WOMEN, FALLBACK_KIDS, FALLBACK_SLUGS, type FallbackTile } from "@/lib/homeTiles";
-import { Sparkles, ShieldCheck } from "lucide-react";
 import ScrollReveal from "@/components/ScrollReveal";
 import TrustBadges from "@/components/TrustBadges";
+import { getGenderCategory } from "@/lib/categoryTree";
+import { HOME_BRANDS_CACHE_KEY } from "@/lib/brands";
+import BrandShowcase from "@/components/home/BrandShowcase";
 import {
   HERO_HIGHLIGHT_BEST_SELLER_NOTE,
   HERO_HIGHLIGHT_NEWEST_NOTE,
@@ -60,6 +62,50 @@ export const metadata: Metadata = {
   alternates: { canonical: "/" },
 };
 
+/** Two full rows at the widest grid (7 per row). */
+const BEST_SELLER_TARGET = 14;
+
+/**
+ * Published products ranked by units sold (cancelled orders excluded), since
+ * `since` or across all time. Variants of one product are summed together.
+ */
+async function rankProductsBySales(since: Date | null) {
+  const topSellers = await prisma.orderItem.groupBy({
+    by: ["variantId"],
+    _sum: { quantity: true },
+    where: {
+      order: {
+        status: { not: "CANCELLED" },
+        ...(since ? { createdAt: { gte: since } } : {}),
+      },
+      variant: { product: { published: true } },
+    },
+    orderBy: { _sum: { quantity: "desc" } },
+    take: 60, // variant ids, not products — enough to fill the grid
+  });
+  if (topSellers.length === 0) return [];
+
+  const variants = await prisma.productVariant.findMany({
+    where: { id: { in: topSellers.map((ts) => ts.variantId) } },
+    select: { id: true, product: { select: PRODUCT_CARD_SELECT } },
+  });
+  const byVariant = new Map(variants.map((v) => [v.id, v.product]));
+
+  const totals = new Map<string, { product: any; quantity: number }>();
+  for (const ts of topSellers) {
+    const product = byVariant.get(ts.variantId);
+    if (!product) continue;
+    const quantity = ts._sum.quantity || 0;
+    const current = totals.get(product.id);
+    if (current) current.quantity += quantity;
+    else totals.set(product.id, { product, quantity });
+  }
+
+  return Array.from(totals.values())
+    .sort((a, b) => b.quantity - a.quantity)
+    .map((entry) => formatProductUrls(entry.product));
+}
+
 export default async function Home() {
   // Fetch real categories, products, and brands from DB
   const now = new Date();
@@ -70,8 +116,9 @@ export default async function Home() {
   const CACHE_KEYS = {
     categories: "home:categories:v2",
     products: "home:products:v2",
-    bestSellers: `home:bestSellers:v2:${monthStart.getTime()}`,
-    brands: "home:brands"
+    bestSellers: `home:bestSellers:v3:${monthStart.getTime()}`,
+    genderCategories: "home:genderCategories:v1",
+    brands: HOME_BRANDS_CACHE_KEY
   }
 
   async function fetchWithCache(key: string, fetcher: () => Promise<any>, ttl = 3600) {
@@ -156,74 +203,39 @@ export default async function Home() {
       return raw.map(p => formatProductUrls(p));
     }),
     fetchWithCache(CACHE_KEYS.bestSellers, async () => {
-      // 1. Group order items by variantId to find the top sellers this month
-      const topSellers = await prisma.orderItem.groupBy({
-        by: ['variantId'],
-        _sum: {
-          quantity: true
-        },
-        where: {
-          order: {
-            status: { not: "CANCELLED" },
-            createdAt: { gte: monthStart }
-          },
-          variant: {
-            product: { published: true }
-          }
-        },
-        orderBy: {
-          _sum: {
-            quantity: 'desc'
-          }
-        },
-        take: 40 // Limit to top 40 variant IDs to optimize fetch size
-      });
-
-      if (topSellers.length === 0) return [];
-
-      const variantIds = topSellers.map(ts => ts.variantId);
-      
-      // 2. Fetch the corresponding products and variants
-      const variants = await prisma.productVariant.findMany({
-        where: { id: { in: variantIds } },
-        select: {
-          id: true,
-          product: { select: PRODUCT_CARD_SELECT }
-        }
-      });
-
-      // 3. Aggregate quantities per product in memory (since multiple variants can belong to the same product)
-      const productTotals = new Map<string, { product: any; quantity: number }>();
-      
-      topSellers.forEach(ts => {
-        const variant = variants.find(v => v.id === ts.variantId);
-        if (!variant || !variant.product) return;
-        
-        const product = variant.product;
-        const quantity = ts._sum.quantity || 0;
-        const current = productTotals.get(product.id);
-        
-        if (current) {
-          current.quantity += quantity;
-        } else {
-          productTotals.set(product.id, { product, quantity });
-        }
-      });
-
-      // 4. Sort products by total quantity sold
-      const rawProducts = Array.from(productTotals.values())
-        .sort((a, b) => b.quantity - a.quantity)
-        .map(entry => entry.product);
-      return rawProducts.map(p => formatProductUrls(p));
+      // This month's sellers first. A quiet month (or a new month's first days)
+      // used to leave the section with nothing ranked, and the page then fell
+      // back to arbitrary products under a "best sellers" heading — so the
+      // list is topped up with all-time sellers before anything else.
+      const thisMonth = await rankProductsBySales(monthStart);
+      if (thisMonth.length >= BEST_SELLER_TARGET) return thisMonth;
+      const allTime = await rankProductsBySales(null);
+      const seen = new Set(thisMonth.map((p: any) => p.id));
+      return [...thisMonth, ...allTime.filter((p: any) => !seen.has(p.id))];
     }),
     fetchWithCache(CACHE_KEYS.brands, async () => {
+      // Every brand with live products (the slider scrolls, so there is no
+      // need to cap it at six), most-stocked first.
       const raw = await prisma.brand.findMany({
-        take: 6
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          image: true,
+          _count: { select: { products: { where: { published: true, deletedAt: null } } } },
+        },
+        take: 40,
       });
-      return raw.map(b => ({
-        ...b,
-        image: b.image ? formatImageUrl(b.image) : null,
-      }));
+      return raw
+        .filter((b) => b._count.products > 0)
+        .sort((a, b) => b._count.products - a._count.products)
+        .map((b) => ({
+          id: b.id,
+          name: b.name,
+          slug: b.slug,
+          image: b.image ? formatImageUrl(b.image) : null,
+          productCount: b._count.products,
+        }));
     }),
     fetchWithCache("home:hero:slides", async () => {
       const s = await prisma.setting.findUnique({
@@ -660,6 +672,36 @@ export default async function Home() {
   // deleted — the card falls back to what it always chose: the top seller if
   // there is one, otherwise the newest product, so it is never empty on a store
   // that has stock but no orders yet.
+  // Men / Women for the best-seller tabs, read from the category tree (the
+  // product's category sits under the "men" or "women" root). The old client
+  // guessed from words in the title, and "women" contains "men", so women's
+  // pieces showed under Men and the Women tab fell back to men's products.
+  const bestSellerList = bestSellerProducts.length > 0 ? bestSellerProducts : products;
+  const genderCategories: { men: string[]; women: string[] } = await fetchWithCache(
+    CACHE_KEYS.genderCategories,
+    async () => {
+      const [men, women] = await Promise.all([getGenderCategory("men"), getGenderCategory("women")]);
+      return { men: men?.categoryIds ?? [], women: women?.categoryIds ?? [] };
+    }
+  );
+  const menIds = new Set(genderCategories.men);
+  const womenIds = new Set(genderCategories.women);
+  const productCategories = await prisma.product.findMany({
+    where: { id: { in: bestSellerList.map((p: any) => p.id) } },
+    select: { id: true, categoryId: true },
+  });
+  const genderById = new Map(
+    productCategories.map((p) => [
+      p.id,
+      p.categoryId && menIds.has(p.categoryId)
+        ? "men"
+        : p.categoryId && womenIds.has(p.categoryId)
+          ? "women"
+          : null,
+    ])
+  );
+  const bestSellersWithGender = bestSellerList.map((p: any) => ({ ...p, gender: genderById.get(p.id) ?? null }));
+
   const heroHighlightSource = pickedHighlight ?? bestSellerProducts[0] ?? products[0] ?? null;
   const heroHighlight =
     heroHighlightConfig.active && heroHighlightSource
@@ -731,7 +773,7 @@ export default async function Home() {
 
     bestsellers: (
       <ScrollReveal>
-        <BestSellers products={bestSellerProducts.length > 0 ? bestSellerProducts : products} />
+        <BestSellers products={bestSellersWithGender} />
       </ScrollReveal>
     ),
 
@@ -770,47 +812,7 @@ export default async function Home() {
 
     brands: (
       <ScrollReveal>
-        <section className="w-full bg-zinc-950 text-white overflow-hidden">
-          {/* Band stays full-bleed; the content keeps to the same 1600px column
-              as the header, so on a wide monitor it does not drift to the edges. */}
-          <div className="mx-auto grid max-w-(--site-max) grid-cols-1 md:grid-cols-2 min-h-[min(50vh,560px)]">
-          <div className="flex flex-col justify-center p-8 sm:p-24 max-w-xl">
-            <span className="text-zinc-400 text-xs font-bold tracking-widest uppercase mb-3 block">Our Brand Collection</span>
-            <h2 className="at-heading text-at-subheading mb-4">
-              {brands.length > 0 ? `${brands.length} Premium Brands` : "Premium Brands"}
-            </h2>
-            <p className="text-zinc-300 text-sm sm:text-base mb-6 font-light leading-relaxed">
-              We partner with the world&apos;s finest labels. Every piece in our collection is carefully selected, authenticity-verified, and crafted to the highest standards of luxury fashion.
-            </p>
-            <div className="flex items-center gap-6 mb-8 text-zinc-300 text-sm">
-              <span className="flex items-center gap-1.5"><Sparkles className="w-4 h-4 text-white" /> Authentic Items</span>
-              <span className="flex items-center gap-1.5"><ShieldCheck className="w-4 h-4 text-white" /> Quality Assured</span>
-            </div>
-            <Link href="/shop" className="rounded-at-btn bg-white text-at-ink px-8 py-3.5 text-xs font-bold tracking-widest uppercase hover:bg-white/90 transition-colors shadow-lg self-start">
-              Shop All Brands
-            </Link>
-          </div>
-          <div className="relative min-h-[35vh] md:min-h-0 flex items-center justify-center p-8">
-            {brands.length > 0 ? (
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 w-full max-w-sm">
-                {brands.map((brand: any) => (
-                  <div key={brand.id} className="bg-zinc-800/60 border border-zinc-700/50 rounded-at-btn p-4 flex items-center justify-center min-h-[80px]">
-                    {brand.image ? (
-                      <img src={brand.image} alt={brand.name} className="max-h-12 max-w-full object-contain" />
-                    ) : (
-                      <span className="text-zinc-300 text-xs font-bold uppercase tracking-widest text-center">{brand.name}</span>
-                    )}
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="relative w-full h-full bg-zinc-900 flex items-center justify-center">
-                <span className="text-zinc-600 font-bold uppercase tracking-widest text-xs">Premium Fashion</span>
-              </div>
-            )}
-          </div>
-          </div>
-        </section>
+        <BrandShowcase brands={brands} />
       </ScrollReveal>
     ),
 

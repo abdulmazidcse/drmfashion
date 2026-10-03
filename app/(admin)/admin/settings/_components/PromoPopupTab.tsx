@@ -9,6 +9,7 @@ import { Textarea } from "@/components/ui/textarea"
 import CollapsibleCard from "./CollapsibleCard"
 import PromoBannerCard from "./PromoBannerCard"
 import { useSettingsForm } from "./SettingsFormContext"
+import { MediaLibraryButton } from "@/components/admin/MediaLibraryPicker"
 
 export default function PromoPopupTab() {
   const {
@@ -187,6 +188,11 @@ export default function PromoPopupTab() {
                   disabled={uploadingPromoPopupImage}
                 />
               </label>
+              <MediaLibraryButton
+                disabled={uploadingPromoPopupImage}
+                onSelect={([url]) => setPromoPopupImageUrl(url)}
+                className="cursor-pointer bg-muted hover:bg-muted/70 text-foreground px-4 py-2 rounded-md transition flex items-center gap-2 border shrink-0 font-bold text-xs uppercase tracking-wider select-none disabled:opacity-50"
+              />
               {promoPopupImageUrl && (
                 <>
                   <Button

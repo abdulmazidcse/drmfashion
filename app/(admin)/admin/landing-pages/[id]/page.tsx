@@ -35,6 +35,7 @@ import {
   type Section,
   type LandingTheme,
 } from "@/lib/landing/sections"
+import { MediaLibraryButton } from "@/components/admin/MediaLibraryPicker"
 
 const LandingBuilder = dynamic(() => import("@/components/admin/landing/LandingBuilder"), {
   ssr: false,
@@ -467,7 +468,10 @@ export default function EditLandingPagePage() {
             <h2 className="text-sm font-semibold text-foreground">Banner Image</h2>
             <div className="space-y-1.5">
               <Label className={labelCls}>Wide Banner (Max 1MB)</Label>
-              <Input type="file" accept="image/*" onChange={(e) => handleFileChange(e, setBannerFile, setBannerPreview)} />
+              <div className="flex items-center gap-2">
+                <Input type="file" className="flex-1" accept="image/*" onChange={(e) => handleFileChange(e, setBannerFile, setBannerPreview)} />
+                <MediaLibraryButton label="Library" onSelect={([url]) => { setBannerImage(url); setBannerFile(null); setBannerPreview(url) }} />
+              </div>
               {bannerPreview && (
                 <div className="mt-3 flex items-start gap-2">
                   <img src={bannerPreview} alt="Banner preview" className="h-20 w-full object-cover rounded-lg border border-border shadow-sm" />

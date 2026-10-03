@@ -26,6 +26,8 @@ interface Product {
   brand?: { name: string } | null;
   category?: { name: string; slug: string } | null;
   variants: Variant[];
+  /** From the category tree (see app/page.tsx); null when under neither root. */
+  gender?: "men" | "women" | null;
 }
 
 interface BestSellersProps {
@@ -51,56 +53,10 @@ function twoRowVisibility(i: number) {
 export default function BestSellers({ products }: BestSellersProps) {
   const [activeTab, setActiveTab] = useState<Gender>("men");
 
-  // Men/women split — heuristic copied verbatim from BestSellersSlider (data logic unchanged)
-  let filteredProducts = products.filter((prod) => {
-    const categorySlug = prod.category?.slug || "";
-    const titleLower = prod.title.toLowerCase();
+  // Each tab shows only its own gender. No fallback to the other tab's
+  // products: an empty tab says so instead (the brief: Women → "upcoming").
+  const filteredProducts = products.filter((prod) => prod.gender === activeTab);
 
-    if (activeTab === "men") {
-      return (
-        categorySlug === "mens-clothing" ||
-        categorySlug.includes("mens-") ||
-        categorySlug.includes("men") ||
-        titleLower.includes("men") ||
-        titleLower.includes("fleece") ||
-        titleLower.includes("shirt") ||
-        titleLower.includes("shorts") ||
-        titleLower.includes("jeans") ||
-        titleLower.includes("tees") ||
-        titleLower.includes("pants")
-      );
-    } else {
-      return (
-        categorySlug === "womens-clothing" ||
-        categorySlug.includes("womens-") ||
-        categorySlug.includes("women") ||
-        titleLower.includes("women") ||
-        titleLower.includes("dress") ||
-        titleLower.includes("trenchcoat") ||
-        titleLower.includes("sneakers") ||
-        titleLower.includes("overcoat") ||
-        titleLower.includes("shirt") ||
-        titleLower.includes("shorts") ||
-        titleLower.includes("jeans") ||
-        titleLower.includes("tees") ||
-        titleLower.includes("pants")
-      );
-    }
-  });
-
-  // Fallback if no products matched the filter
-  if (filteredProducts.length === 0 && products.length > 0) {
-    if (activeTab === "men") {
-      filteredProducts = products.slice(0, Math.ceil(products.length / 2));
-    } else {
-      filteredProducts = products.slice(Math.ceil(products.length / 2));
-    }
-  }
-  if (filteredProducts.length === 0) {
-    filteredProducts = products;
-  }
-
-  // Two full rows of the four-column grid.
   // Two full rows at the shared per-screen count (4 / 5 / 6 / 7 per row), so
   // up to 14 are rendered; cards beyond two rows at the current breakpoint
   // stay hidden (see twoRowVisibility).
@@ -130,6 +86,16 @@ export default function BestSellers({ products }: BestSellersProps) {
             ))}
           </div>
         </SigSectionHead>
+
+        {visibleProducts.length === 0 && (
+          <div className="grid place-items-center rounded-sig border border-dashed border-sig-line bg-sig-card px-6 py-16 text-center">
+            <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-sig-copper-600">Coming soon</p>
+            <p className="mt-2 text-lg font-bold text-sig-ink">
+              {activeTab === "women" ? "Our women's collection is on its way." : "New best sellers are on their way."}
+            </p>
+            <p className="mt-1 text-sm text-sig-soft">Check back shortly — new pieces are being added.</p>
+          </div>
+        )}
 
         {/* Re-mounted on tab change so the staggered reveal replays. */}
         <div key={activeTab} className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-5 3xl:grid-cols-6 4xl:grid-cols-7 gap-4 lg:gap-5">

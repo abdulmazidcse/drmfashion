@@ -18,6 +18,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import AccountingNav from "@/components/admin/accounting/AccountingNav"
 import { apiMessage, isCancel } from "@/components/admin/accounting/apiError"
 import DateRangePicker, { presetRange, rangeValid, ymd, type DateRange } from "@/components/admin/accounting/DateRangePicker"
+import { MediaLibraryButton } from "@/components/admin/MediaLibraryPicker"
 
 type Account = { id: string; code: string; name: string; type: string; active: boolean }
 type Supplier = { id: string; name: string }
@@ -315,6 +316,7 @@ export default function ExpensesPage() {
                 <Label>Receipt</Label>
                 <div className="flex items-center gap-2">
                   <Input type="file" accept="image/*" onChange={handleReceipt} disabled={uploading} className="flex-1" />
+                  <MediaLibraryButton label="Library" disabled={uploading} onSelect={([url]) => setForm((f) => ({ ...f, receiptUrl: url }))} />
                   {uploading && <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />}
                 </div>
                 {form.receiptUrl && (

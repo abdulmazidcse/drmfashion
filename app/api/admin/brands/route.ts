@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
+import { invalidateCache } from "@/lib/redis"
+import { HOME_BRANDS_CACHE_KEY } from "@/lib/brands"
 
 export async function GET() {
   try {
@@ -50,6 +52,8 @@ export async function POST(req: NextRequest) {
       },
     })
 
+    // The homepage brand slider is cached; show the new brand straight away.
+    await invalidateCache(HOME_BRANDS_CACHE_KEY)
     return NextResponse.json(brand)
   } catch (error) {
     console.log("[BRANDS_POST]", error)

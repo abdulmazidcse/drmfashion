@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import CollapsibleCard from "./CollapsibleCard"
 import AnnouncementBarCard from "./AnnouncementBarCard"
+import ContactPageCard from "./ContactPageCard"
 import MediaField from "./MediaField"
 import { useSettingsForm } from "./SettingsFormContext"
 import { DEFAULT_HEIGHTS_GUIDE } from "@/lib/heightsGuide"
@@ -67,6 +68,9 @@ export default function BrandTab() {
     <div className="space-y-6 animate-in fade-in-50 duration-200">
           {/* ANNOUNCEMENT BAR — site-wide, so it lives here rather than under Homepage */}
           <AnnouncementBarCard />
+
+          {/* CONTACT PAGE — /pages/contact-support copy + footer address */}
+          <ContactPageCard />
 
           {/* BRAND SETTINGS */}
         <CollapsibleCard

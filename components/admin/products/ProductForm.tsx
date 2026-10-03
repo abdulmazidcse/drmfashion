@@ -13,6 +13,7 @@ import ProductFormStepper, { type ProductFormStepDef } from "./ProductFormSteppe
 import CustomMeasurementSection, { type CustomMeasurementValue } from "./CustomMeasurementSection"
 import { productCodeSlugPart } from "@/lib/productCode"
 import Swal from "sweetalert2";
+import { MediaLibraryButton } from "@/components/admin/MediaLibraryPicker"
 import dynamic from "next/dynamic"
 import { useCurrency } from "@/providers/CurrencyProvider"
 import {
@@ -309,6 +310,27 @@ export default function ProductForm() {
       releasePendingUrl(current)
     }
     setValue(field, "")
+  }
+
+  // Media Library picks: real `/media/...` URLs, so unlike staged files there
+  // is nothing to upload on save — they are stored exactly as chosen.
+  function pickThumbnailFromLibrary(url: string) {
+    clearSingleImage("thumbnail")
+    setValue("thumbnail", url, { shouldValidate: true })
+  }
+
+  function pickGalleryFromLibrary(urls: string[]) {
+    setUploadError("")
+    setProductImages((prev) => {
+      const fresh = urls
+        .filter((url) => !prev.some((img) => img.url === url))
+        .map((url) => ({ url, color: "", alt: "", caption: "" }))
+      const updated = [...prev, ...fresh]
+      if (!watch("thumbnail") && updated.length > 0) {
+        setValue("thumbnail", updated[0].url)
+      }
+      return updated
+    })
   }
 
   // ADD MULTIPLE COLOR MATCHED IMAGES (MANUAL URL)
@@ -621,6 +643,11 @@ export default function ProductForm() {
                     className="hidden"
                   />
                 </label>
+                <MediaLibraryButton
+                  label="Library"
+                  onSelect={([url]) => pickThumbnailFromLibrary(url)}
+                  className="inline-flex items-center gap-2 border border-zinc-200 bg-white hover:bg-zinc-50 text-zinc-700 font-semibold py-3 px-4 rounded-xl cursor-pointer text-xs shadow-sm transition whitespace-nowrap"
+                />
               </div>
             </div>
 
@@ -671,6 +698,14 @@ export default function ProductForm() {
                     <p className="text-zinc-600 text-xs mt-1 font-semibold">Click anywhere in this box to browse — files upload when you save</p>
                   </div>
                 </div>
+              </div>
+              <div className="mt-3 flex justify-center">
+                <MediaLibraryButton
+                  multiple
+                  label="Add from Media Library"
+                  onSelect={pickGalleryFromLibrary}
+                  className="inline-flex items-center gap-2 border border-zinc-200 bg-white hover:bg-zinc-50 text-zinc-700 font-semibold py-2.5 px-4 rounded-xl cursor-pointer text-xs shadow-sm transition"
+                />
               </div>
             </div>
 

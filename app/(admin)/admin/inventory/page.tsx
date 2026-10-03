@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import Link from "next/link"
 import {
   Boxes,
   AlertTriangle,
@@ -173,6 +174,10 @@ export default function InventoryPage() {
           </p>
         </div>
 
+        <div className="flex shrink-0 gap-2">
+        <Button variant="outline" asChild>
+          <Link href="/admin/inventory/sheet">Stock Sheet view</Link>
+        </Button>
         <Button
           variant="outline"
           onClick={() => fetchInventory()}
@@ -181,6 +186,7 @@ export default function InventoryPage() {
           <RefreshCw className={cn("w-3.5 h-3.5", loading && "animate-spin")} />
           Sync Database
         </Button>
+        </div>
       </div>
 
       {/* INTELLIGENT SUMMARY CARDS */}

@@ -301,10 +301,17 @@ export function formatOrderDateTime(
 ): string {
   const d = typeof date === "string" ? new Date(date) : date
   const timeZone = resolveOrderTimezone(countryCode, stateCode)
+  // Spelled out field by field: `dateStyle`/`timeStyle` cannot be combined
+  // with `timeZoneName` — Intl throws "Invalid option", which crashed both
+  // invoice pages and the order email. Same output, e.g.
+  // "Oct 3, 2026, 4:15 PM GMT+6".
   return new Intl.DateTimeFormat("en-US", {
     timeZone,
-    dateStyle: "medium",
-    timeStyle: "short",
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
     timeZoneName: "short",
   }).format(d)
 }

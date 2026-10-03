@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
+import { invalidateCache } from "@/lib/redis"
+import { HOME_BRANDS_CACHE_KEY } from "@/lib/brands"
 
 type Params = {
   params: Promise<{
@@ -39,6 +41,7 @@ export async function PATCH(
       data: { name, slug, image: image || null, description: description || null },
     })
 
+    await invalidateCache(HOME_BRANDS_CACHE_KEY)
     return NextResponse.json(brand)
   } catch (error) {
     console.log("[BRAND_PATCH]", error)
@@ -70,6 +73,7 @@ export async function DELETE(
     }
 
     await prisma.brand.delete({ where: { id } })
+    await invalidateCache(HOME_BRANDS_CACHE_KEY)
 
     return NextResponse.json({ success: true })
   } catch (error) {

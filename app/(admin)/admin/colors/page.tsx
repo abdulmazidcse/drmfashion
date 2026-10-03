@@ -12,6 +12,7 @@ import { Label } from "@/components/ui/label"
 import { Card, CardContent } from "@/components/ui/card"
 import { Dialog, DialogContent, DialogHeader, DialogFooter, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { COLOR_TYPES, DEFAULT_ANGLE, swatchLabel, swatchStyle, type ColorType } from "@/lib/colorStyle"
+import { MediaLibraryButton } from "@/components/admin/MediaLibraryPicker"
 
 type Color = { id: string; name: string; type: ColorType; value: string; value2: string | null; angle: number | null; image: string | null }
 type FormValues = { name: string; type: ColorType; value: string; value2: string; angle: number; image: string }
@@ -104,6 +105,12 @@ function FabricField({ form }: { form: UseFormReturn<FormValues> }) {
           {uploading ? "Uploading..." : image ? "Replace photo" : "Upload photo"}
           <input type="file" accept="image/*" className="hidden" onChange={handleUpload} disabled={uploading} />
         </label>
+        <MediaLibraryButton
+          disabled={uploading}
+          label="Library"
+          onSelect={([url]) => form.setValue("image", url, { shouldValidate: true })}
+          className="shrink-0 inline-flex items-center gap-1.5 border border-input rounded-md px-3 py-2.5 text-xs font-semibold cursor-pointer hover:bg-muted transition disabled:opacity-50"
+        />
       </div>
       <p className="text-[11px] text-muted-foreground">Use a tight, square crop of the print — it is cropped to fill the swatch circle. Max {MAX_FABRIC_KB}KB.</p>
     </div>

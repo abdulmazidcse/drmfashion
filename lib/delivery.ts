@@ -28,6 +28,7 @@ export interface DeliveryCarrier {
 }
 
 export const DEFAULT_DELIVERY_CARRIERS: DeliveryCarrier[] = [
+  { id: "steadfast", name: "Steadfast", trackingUrlTemplate: "https://steadfast.com.bd/t/{tracking}", active: true },
   { id: "ups", name: "UPS", trackingUrlTemplate: "https://www.ups.com/track?tracknum={tracking}", active: true },
   { id: "fedex", name: "FedEx", trackingUrlTemplate: "https://www.fedex.com/fedextrack/?trknbr={tracking}", active: true },
   { id: "dhl", name: "DHL", trackingUrlTemplate: "https://www.dhl.com/en/express/tracking.html?AWB={tracking}", active: true },

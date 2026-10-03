@@ -25,6 +25,7 @@ import { Label } from "@/components/ui/label"
 import { Card } from "@/components/ui/card"
 import { Switch } from "@/components/ui/switch"
 import { BANNER_POSITIONS, bannerPositionLabel, type BannerPosition } from "@/lib/bannerPositions"
+import { MediaLibraryButton } from "@/components/admin/MediaLibraryPicker"
 
 type Banner = {
   id: string
@@ -116,6 +117,9 @@ export default function BannersPage() {
   const [mobileFile, setMobileFile] = useState<File | null>(null)
   const [mobilePreview, setMobilePreview] = useState<string | null>(null)
   const [mobileRemoved, setMobileRemoved] = useState(false)
+  // Set when an image is chosen from the Media Library rather than uploaded.
+  const [pickedImage, setPickedImage] = useState<string | null>(null)
+  const [pickedMobile, setPickedMobile] = useState<string | null>(null)
   const [formActive, setFormActive] = useState(true)
 
   const { register, handleSubmit, reset } = useForm<FormValues>()
@@ -159,6 +163,8 @@ export default function BannersPage() {
     setMobileFile(null)
     setMobilePreview(null)
     setMobileRemoved(false)
+    setPickedImage(null)
+    setPickedMobile(null)
   }
 
   function openAdd() {
@@ -179,6 +185,8 @@ export default function BannersPage() {
     setMobileFile(null)
     setMobilePreview(null)
     setMobileRemoved(false)
+    setPickedImage(null)
+    setPickedMobile(null)
     setShowModal(true)
   }
 
@@ -200,6 +208,8 @@ export default function BannersPage() {
     setMobileFile(null)
     setMobilePreview(b.mobileImage)
     setMobileRemoved(false)
+    setPickedImage(null)
+    setPickedMobile(null)
     setShowModal(true)
   }
 
@@ -214,14 +224,14 @@ export default function BannersPage() {
     try {
       setSubmitting(true)
 
-      let imageUrl = editing?.image || ""
+      let imageUrl = pickedImage || editing?.image || ""
       if (imageFile) imageUrl = await uploadImage(imageFile)
       if (!imageUrl) {
         Swal.fire({ text: "A banner image is required", icon: "warning", confirmButtonColor: "#18181b" })
         return
       }
 
-      let mobileUrl: string | null = mobileRemoved ? null : editing?.mobileImage ?? null
+      let mobileUrl: string | null = mobileRemoved ? null : pickedMobile ?? editing?.mobileImage ?? null
       if (mobileFile) mobileUrl = await uploadImage(mobileFile)
 
       const payload = {
@@ -329,7 +339,10 @@ export default function BannersPage() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
                   <Label className={LABEL_CLASS}>Banner Image (Max 1MB)</Label>
-                  <Input type="file" accept="image/*" onChange={(e) => handleFileChange(e, setImageFile, setImagePreview)} />
+                  <div className="flex items-center gap-2">
+                    <Input type="file" className="flex-1" accept="image/*" onChange={(e) => { setPickedImage(null); handleFileChange(e, setImageFile, setImagePreview) }} />
+                    <MediaLibraryButton label="Library" onSelect={([url]) => { setImageFile(null); setImagePreview(url); setPickedImage(url) }} />
+                  </div>
                   <p className="text-[11px] text-muted-foreground">
                     Single banner: 21:9 wide, e.g. 1600 × 686 px. Two or more in the same position: 4:3, e.g. 1200 × 900 px. JPG/WebP.
                   </p>
@@ -340,7 +353,10 @@ export default function BannersPage() {
                 </div>
                 <div className="space-y-1.5">
                   <Label className={LABEL_CLASS}>Mobile Image (optional, portrait)</Label>
-                  <Input type="file" accept="image/*" onChange={(e) => { setMobileRemoved(false); handleFileChange(e, setMobileFile, setMobilePreview) }} />
+                  <div className="flex items-center gap-2">
+                    <Input type="file" className="flex-1" accept="image/*" onChange={(e) => { setMobileRemoved(false); setPickedMobile(null); handleFileChange(e, setMobileFile, setMobilePreview) }} />
+                    <MediaLibraryButton label="Library" onSelect={([url]) => { setMobileFile(null); setMobilePreview(url); setPickedMobile(url); setMobileRemoved(false) }} />
+                  </div>
                   <p className="text-[11px] text-muted-foreground">
                     Shown on phones instead of the banner image. 4:5 portrait, e.g. 800 × 1000 px.
                   </p>
@@ -348,7 +364,7 @@ export default function BannersPage() {
                     <div className="mt-3 flex items-start gap-3">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img src={mobilePreview} alt="Mobile preview" className="h-24 w-16 object-cover rounded-lg border border-border shadow-sm" />
-                      <Button type="button" variant="outline" size="sm" onClick={() => { setMobileFile(null); setMobilePreview(null); setMobileRemoved(true) }}>Remove</Button>
+                      <Button type="button" variant="outline" size="sm" onClick={() => { setMobileFile(null); setMobilePreview(null); setPickedMobile(null); setMobileRemoved(true) }}>Remove</Button>
                     </div>
                   ) : (
                     <p className="text-[11px] text-muted-foreground">Falls back to the banner image on phones.</p>

@@ -176,6 +176,11 @@ export default function AdminDeliveriesPage() {
   const [urlDirty, setUrlDirty] = useState(false)
   const [saving, setSaving] = useState<SaveAction | null>(null)
 
+  // Steadfast courier (lib/steadfast.ts). `null` until the first check.
+  const [steadfast, setSteadfast] = useState<{ configured: boolean; balance?: number } | null>(null)
+  const [steadfastBusy, setSteadfastBusy] = useState<"send" | "status" | null>(null)
+  const [steadfastStatus, setSteadfastStatus] = useState<string | null>(null)
+
   // Manage carriers dialog
   const [manageOpen, setManageOpen] = useState(false)
   const [draft, setDraft] = useState<DeliveryCarrier[]>([])
@@ -306,7 +311,70 @@ export default function AdminDeliveriesPage() {
     })
     // A stored URL that differs from the template is the admin's own; keep it.
     setUrlDirty(!!row.trackingUrl && row.trackingUrl !== derived)
+    setSteadfastStatus(null)
     setEditing(row)
+    if (steadfast === null) {
+      api
+        .get("/admin/deliveries/steadfast")
+        .then((res) => setSteadfast(res.data))
+        .catch(() => setSteadfast({ configured: false }))
+    }
+  }
+
+  const sentToSteadfast = editing?.shippingCarrier === "Steadfast" && !!editing?.trackingNumber
+
+  async function sendToSteadfast() {
+    if (!editing) return
+    const confirm = await Swal.fire({
+      title: "Send to Steadfast?",
+      text: "This books a real pickup with Steadfast for this order. It can only be sent once.",
+      icon: "question",
+      showCancelButton: true,
+      confirmButtonText: "Send",
+      confirmButtonColor: "#18181b",
+    })
+    if (!confirm.isConfirmed) return
+    try {
+      setSteadfastBusy("send")
+      const res = await api.post("/admin/deliveries/steadfast", {
+        orderId: editing.id,
+        note: form.deliveryNote.trim() || undefined,
+      })
+      const { trackingCode, trackingUrl, codAmount } = res.data
+      setEditing({ ...editing, shippingCarrier: "Steadfast", trackingNumber: trackingCode, trackingUrl })
+      const listed = carriers.find((c) => c.name.toLowerCase() === "steadfast")
+      setForm((prev) => ({
+        ...prev,
+        carrier: listed ? listed.name : CUSTOM_CARRIER,
+        customCarrier: listed ? "" : "Steadfast",
+        trackingNumber: trackingCode,
+        trackingUrl,
+      }))
+      setUrlDirty(true)
+      Swal.fire({
+        text: `Sent to Steadfast. Tracking ${trackingCode} · COD ৳${codAmount}.`,
+        icon: "success",
+        confirmButtonColor: "#18181b",
+      })
+      fetchDeliveries()
+    } catch (error) {
+      Swal.fire({ text: apiMessage(error, "Failed to send to Steadfast."), icon: "error", confirmButtonColor: "#18181b" })
+    } finally {
+      setSteadfastBusy(null)
+    }
+  }
+
+  async function checkSteadfastStatus() {
+    if (!editing) return
+    try {
+      setSteadfastBusy("status")
+      const res = await api.get(`/admin/deliveries/steadfast?orderId=${encodeURIComponent(editing.id)}`)
+      setSteadfastStatus(String(res.data.status || "unknown").replace(/_/g, " "))
+    } catch (error) {
+      Swal.fire({ text: apiMessage(error, "Failed to read Steadfast status."), icon: "error", confirmButtonColor: "#18181b" })
+    } finally {
+      setSteadfastBusy(null)
+    }
   }
 
   /** Applies a change and, unless the admin has hand-edited the URL, re-derives it. */
@@ -399,8 +467,8 @@ export default function AdminDeliveriesPage() {
   return (
     <>
       {/* UPDATE DELIVERY DIALOG */}
-      <Dialog open={!!editing} onOpenChange={(open) => { if (!open && !saving) setEditing(null) }}>
-        <DialogContent className="sm:max-w-lg">
+      <Dialog open={!!editing} onOpenChange={(open) => { if (!open && !saving && !steadfastBusy) setEditing(null) }}>
+        <DialogContent className="sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Truck className="w-4 h-4" /> Update delivery
@@ -415,6 +483,42 @@ export default function AdminDeliveriesPage() {
           </DialogHeader>
 
           <div className="space-y-4">
+            {/* Steadfast courier — books the consignment and fills in tracking. */}
+            <div className="rounded-lg border bg-muted/30 p-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold">Steadfast Courier</p>
+                  <p className="text-xs text-muted-foreground">
+                    {steadfast === null
+                      ? "Checking connection…"
+                      : !steadfast.configured
+                        ? "Not connected — add STEADFAST_API_KEY and STEADFAST_SECRET_KEY to .env."
+                        : sentToSteadfast
+                          ? `Sent · tracking ${editing?.trackingNumber}${steadfastStatus ? ` · status: ${steadfastStatus}` : ""}`
+                          : `Connected${typeof steadfast.balance === "number" ? ` · balance ৳${steadfast.balance}` : ""}. Cash on delivery is the order total unless it is already paid.`}
+                  </p>
+                </div>
+                <div className="flex gap-2">
+                  {sentToSteadfast ? (
+                    <Button type="button" variant="outline" size="sm" onClick={checkSteadfastStatus} disabled={!steadfast?.configured || steadfastBusy !== null}>
+                      {steadfastBusy === "status" && <Loader2 className="w-4 h-4 animate-spin" />}
+                      Check status
+                    </Button>
+                  ) : (
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={sendToSteadfast}
+                      disabled={!steadfast?.configured || steadfastBusy !== null || saving !== null}
+                    >
+                      {steadfastBusy === "send" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Truck className="w-4 h-4" />}
+                      Send to Steadfast
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </div>
+
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Carrier</Label>

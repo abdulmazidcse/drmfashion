@@ -27,6 +27,7 @@ import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
+import { MediaLibraryButton } from "@/components/admin/MediaLibraryPicker"
 
 const RichTextEditor = dynamic(() => import("@/components/admin/RichTextEditor"), { ssr: false, loading: () => <div className="p-4 text-center text-xs text-zinc-400 border border-zinc-200 rounded-xl">Loading editor...</div> })
 
@@ -477,7 +478,10 @@ export default function EditCollectionPage() {
             <h2 className="text-sm font-semibold text-foreground">Images</h2>
             <div className="space-y-1.5">
               <Label className={labelCls}>Tile Image (Max 1MB)</Label>
-              <Input type="file" accept="image/*" onChange={(e) => handleFileChange(e, setImageFile, setImagePreview)} />
+              <div className="flex items-center gap-2">
+                <Input type="file" className="flex-1" accept="image/*" onChange={(e) => handleFileChange(e, setImageFile, setImagePreview)} />
+                <MediaLibraryButton label="Library" onSelect={([url]) => { setImage(url); setImageFile(null); setImagePreview(url) }} />
+              </div>
               {imagePreview && (
                 <div className="mt-3 flex items-start gap-2">
                   <img src={imagePreview} alt="Tile preview" className="h-24 w-20 object-cover rounded-lg border border-border shadow-sm" />
@@ -488,7 +492,10 @@ export default function EditCollectionPage() {
             </div>
             <div className="space-y-1.5">
               <Label className={labelCls}>Banner Image (Max 1MB)</Label>
-              <Input type="file" accept="image/*" onChange={(e) => handleFileChange(e, setBannerFile, setBannerPreview)} />
+              <div className="flex items-center gap-2">
+                <Input type="file" className="flex-1" accept="image/*" onChange={(e) => handleFileChange(e, setBannerFile, setBannerPreview)} />
+                <MediaLibraryButton label="Library" onSelect={([url]) => { setBannerImage(url); setBannerFile(null); setBannerPreview(url) }} />
+              </div>
               {bannerPreview && (
                 <div className="mt-3 flex items-start gap-2">
                   <img src={bannerPreview} alt="Banner preview" className="h-20 w-full object-cover rounded-lg border border-border shadow-sm" />

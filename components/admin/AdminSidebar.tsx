@@ -50,7 +50,7 @@ import {
   Calculator,
   ShieldCheck,
   ChevronDown,
-  type LucideIcon,
+  type LucideIcon, Sheet
 } from "lucide-react"
 
 import { useMemo, useState } from "react"
@@ -98,6 +98,7 @@ const navGroups: NavGroup[] = [
     title: "Operations",
     links: [
       { label: "Inventory", href: "/admin/inventory", icon: Boxes },
+      { label: "Stock Sheet", href: "/admin/inventory/sheet", icon: Sheet },
       { label: "Purchases", href: "/admin/purchases", icon: PackagePlus },
       { label: "Suppliers", href: "/admin/suppliers", icon: Warehouse },
       { label: "Deliveries", href: "/admin/deliveries", icon: PackageCheck },

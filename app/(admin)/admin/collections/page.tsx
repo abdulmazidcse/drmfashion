@@ -14,6 +14,7 @@ import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
+import { MediaLibraryButton } from "@/components/admin/MediaLibraryPicker"
 
 type Collection = {
   id: string
@@ -60,6 +61,8 @@ export default function CollectionsPage() {
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState("")
   const [submitting, setSubmitting] = useState(false)
+  // Set when the image is chosen from the Media Library instead of uploaded.
+  const [pickedImage, setPickedImage] = useState<string | null>(null)
   const [showAddModal, setShowAddModal] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
 
@@ -81,6 +84,7 @@ export default function CollectionsPage() {
       return
     }
     setAddFile(file)
+    setPickedImage(null)
     setAddPreview(URL.createObjectURL(file))
   }
 
@@ -103,7 +107,7 @@ export default function CollectionsPage() {
   async function onSubmit(data: FormValues) {
     try {
       setSubmitting(true)
-      let imageUrl = ""
+      let imageUrl = pickedImage || ""
       if (addFile) {
         imageUrl = await uploadImage(addFile)
       }
@@ -117,6 +121,8 @@ export default function CollectionsPage() {
       reset()
       setAddFile(null)
       setAddPreview(null)
+    setPickedImage(null)
+      setPickedImage(null)
       setShowAddModal(false)
       fetchCollections(search)
     }
@@ -128,6 +134,7 @@ export default function CollectionsPage() {
     reset({ name: "", slug: "", sortOrder: 0, description: "" })
     setAddFile(null)
     setAddPreview(null)
+    setPickedImage(null)
     setAddActive(true)
     setAddFeatured(false)
     setShowAddModal(true)
@@ -172,7 +179,10 @@ export default function CollectionsPage() {
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Tile Image (Max 1MB)</Label>
-                <Input type="file" accept="image/*" onChange={handleFileChange} />
+                <div className="flex items-center gap-2">
+                  <Input type="file" className="flex-1" accept="image/*" onChange={handleFileChange} />
+                  <MediaLibraryButton label="Library" onSelect={([url]) => { setAddFile(null); setAddPreview(url); setPickedImage(url) }} />
+                </div>
                 {addPreview && <img src={addPreview} alt="Preview" className="mt-3 h-20 w-16 object-cover rounded-lg border border-border shadow-sm" />}
                 <p className="text-[10px] text-muted-foreground">Portrait, 5:6 ratio, e.g. 1000 × 1200 px. The wide banner image can be added on the edit page.</p>
               </div>

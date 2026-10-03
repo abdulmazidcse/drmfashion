@@ -13,6 +13,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { stagePendingFile } from "@/lib/pendingUploads"
+import { MediaLibraryButton } from "@/components/admin/MediaLibraryPicker"
 import { compareVariantsForDisplay } from "@/lib/variants"
 import {
   Table,
@@ -114,9 +115,19 @@ export default function VariantTable({ variants, productTitle, brandName, onRemo
 
   /** Files are staged locally; the product form uploads them on submit. */
   function addFiles(index: number, files: FileList | null) {
-    if (!files || files.length === 0 || !onUpdateImages) return
+    if (!files || files.length === 0) return
+    addUrls(index, Array.from(files).map(stagePendingFile))
+  }
+
+  /**
+   * Append images by URL — staged blob URLs from addFiles, or `/media/...`
+   * URLs picked from the Media Library (already in storage, stored as-is).
+   */
+  function addUrls(index: number, urls: string[]) {
+    if (urls.length === 0 || !onUpdateImages) return
     const existing = imagesOf(variants[index])
-    const staged = Array.from(files).map(stagePendingFile)
+    const staged = urls.filter((url) => !existing.some((img) => img.url === url))
+    if (staged.length === 0) return
     const total = existing.length + staged.length
 
     // Newly added shots arrive with the generated copy already written in, so
@@ -407,6 +418,12 @@ export default function VariantTable({ variants, productTitle, brandName, onRemo
                           className="hidden"
                         />
                       </label>
+                      <MediaLibraryButton
+                        multiple
+                        label="From library"
+                        onSelect={(urls) => addUrls(editing, urls)}
+                        className="flex h-12 cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed border-border text-[10px] font-bold uppercase tracking-wider text-muted-foreground transition hover:border-primary/50 hover:text-foreground"
+                      />
                     </div>
 
                     <div className="flex items-center gap-3">

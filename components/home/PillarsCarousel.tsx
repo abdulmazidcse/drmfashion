@@ -66,23 +66,22 @@ interface PillarsCarouselProps {
 // they fall back to live in lib/pillarsSizes.ts.
 
 /**
- * Layout of the heights slide, shared by the figures and the measuring rule.
+ * Layout of the heights slide's figures.
  *
  * Every range gets a third of the media box. At rest the figures fill the row
  * left to right (a two-range gender is centred by starting half a slot in);
  * picking one slides them all into the right-hand slot, where only the chosen
- * one stays visible. The rule then rises into the gap the others left behind.
+ * one stays visible.
  */
 const SLOT = 100 / 3;
 const FIGURE_TRANSITION = "transition-all duration-700 ease-[cubic-bezier(0.7,0,0.3,1)]";
-/** Clears the size buttons pinned at the bottom of the media box. */
-const FLOOR = "bottom-[76px] md:bottom-[90px]";
 /** Clears the gender toggle pinned at the top of the media box. */
 const CEILING = "top-[90px] md:top-[110px]";
 // `top` + `bottom` alone don't stretch an <img> — replaced elements size from
 // their intrinsic ratio unless height is explicit, so an explicit calc'd
-// height (matching the CEILING/FLOOR offsets above) is required to actually
-// fill the space between the toggle and the size buttons.
+// height (matching the CEILING offset above and the size-button strip at the
+// bottom) is required to actually fill the space between the toggle and the
+// size buttons.
 const FIGURE_HEIGHT = "h-[calc(100%-166px)] md:h-[calc(100%-200px)]";
 
 function slotLeft(index: number, count: number) {
@@ -305,7 +304,6 @@ export default function PillarsCarousel({ initialTabs }: PillarsCarouselProps) {
     setActiveSize(null);
   };
 
-  const selectedSize = sizes[gender].find((s) => s.id === activeSize) || null;
   const activeType = slides[activeSlide]?.type;
   const showToggle = activeType === "sizes" || activeType === "compare";
 
@@ -386,7 +384,7 @@ export default function PillarsCarousel({ initialTabs }: PillarsCarouselProps) {
                           style={{
                             // Once a range is picked every figure travels to the
                             // right-hand slot; the unchosen ones fade out on the
-                            // way, leaving the chosen one standing beside the rule.
+                            // way, leaving only the chosen one standing.
                             left: `${activeSize ? SLOT * 2 : slotLeft(idx, sizes[gender].length)}%`,
                             opacity: !activeSize || chosen ? 1 : 0,
                           }}
@@ -397,42 +395,6 @@ export default function PillarsCarousel({ initialTabs }: PillarsCarouselProps) {
                       );
                     })}
 
-                    {/* Measuring rule + Height/Inseam readout. Kept mounted and
-                        slid out of frame rather than unmounted, so it animates
-                        away as smoothly as it arrives. */}
-                    <div
-                      className={`pointer-events-none absolute right-1/3 z-10 border-r border-at-muted ${FLOOR} ${FIGURE_TRANSITION} ${
-                        selectedSize
-                          ? "translate-y-0 opacity-100"
-                          : "translate-y-[calc(100%+90px)] opacity-0"
-                      }`}
-                      style={{ height: `${selectedSize?.bracket ?? 45}%` }}
-                    >
-                      {/* Tick pointing off the top of the rule at the figure. */}
-                      <span className="absolute -right-10 top-0 block w-10 border-t border-at-muted" />
-
-                      {/* Every readout stays mounted and cross-fades, so moving
-                          between ranges does not blank the text mid-slide. */}
-                      {sizes[gender].map((size) => (
-                        <div
-                          key={size.id}
-                          className={`absolute right-[30px] top-0 flex w-max flex-col gap-4 text-right transition-opacity duration-700 ${
-                            activeSize === size.id ? "opacity-100" : "opacity-0"
-                          }`}
-                          aria-hidden={activeSize !== size.id}
-                        >
-                          <span className="at-heading text-2xl text-at-ink">{size.name}</span>
-                          <span>
-                            <span className="block text-[12px] uppercase tracking-wider text-at-muted">Height</span>
-                            <span className="at-heading text-xl text-at-ink">{size.height}</span>
-                          </span>
-                          <span>
-                            <span className="block text-[12px] uppercase tracking-wider text-at-muted">Inseam</span>
-                            <span className="at-heading text-xl text-at-ink">{size.inseam}</span>
-                          </span>
-                        </div>
-                      ))}
-                    </div>
                     {/* Size-range buttons */}
                     <div className="absolute bottom-[30px] left-1/2 z-10 flex -translate-x-1/2 gap-[5px]">
                       {sizes[gender].map((size) => (
