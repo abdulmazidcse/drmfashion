@@ -385,6 +385,77 @@ export async function sendEmailVerificationOtpEmail(to: string, data: {
   })
 }
 
+// ─── Newsletter (one email per recipient) ─────────────────────────────────────
+
+function escapeHtml(text: string) {
+  return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;")
+}
+
+/** Typed plain text → paragraphs with line breaks; HTML is used as written. */
+function newsletterBody(message: string) {
+  // Only real markup counts as HTML — "Dear <name>" typed as text must not.
+  const HTML_TAG = /<\/?(p|br|div|a|h[1-6]|ul|ol|li|table|tr|td|strong|em|b|i|u|img|span|hr|blockquote)\b[^>]*>/i
+  if (HTML_TAG.test(message)) return message
+  return message
+    .trim()
+    .split(/\n{2,}/)
+    .map((para) => `<p style="margin:0 0 16px;color:#444;font-size:15px;line-height:1.7;">${escapeHtml(para).replace(/\n/g, "<br>")}</p>`)
+    .join("")
+}
+
+/**
+ * Sends a campaign so that every recipient gets their own email.
+ *
+ * The admin newsletter used to put up to 50 addresses in one `to` field, so
+ * everyone who received it could read every other recipient's address. Each
+ * message here has exactly one address in `to`; Resend's batch endpoint still
+ * lets 100 of them go in one request. Failures are counted, not thrown, so one
+ * bad batch does not stop the rest — and the admin is told the real numbers.
+ */
+export async function sendNewsletter(recipients: string[], subject: string, message: string) {
+  const storeName = await getStoreName()
+  const html = `
+<!DOCTYPE html>
+<html>
+<body style="margin:0;padding:0;background:#f9f9f9;font-family:'Helvetica Neue',Arial,sans-serif;">
+  <div style="max-width:600px;margin:40px auto;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,0.08);">
+    <div style="background:#09090b;padding:32px 40px;text-align:center;">
+      <h1 style="margin:0;color:#fff;font-size:22px;letter-spacing:0.3em;font-weight:900;">${escapeHtml(storeName)}</h1>
+    </div>
+    <div style="padding:40px;">
+      ${newsletterBody(message)}
+    </div>
+    <div style="background:#f9f9f9;padding:20px;text-align:center;border-top:1px solid #eee;">
+      <p style="margin:0;font-size:11px;color:#aaa;">You are receiving this because you subscribed to or shopped at ${escapeHtml(storeName)}.</p>
+      <p style="margin:6px 0 0;font-size:11px;color:#aaa;">&copy; ${new Date().getFullYear()} ${escapeHtml(storeName)}. All rights reserved.</p>
+    </div>
+  </div>
+</body>
+</html>`
+
+  let sent = 0
+  let failed = 0
+  const BATCH = 100 // Resend's per-request limit
+  for (let i = 0; i < recipients.length; i += BATCH) {
+    const chunk = recipients.slice(i, i + BATCH)
+    try {
+      const { error } = await resend.batch.send(
+        chunk.map((to) => ({ from: FROM_EMAIL, to: [to], subject, html }))
+      )
+      if (error) {
+        console.error("[NEWSLETTER_BATCH_ERROR]", error)
+        failed += chunk.length
+      } else {
+        sent += chunk.length
+      }
+    } catch (e) {
+      console.error("[NEWSLETTER_BATCH_ERROR]", e)
+      failed += chunk.length
+    }
+  }
+  return { sent, failed }
+}
+
 // ─── Generic Email ────────────────────────────────────────────────────────────
 export async function sendEmail({
   to,

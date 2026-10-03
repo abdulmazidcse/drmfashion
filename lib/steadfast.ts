@@ -121,6 +121,26 @@ export async function statusByTrackingCode(trackingCode: string): Promise<string
   return data.delivery_status || "unknown"
 }
 
+/**
+ * Steadfast's own record for an invoice (we use the order id as the invoice),
+ * or null when Steadfast has no consignment for it. This — not the carrier and
+ * tracking fields on the order, which an admin can type by hand — is what says
+ * whether an order has really been sent.
+ */
+export async function statusByInvoice(invoice: string): Promise<string | null> {
+  try {
+    const data = await call<{ delivery_status?: string }>(`/status_by_invoice/${encodeURIComponent(invoice)}`)
+    return data.delivery_status || null
+  } catch (e) {
+    // "Not found" comes back as a 4xx; credential errors (401/403) and
+    // outages are real failures and must not read as "not sent yet".
+    if (e instanceof SteadfastError && e.status && e.status >= 400 && e.status < 500 && e.status !== 401 && e.status !== 403) {
+      return null
+    }
+    throw e
+  }
+}
+
 export async function currentBalance(): Promise<number> {
   const data = await call<{ current_balance?: number }>("/get_balance")
   return Number(data.current_balance ?? 0)

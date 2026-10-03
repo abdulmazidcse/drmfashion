@@ -180,6 +180,13 @@ export default function AdminDeliveriesPage() {
   const [steadfast, setSteadfast] = useState<{ configured: boolean; balance?: number } | null>(null)
   const [steadfastBusy, setSteadfastBusy] = useState<"send" | "status" | null>(null)
   const [steadfastStatus, setSteadfastStatus] = useState<string | null>(null)
+  // Whether Steadfast itself has a consignment for the open order (null = checking).
+  const [steadfastSent, setSteadfastSent] = useState<boolean | null>(null)
+  // Confirmation and result are shown inside the dialog: a SweetAlert opened
+  // on top of this (modal) dialog cannot be clicked — the dialog blocks
+  // pointer events outside itself, so "Send" did nothing.
+  const [steadfastConfirm, setSteadfastConfirm] = useState(false)
+  const [steadfastMessage, setSteadfastMessage] = useState<{ type: "success" | "error"; text: string } | null>(null)
 
   // Manage carriers dialog
   const [manageOpen, setManageOpen] = useState(false)
@@ -312,6 +319,9 @@ export default function AdminDeliveriesPage() {
     // A stored URL that differs from the template is the admin's own; keep it.
     setUrlDirty(!!row.trackingUrl && row.trackingUrl !== derived)
     setSteadfastStatus(null)
+    setSteadfastSent(null)
+    setSteadfastConfirm(false)
+    setSteadfastMessage(null)
     setEditing(row)
     if (steadfast === null) {
       api
@@ -319,21 +329,23 @@ export default function AdminDeliveriesPage() {
         .then((res) => setSteadfast(res.data))
         .catch(() => setSteadfast({ configured: false }))
     }
+    // A carrier + tracking number typed by hand does not mean the parcel was
+    // booked, so ask Steadfast (by order id) rather than reading the fields.
+    api
+      .get(`/admin/deliveries/steadfast?orderId=${encodeURIComponent(row.id)}`)
+      .then((res) => {
+        setSteadfastSent(!!res.data.sent)
+        if (res.data.status) setSteadfastStatus(String(res.data.status).replace(/_/g, " "))
+      })
+      .catch(() => setSteadfastSent(false))
   }
 
-  const sentToSteadfast = editing?.shippingCarrier === "Steadfast" && !!editing?.trackingNumber
+  const sentToSteadfast = steadfastSent === true
 
   async function sendToSteadfast() {
     if (!editing) return
-    const confirm = await Swal.fire({
-      title: "Send to Steadfast?",
-      text: "This books a real pickup with Steadfast for this order. It can only be sent once.",
-      icon: "question",
-      showCancelButton: true,
-      confirmButtonText: "Send",
-      confirmButtonColor: "#18181b",
-    })
-    if (!confirm.isConfirmed) return
+    setSteadfastConfirm(false)
+    setSteadfastMessage(null)
     try {
       setSteadfastBusy("send")
       const res = await api.post("/admin/deliveries/steadfast", {
@@ -342,6 +354,8 @@ export default function AdminDeliveriesPage() {
       })
       const { trackingCode, trackingUrl, codAmount } = res.data
       setEditing({ ...editing, shippingCarrier: "Steadfast", trackingNumber: trackingCode, trackingUrl })
+      setSteadfastSent(true)
+      setSteadfastStatus(String(res.data.status || "in review").replace(/_/g, " "))
       const listed = carriers.find((c) => c.name.toLowerCase() === "steadfast")
       setForm((prev) => ({
         ...prev,
@@ -351,14 +365,10 @@ export default function AdminDeliveriesPage() {
         trackingUrl,
       }))
       setUrlDirty(true)
-      Swal.fire({
-        text: `Sent to Steadfast. Tracking ${trackingCode} · COD ৳${codAmount}.`,
-        icon: "success",
-        confirmButtonColor: "#18181b",
-      })
+      setSteadfastMessage({ type: "success", text: `Sent to Steadfast. Tracking ${trackingCode} · cash on delivery ৳${codAmount}.` })
       fetchDeliveries()
     } catch (error) {
-      Swal.fire({ text: apiMessage(error, "Failed to send to Steadfast."), icon: "error", confirmButtonColor: "#18181b" })
+      setSteadfastMessage({ type: "error", text: apiMessage(error, "Failed to send to Steadfast.") })
     } finally {
       setSteadfastBusy(null)
     }
@@ -369,9 +379,10 @@ export default function AdminDeliveriesPage() {
     try {
       setSteadfastBusy("status")
       const res = await api.get(`/admin/deliveries/steadfast?orderId=${encodeURIComponent(editing.id)}`)
-      setSteadfastStatus(String(res.data.status || "unknown").replace(/_/g, " "))
+      setSteadfastSent(!!res.data.sent)
+      setSteadfastStatus(res.data.status ? String(res.data.status).replace(/_/g, " ") : null)
     } catch (error) {
-      Swal.fire({ text: apiMessage(error, "Failed to read Steadfast status."), icon: "error", confirmButtonColor: "#18181b" })
+      setSteadfastMessage({ type: "error", text: apiMessage(error, "Failed to read Steadfast status.") })
     } finally {
       setSteadfastBusy(null)
     }
@@ -416,7 +427,8 @@ export default function AdminDeliveriesPage() {
       Swal.fire({ text: "Delivery details saved.", icon: "success", confirmButtonColor: "#18181b", timer: 1500, showConfirmButton: false })
       fetchDeliveries()
     } catch (error) {
-      Swal.fire({ text: apiMessage(error, "Failed to save delivery details."), icon: "error", confirmButtonColor: "#18181b" })
+      // Shown in the dialog — a SweetAlert over the open dialog can't be clicked.
+      setSteadfastMessage({ type: "error", text: apiMessage(error, "Failed to save delivery details.") })
       console.error(error)
     } finally {
       setSaving(null)
@@ -493,7 +505,9 @@ export default function AdminDeliveriesPage() {
                       ? "Checking connection…"
                       : !steadfast.configured
                         ? "Not connected — add STEADFAST_API_KEY and STEADFAST_SECRET_KEY to .env."
-                        : sentToSteadfast
+                        : steadfastSent === null
+                          ? "Checking whether this order was sent…"
+                          : sentToSteadfast
                           ? `Sent · tracking ${editing?.trackingNumber}${steadfastStatus ? ` · status: ${steadfastStatus}` : ""}`
                           : `Connected${typeof steadfast.balance === "number" ? ` · balance ৳${steadfast.balance}` : ""}. Cash on delivery is the order total unless it is already paid.`}
                   </p>
@@ -508,8 +522,11 @@ export default function AdminDeliveriesPage() {
                     <Button
                       type="button"
                       size="sm"
-                      onClick={sendToSteadfast}
-                      disabled={!steadfast?.configured || steadfastBusy !== null || saving !== null}
+                      onClick={() => {
+                        setSteadfastMessage(null)
+                        setSteadfastConfirm(true)
+                      }}
+                      disabled={!steadfast?.configured || steadfastSent !== false || steadfastBusy !== null || saving !== null || steadfastConfirm}
                     >
                       {steadfastBusy === "send" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Truck className="w-4 h-4" />}
                       Send to Steadfast
@@ -517,6 +534,35 @@ export default function AdminDeliveriesPage() {
                   )}
                 </div>
               </div>
+
+              {steadfastConfirm && (
+                <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-md border border-amber-300 bg-amber-50 p-3 text-amber-900">
+                  <p className="text-xs font-medium">
+                    This books a real pickup with Steadfast for this order. It can only be sent once.
+                  </p>
+                  <div className="flex gap-2">
+                    <Button type="button" size="sm" variant="outline" onClick={() => setSteadfastConfirm(false)}>
+                      Cancel
+                    </Button>
+                    <Button type="button" size="sm" onClick={sendToSteadfast}>
+                      Yes, send
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {steadfastMessage && (
+                <p
+                  role="status"
+                  className={`mt-3 rounded-md px-3 py-2 text-xs font-medium ${
+                    steadfastMessage.type === "success"
+                      ? "bg-emerald-50 text-emerald-800"
+                      : "bg-red-50 text-red-700"
+                  }`}
+                >
+                  {steadfastMessage.text}
+                </p>
+              )}
             </div>
 
             <div className="grid grid-cols-2 gap-3">

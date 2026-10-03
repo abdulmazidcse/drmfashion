@@ -7,7 +7,7 @@ import {
   createConsignment,
   currentBalance,
   normalizeBdPhone,
-  statusByTrackingCode,
+  statusByInvoice,
   steadfastConfigured,
   steadfastTrackingUrl,
 } from "@/lib/steadfast"
@@ -31,7 +31,7 @@ function failure(e: unknown, tag: string, fallback: string) {
 
 /**
  * GET /api/admin/deliveries/steadfast            → { configured, balance? }
- * GET /api/admin/deliveries/steadfast?orderId=…  → live Steadfast status for that order
+ * GET /api/admin/deliveries/steadfast?orderId=…  → { sent, status } straight from Steadfast
  */
 export async function GET(req: NextRequest) {
   const denied = await requireAdmin(req)
@@ -44,16 +44,11 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ configured: true, balance: await currentBalance() })
     }
 
-    const order = await prisma.order.findUnique({
-      where: { id: orderId },
-      select: { shippingCarrier: true, trackingNumber: true },
-    })
-    if (!order) return NextResponse.json({ message: "Order not found" }, { status: 404 })
-    if (order.shippingCarrier !== STEADFAST_CARRIER_NAME || !order.trackingNumber) {
-      return NextResponse.json({ message: "This order has not been sent to Steadfast." }, { status: 400 })
-    }
-    const status = await statusByTrackingCode(order.trackingNumber)
-    return NextResponse.json({ status, trackingCode: order.trackingNumber })
+    if (!steadfastConfigured()) return NextResponse.json({ sent: false, configured: false })
+    // Asked of Steadfast itself (the order id is the invoice), so a carrier
+    // and tracking number typed in by hand never count as "sent".
+    const status = await statusByInvoice(orderId)
+    return NextResponse.json({ sent: status !== null, status })
   } catch (e) {
     return failure(e, "[STEADFAST_STATUS_ERROR]", "Failed to read Steadfast status.")
   }
@@ -85,18 +80,19 @@ export async function POST(req: NextRequest) {
         totalAmount: true,
         shippingPhone: true,
         shippingAddress: true,
-        shippingCarrier: true,
-        trackingNumber: true,
         deliveryNote: true,
         user: { select: { name: true } },
       },
     })
     if (!order) return NextResponse.json({ message: "Order not found" }, { status: 404 })
 
-    // One consignment per order: a second click must not book a second pickup.
-    if (order.shippingCarrier === STEADFAST_CARRIER_NAME && order.trackingNumber) {
+    // One consignment per order: a second click must not book a second
+    // pickup. Checked with Steadfast by invoice — the order's own carrier /
+    // tracking fields can be typed by hand and prove nothing.
+    const existing = await statusByInvoice(order.id)
+    if (existing !== null) {
       return NextResponse.json(
-        { message: `Already sent to Steadfast (tracking ${order.trackingNumber}).` },
+        { message: `Already sent to Steadfast (status: ${existing.replace(/_/g, " ")}).` },
         { status: 409 }
       )
     }

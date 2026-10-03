@@ -36,7 +36,10 @@ export default function NewsletterPage() {
       const data = await res.json()
       if (!res.ok) throw new Error(data.message || "Failed to send newsletter.")
 
-      setStatus({ type: "success", msg: `Newsletter sent successfully to ${data.count} recipients.` })
+      setStatus({
+        type: "success",
+        msg: `Newsletter sent to ${data.count} recipients${data.failed ? ` (${data.failed} failed — see server log)` : ""}. Each person received their own copy.`,
+      })
       setSubject("")
       setMessage("")
     } catch (err: any) {
