@@ -14,7 +14,7 @@ import { Label } from "@/components/ui/label"
 import { Card, CardContent } from "@/components/ui/card"
 import { Switch } from "@/components/ui/switch"
 import { Separator } from "@/components/ui/separator"
-import { DEFAULT_SHIPPING_METHODS, parseFreeShippingThreshold, type ShippingMethod, type ShippingRegionRestriction } from "@/lib/shipping"
+import { DEFAULT_SHIPPING_METHODS, WHOLE_COUNTRY, parseFreeShippingThreshold, type ShippingMethod, type ShippingRegionRestriction } from "@/lib/shipping"
 import { DEFAULT_WAREHOUSE, isWarehouseComplete, type WarehouseAddress } from "@/lib/warehouse"
 import { COUNTRIES } from "@/lib/countries"
 import { regionLabelFor } from "@/lib/regions"
@@ -54,14 +54,16 @@ function RegionRestrictionEditor({
       regionRestriction: {
         scope: nextScope,
         country: pendingCountry,
-        region: restriction?.region || regions[0]?.code || "",
+        // Whole country unless a region was already picked: a limit saved with
+        // no region used to be dropped silently, leaving the tier everywhere.
+        region: restriction?.region || WHOLE_COUNTRY,
       },
     })
   }
 
   const setCountry = (country: string) => {
     setPendingCountry(country)
-    if (restriction) onChange({ regionRestriction: { ...restriction, country, region: "" } })
+    if (restriction) onChange({ regionRestriction: { ...restriction, country, region: WHOLE_COUNTRY } })
   }
 
   const setRegion = (region: string) => {
@@ -76,10 +78,12 @@ function RegionRestrictionEditor({
           Availability
         </p>
         <p className="text-[11px] text-muted-foreground mt-0.5">
-          Limit this method to — or hide it from — one Division/State/Province within the
-          country picked below. Either way it only ever shows for that country: an
-          &quot;Outside Dhaka&quot; tier set to &quot;Everywhere except Dhaka&quot; still only
-          appears for Bangladesh addresses, never for a different country entirely.
+          Limit this method to — or hide it from — a whole country or one
+          Division/State/Province in it. A region limit only ever applies inside that
+          country: an &quot;Outside Dhaka&quot; tier set to &quot;Everywhere except Dhaka&quot;
+          still only appears for Bangladesh addresses. To offer an international tier
+          to every country but Bangladesh, choose &quot;Everywhere except…&quot;, Bangladesh,
+          &quot;Whole country&quot;.
         </p>
       </div>
 
@@ -99,13 +103,13 @@ function RegionRestrictionEditor({
             ))}
           </select>
           <select
-            value={restriction?.region || ""}
+            value={restriction?.region || WHOLE_COUNTRY}
             onChange={(e) => setRegion(e.target.value)}
-            disabled={loading || regions.length === 0}
+            disabled={loading}
             className={`flex-1 ${selectClass}`}
           >
-            <option value="" disabled>
-              {loading ? "Loading…" : regions.length === 0 ? "No regions for this country" : `Select ${regionLabelFor(pendingCountry).toLowerCase()}…`}
+            <option value={WHOLE_COUNTRY}>
+              {loading ? "Loading…" : "Whole country"}
             </option>
             {regions.map((r) => (
               <option key={r.code} value={r.code}>
@@ -128,9 +132,9 @@ export default function ShippingSettingsPage() {
   // Kept as a string: "" is a blank input, which is what "no offer" should
   // look like. It is parsed on save and by the preview below.
   const [freeThreshold, setFreeThreshold] = useState("")
-  // Also kept as a string for the same reason: blank means "use the built-in
-  // default", which is distinct from "0" (turned off) — see parseBkashFreeShippingMax.
-  const [bkashFreeShippingMax, setBkashFreeShippingMax] = useState("")
+  // Free delivery when the order is paid in full online (bKash, SSLCommerz,
+  // card, Square) — no amount limit. See lib/shipping.ts.
+  const [fullPaymentFree, setFullPaymentFree] = useState(true)
   const [warehouse, setWarehouse] = useState<WarehouseAddress>(DEFAULT_WAREHOUSE)
   const [ups, setUps] = useState({
     enabled: false,
@@ -154,8 +158,8 @@ export default function ShippingSettingsPage() {
         if (typeof data.shipping_free_threshold === "string") {
           setFreeThreshold(data.shipping_free_threshold === "0" ? "" : data.shipping_free_threshold)
         }
-        if (typeof data.bkash_free_shipping_max_amount === "string") {
-          setBkashFreeShippingMax(data.bkash_free_shipping_max_amount)
+        if (typeof data.free_shipping_full_payment === "string") {
+          setFullPaymentFree(data.free_shipping_full_payment !== "false")
         }
         if (data.warehouse_address) setWarehouse(data.warehouse_address)
       setUps(u => ({
@@ -255,7 +259,7 @@ export default function ShippingSettingsPage() {
           shipping_enabled: String(enabled),
           shipping_methods: methods,
           shipping_free_threshold: freeThreshold,
-          bkash_free_shipping_max_amount: bkashFreeShippingMax,
+          free_shipping_full_payment: String(fullPaymentFree),
           warehouse_address: warehouse,
           ups_enabled: String(ups.enabled),
           ups_environment: ups.environment,
@@ -272,8 +276,8 @@ export default function ShippingSettingsPage() {
       if (typeof data.shipping_free_threshold === "string") {
         setFreeThreshold(data.shipping_free_threshold === "0" ? "" : data.shipping_free_threshold)
       }
-      if (typeof data.bkash_free_shipping_max_amount === "string") {
-        setBkashFreeShippingMax(data.bkash_free_shipping_max_amount)
+      if (typeof data.free_shipping_full_payment === "string") {
+        setFullPaymentFree(data.free_shipping_full_payment !== "false")
       }
       if (data.warehouse_address) setWarehouse(data.warehouse_address)
       setUps(u => ({
@@ -543,26 +547,20 @@ export default function ShippingSettingsPage() {
 
           <Separator />
 
-          {/* bKash free shipping cap */}
-          <div className="space-y-2">
-            <Label htmlFor="bkash_free_shipping_max_amount">
-              Free Shipping for bKash Orders Up To ({baseCurrency.symbol})
-            </Label>
-            <p className="text-xs text-muted-foreground">
-              An order paid online via bKash ships free when its subtotal is at or below this
-              amount — separate from the threshold above, which waives shipping above a subtotal
-              for any payment method. Leave blank for the default (৳2000). Enter 0 to turn this
-              offer off.
-            </p>
-            <Input
-              id="bkash_free_shipping_max_amount"
-              type="number"
-              min="0"
-              step="0.01"
-              placeholder="2000"
-              value={bkashFreeShippingMax}
-              onChange={e => setBkashFreeShippingMax(e.target.value)}
-              className="max-w-xs"
+          {/* Free delivery on full online payment */}
+          <div className="flex items-start justify-between gap-6">
+            <div className="space-y-1">
+              <Label htmlFor="free_shipping_full_payment">Free Shipping on Full Advance Payment</Label>
+              <p className="text-xs text-muted-foreground">
+                Delivery is free when the customer pays the whole order online — bKash, SSLCommerz,
+                card or Square — whatever the order value. Cash on delivery and Nagad (confirmed by
+                hand) still pay the delivery charge.
+              </p>
+            </div>
+            <Switch
+              id="free_shipping_full_payment"
+              checked={fullPaymentFree}
+              onCheckedChange={setFullPaymentFree}
             />
           </div>
 

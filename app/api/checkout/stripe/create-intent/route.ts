@@ -2,7 +2,12 @@ import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import Stripe from "stripe"
 import { resolveOrderShipping } from "@/lib/shippingServer"
-import { applyFreeShippingThreshold, freeShippingThresholdFromSettings } from "@/lib/shipping"
+import {
+  applyFreeShippingThreshold,
+  applyFullPaymentFreeShipping,
+  freeShippingThresholdFromSettings,
+  fullPaymentFreeShippingFromSettings,
+} from "@/lib/shipping"
 import { resolveTax, taxSettingsFromSettings } from "@/lib/tax"
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "", {
@@ -89,7 +94,10 @@ export async function POST(req: NextRequest) {
 
     // Same resolution as /api/checkout, so the amount authorised here matches
     // the amount the order is later written for.
-    const finalShippingFee = applyFreeShippingThreshold(
+    // A card payment is a full online payment, so the full-payment free
+    // delivery rule applies here too — otherwise the card would be charged a
+    // delivery fee the checkout showed as free.
+    const finalShippingFee = applyFullPaymentFreeShipping(applyFreeShippingThreshold(
       (
         await resolveOrderShipping({
           settings: settingsObj,
@@ -99,8 +107,9 @@ export async function POST(req: NextRequest) {
         })
       ).fee,
       calculatedTotal,
-      freeShippingThresholdFromSettings(settingsObj)
-    )
+      freeShippingThresholdFromSettings(settingsObj),
+      shippingDestination?.countryCode
+    ), "card", fullPaymentFreeShippingFromSettings(settingsObj), shippingDestination?.countryCode)
 
     const tax = resolveTax(taxSettingsFromSettings(settingsObj), {
       country: shippingDestination?.countryCode,

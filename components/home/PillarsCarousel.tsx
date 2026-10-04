@@ -70,8 +70,8 @@ interface PillarsCarouselProps {
  *
  * Every range gets a third of the media box. At rest the figures fill the row
  * left to right (a two-range gender is centred by starting half a slot in);
- * picking one slides them all into the right-hand slot, where only the chosen
- * one stays visible.
+ * picking one slides them all into the middle slot, where only the chosen one
+ * stays visible — centred, now that no measuring rule sits beside it.
  */
 const SLOT = 100 / 3;
 const FIGURE_TRANSITION = "transition-all duration-700 ease-[cubic-bezier(0.7,0,0.3,1)]";
@@ -85,7 +85,10 @@ const CEILING = "top-[90px] md:top-[110px]";
 const FIGURE_HEIGHT = "h-[calc(100%-166px)] md:h-[calc(100%-200px)]";
 
 function slotLeft(index: number, count: number) {
-  return (index + (count === 2 ? 0.5 : 0)) * SLOT;
+  // Fewer than three ranges are centred: half a slot in for two, the middle
+  // slot for one.
+  const offset = count === 1 ? 1 : count === 2 ? 0.5 : 0;
+  return (index + offset) * SLOT;
 }
 
 const FIGURES: Record<Gender, string> = {
@@ -383,9 +386,9 @@ export default function PillarsCarousel({ initialTabs }: PillarsCarouselProps) {
                           className={`absolute w-1/3 object-contain object-bottom ${CEILING} ${FIGURE_HEIGHT} ${FIGURE_TRANSITION}`}
                           style={{
                             // Once a range is picked every figure travels to the
-                            // right-hand slot; the unchosen ones fade out on the
+                            // middle slot; the unchosen ones fade out on the
                             // way, leaving only the chosen one standing.
-                            left: `${activeSize ? SLOT * 2 : slotLeft(idx, sizes[gender].length)}%`,
+                            left: `${activeSize ? SLOT : slotLeft(idx, sizes[gender].length)}%`,
                             opacity: !activeSize || chosen ? 1 : 0,
                           }}
                           loading="lazy"

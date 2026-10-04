@@ -18,7 +18,7 @@ import Swal from "@/lib/swal";
 import { startBkashCheckout } from "@/lib/bkashCheckoutClient";
 import { startSslcommerzCheckout } from "@/lib/sslcommerzCheckoutClient";
 import {
-  applyBkashFreeShipping,
+  applyFullPaymentFreeShipping,
   applyFreeShippingThreshold,
   defaultShippingMethod,
   shippableMethodsForDestination,
@@ -66,8 +66,8 @@ export interface ShippingSettings {
   methods: ShippingMethod[];
   /** Base-currency subtotal above which shipping is free, or null. */
   freeThreshold: number | null;
-  /** Base-currency subtotal at or below which a bKash order ships free, or null. */
-  bkashFreeShippingMax: number | null;
+  /** Free delivery when the order is paid in full online (lib/shipping.ts). */
+  fullPaymentFreeShipping: boolean;
 }
 
 interface OrderRenderProps {
@@ -248,17 +248,18 @@ export default function OrderRender({
   const selectedMethod =
     shippingOptions.find((m) => m.id === selectedMethodId) ??
     defaultShippingMethod(shipping.methods, form.country, form.area);
-  const shippingFee = applyBkashFreeShipping(
+  const shippingFee = applyFullPaymentFreeShipping(
     applyFreeShippingThreshold(
       shipping.enabled && selectedMethod
         ? shippingPriceForCountry(selectedMethod, form.country)
         : 0,
       cartSubtotal,
-      shipping.freeThreshold
+      shipping.freeThreshold,
+      form.country
     ),
-    cartSubtotal,
     form.paymentMethod,
-    shipping.bkashFreeShippingMax
+    shipping.fullPaymentFreeShipping,
+    form.country
   );
 
   const resolvedTax = resolveTax(taxSettings, {

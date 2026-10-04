@@ -26,12 +26,18 @@ export const SHIPPING_METHODS_KEY = "shipping_methods"
 // Edited in Admin → Settings → Shipping; advertised on the product page.
 export const FREE_SHIPPING_THRESHOLD_KEY = "shipping_free_threshold"
 
-// Order value, in base currency, AT OR BELOW which a bKash-paid order ships
-// free — the mirror image of FREE_SHIPPING_THRESHOLD_KEY (which waives
-// shipping above a subtotal, for any payment method). Edited in Admin →
-// Settings → Shipping.
-export const BKASH_FREE_SHIPPING_MAX_KEY = "bkash_free_shipping_max_amount"
-export const DEFAULT_BKASH_FREE_SHIPPING_MAX = 2000
+// "true"/"false": an order paid in full online ships free, whatever its value.
+// Replaced the old bKash-only rule that capped it at a subtotal (৳2,000).
+// Edited in Admin → Settings → Shipping; on unless set to "false".
+export const FULL_PAYMENT_FREE_SHIPPING_KEY = "free_shipping_full_payment"
+
+/**
+ * Payment methods that collect the whole order total up front through a
+ * gateway — bKash and SSLCommerz are verified, card and Square are charged.
+ * Cash on delivery and Nagad are confirmed by hand later, so they do not
+ * count as paid in full and keep their delivery charge.
+ */
+export const FULL_ONLINE_PAYMENT_METHODS = ["bkash", "sslcommerz", "card", "square"] as const
 
 /** One destination override inside a tier. */
 export interface ShippingCountryRate {
@@ -54,9 +60,17 @@ export interface ShippingRegionRestriction {
   scope: "only" | "except"
   /** ISO 3166-1 alpha-2, upper case. */
   country: string
-  /** ISO 3166-2 short code, upper case. */
+  /** ISO 3166-2 short code, upper case — or WHOLE_COUNTRY for every region. */
   region: string
 }
+
+/**
+ * Region value meaning "the whole country". Lets a tier be limited to one
+ * country ("only" → Bangladesh) or offered everywhere but it ("except" →
+ * every other country) — e.g. an international tier that must not be offered
+ * to Bangladeshi addresses.
+ */
+export const WHOLE_COUNTRY = "*"
 
 export interface ShippingMethod {
   /** Stable slug stored on the order and sent by the browser. */
@@ -225,47 +239,47 @@ export function freeShippingThresholdFromSettings(
  * promises is what the server later applies. Every display path and both
  * server money paths go through this, so they cannot drift apart.
  */
+/**
+ * Free-delivery offers apply to addresses in this country only. An
+ * international tier (e.g. ৳2,500 to the UK) is always charged, otherwise a
+ * ৳2,000 order abroad would ship free at the store's expense.
+ */
+export const FREE_SHIPPING_COUNTRY = "BD"
+
+/** Whether free-delivery offers can apply to this destination country. */
+export function freeShippingEligibleCountry(countryCode: unknown): boolean {
+  return typeof countryCode === "string" && countryCode.trim().toUpperCase() === FREE_SHIPPING_COUNTRY
+}
+
 export function applyFreeShippingThreshold(
   fee: number,
   subtotal: number,
-  threshold: number | null
+  threshold: number | null,
+  countryCode: unknown
 ): number {
-  if (threshold === null || fee <= 0) return fee
+  if (threshold === null || fee <= 0 || !freeShippingEligibleCountry(countryCode)) return fee
   return subtotal >= threshold ? 0 : fee
 }
 
-/**
- * The bKash free-shipping cap, or null when disabled.
- *
- * Blank, zero and anything non-numeric all mean "no offer" — same convention
- * as `parseFreeShippingThreshold`.
- */
-export function parseBkashFreeShippingMax(raw: unknown): number | null {
-  if (raw === undefined || raw === null || raw === "") return DEFAULT_BKASH_FREE_SHIPPING_MAX
-  const n = Number(raw)
-  return Number.isFinite(n) && n > 0 ? round2(n) : null
-}
-
-export function bkashFreeShippingMaxFromSettings(
+export function fullPaymentFreeShippingFromSettings(
   settings: Record<string, string> | undefined | null
-): number | null {
-  return parseBkashFreeShippingMax(settings?.[BKASH_FREE_SHIPPING_MAX_KEY])
+): boolean {
+  return settings?.[FULL_PAYMENT_FREE_SHIPPING_KEY] !== "false"
 }
 
 /**
- * Zeroes a shipping fee for a bKash order at or under the cap.
- *
- * Applied alongside `applyFreeShippingThreshold` — either rule can waive the
- * fee, so call this after (or before) it and take the lower result.
+ * Zeroes the shipping fee when the order is paid in full online. No amount
+ * limit. Applied alongside `applyFreeShippingThreshold` — either rule can
+ * waive the fee — on every display path and both server money paths.
  */
-export function applyBkashFreeShipping(
+export function applyFullPaymentFreeShipping(
   fee: number,
-  subtotal: number,
   paymentMethod: unknown,
-  maxAmount: number | null
+  enabled: boolean,
+  countryCode: unknown
 ): number {
-  if (maxAmount === null || fee <= 0) return fee
-  return paymentMethod === "bkash" && subtotal <= maxAmount ? 0 : fee
+  if (!enabled || fee <= 0 || !freeShippingEligibleCountry(countryCode)) return fee
+  return (FULL_ONLINE_PAYMENT_METHODS as readonly string[]).includes(String(paymentMethod)) ? 0 : fee
 }
 
 export function activeShippingMethods(methods: ShippingMethod[]): ShippingMethod[] {
@@ -294,6 +308,13 @@ export function methodAllowedForDestination(
   if (!restriction) return true
 
   const country = typeof countryCode === "string" ? countryCode.trim().toUpperCase() : ""
+
+  // Whole-country limit: in that country ("only") or anywhere else ("except").
+  if (restriction.region === WHOLE_COUNTRY) {
+    const inCountry = country === restriction.country
+    return restriction.scope === "only" ? inCountry : !inCountry
+  }
+
   if (country !== restriction.country) return false
 
   const region = typeof regionCode === "string" ? regionCode.trim().toUpperCase() : ""

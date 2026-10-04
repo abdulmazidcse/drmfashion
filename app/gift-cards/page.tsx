@@ -143,12 +143,14 @@ export default async function GiftCardsPage() {
               <div className="w-16 h-16 rounded-full bg-zinc-150 flex items-center justify-center mb-6">
                 <Gift className="w-7 h-7 text-zinc-400" />
               </div>
-              <h3 className="text-lg font-bold uppercase tracking-wide mb-2">No Gift Cards Available</h3>
+              {/* Shoppers see this, so it speaks to them — the old copy was an
+                  instruction for the store owner, with a link into the admin. */}
+              <h3 className="text-lg font-bold uppercase tracking-wide mb-2">Gift Cards Coming Soon</h3>
               <p className="text-zinc-450 text-sm font-light mb-6">
-                Please add products under the category with slug &quot;gift-cards&quot; in the admin panel to display them here!
+                We&apos;re preparing gift cards for you. In the meantime, explore our latest collection.
               </p>
-              <Link href="/admin/products/create" className="bg-zinc-950 text-white px-8 py-3 text-xs font-bold tracking-widest uppercase hover:bg-zinc-800 transition-all rounded-xl shadow-lg hover:shadow-xl duration-300">
-                Go to Admin Product Creator
+              <Link href="/shop" className="bg-zinc-950 text-white px-8 py-3 text-xs font-bold tracking-widest uppercase hover:bg-zinc-800 transition-all rounded-xl shadow-lg hover:shadow-xl duration-300">
+                Continue Shopping
               </Link>
             </div>
           ) : (

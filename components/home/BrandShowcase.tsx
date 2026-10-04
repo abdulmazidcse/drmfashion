@@ -42,7 +42,9 @@ export default function BrandShowcase({ brands }: { brands: HomeBrand[] }) {
         />
       </span>
       <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-400">
-        {brand.productCount} product{brand.productCount === 1 ? "" : "s"}
+        {brand.productCount > 0
+          ? `${brand.productCount} product${brand.productCount === 1 ? "" : "s"}`
+          : "Coming soon"}
       </span>
     </Link>
   );

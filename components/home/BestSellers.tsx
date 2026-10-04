@@ -67,7 +67,7 @@ export default function BestSellers({ products }: BestSellersProps) {
       <div className="sig-wrap">
         <SigSectionHead
           kicker="Trending now"
-          title="This month's best sellers"
+          title="This month's best selling items"
           subtitle="Ranked by what actually sold this month — sizes move fast."
         >
           <div className="flex gap-1 rounded-full border border-sig-line bg-sig-card p-1.5">

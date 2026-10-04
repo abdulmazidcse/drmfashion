@@ -7,7 +7,7 @@ export { BANNER_POSITIONS, isBannerPosition, bannerPositionLabel } from "@/lib/b
 export type { BannerPosition } from "@/lib/bannerPositions"
 
 /** Storefront pages that render <PromoBanners>; every admin write revalidates all of them. */
-export const BANNER_PAGE_PATHS = ["/", "/men", "/women", "/shop"] as const
+export const BANNER_PAGE_PATHS = ["/", "/category/men", "/category/women", "/shop"] as const
 
 /**
  * Five minutes. A scheduled banner can therefore appear or disappear up to

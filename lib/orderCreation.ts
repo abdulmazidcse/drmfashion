@@ -8,8 +8,8 @@ import { baseCurrencyCode } from "@/lib/settings"
 import {
   applyFreeShippingThreshold,
   freeShippingThresholdFromSettings,
-  applyBkashFreeShipping,
-  bkashFreeShippingMaxFromSettings,
+  applyFullPaymentFreeShipping,
+  fullPaymentFreeShippingFromSettings,
 } from "@/lib/shipping"
 import type { OrderShipping } from "@/lib/shippingServer"
 import { resolveTax, taxSettingsFromSettings } from "@/lib/tax"
@@ -433,13 +433,15 @@ export async function createOrderFromCheckout(
   let finalShippingFee = applyFreeShippingThreshold(
     resolvedShipping.fee,
     calculatedTotal,
-    freeShippingThresholdFromSettings(settingsObj)
+    freeShippingThresholdFromSettings(settingsObj),
+    shippingDestination?.countryCode
   )
-  finalShippingFee = applyBkashFreeShipping(
+  // Paid in full online → free delivery, any order value (lib/shipping.ts).
+  finalShippingFee = applyFullPaymentFreeShipping(
     finalShippingFee,
-    calculatedTotal,
     paymentMethod,
-    bkashFreeShippingMaxFromSettings(settingsObj)
+    fullPaymentFreeShippingFromSettings(settingsObj),
+    shippingDestination?.countryCode
   )
 
   // Tax is by destination and comes from the same settings the storefront

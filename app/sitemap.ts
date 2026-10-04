@@ -18,13 +18,10 @@ export const dynamic = "force-dynamic"
 const STATIC_ROUTES: Array<{ path: string; priority: number; changeFrequency: MetadataRoute.Sitemap[number]["changeFrequency"] }> = [
   { path: "/", priority: 1.0, changeFrequency: "daily" },
   { path: "/shop", priority: 0.9, changeFrequency: "daily" },
-  { path: "/men", priority: 0.9, changeFrequency: "daily" },
-  { path: "/women", priority: 0.9, changeFrequency: "daily" },
   { path: "/category", priority: 0.7, changeFrequency: "weekly" },
   { path: "/collection", priority: 0.7, changeFrequency: "weekly" },
   { path: "/journal", priority: 0.6, changeFrequency: "weekly" },
   { path: "/reviews", priority: 0.6, changeFrequency: "weekly" },
-  { path: "/about", priority: 0.5, changeFrequency: "monthly" },
   { path: "/gift-cards", priority: 0.5, changeFrequency: "monthly" },
   { path: "/pages/contact-support", priority: 0.4, changeFrequency: "monthly" },
   { path: "/track-order", priority: 0.3, changeFrequency: "yearly" },

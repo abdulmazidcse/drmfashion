@@ -114,7 +114,7 @@ export default function AboutSettingsPage() {
         </div>
         <div className="flex items-center gap-3">
           <Link
-            href="/about"
+            href="/pages/about-us"
             target="_blank"
             className="flex items-center gap-2 rounded-sm border border-zinc-200 bg-white px-5 py-2.5 text-xs font-bold uppercase tracking-widest text-zinc-700 hover:bg-zinc-50 transition-colors"
           >

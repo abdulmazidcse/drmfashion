@@ -29,7 +29,7 @@ const defaultTabs = {
     description: "We engineer clothing specifically for tall men from 6'3\" to 7'1\" and tall women from 5'9\" to 6'6\". Every pattern is scaled vertically to ensure the waist, elbows, and knees land exactly where they should.",
     image: "/images/men_hero.png",
     ctaText: "Explore Heights",
-    ctaLink: "/about"
+    ctaLink: "/pages/about-us"
   },
   fit: {
     label: "Our Fit",
@@ -37,7 +37,7 @@ const defaultTabs = {
     description: "Standard grading just adds width. We adjust every single measurement—sleeve length, torso length, shoulder width, and rise—to create a tailored fit that respects your height without being baggy.",
     image: "/images/pants.png",
     ctaText: "Explore Fit Guide",
-    ctaLink: "/about"
+    ctaLink: "/pages/about-us"
   },
   purpose: {
     label: "Our Purpose",
@@ -45,7 +45,7 @@ const defaultTabs = {
     description: "We know the frustration of searching endlessly for clothing that fits—and coming up short. What started as one family's mission to solve fit challenges with better options has reached a global community of tall people with a shared vision.",
     image: "/images/community.png",
     ctaText: "Learn More",
-    ctaLink: "/about"
+    ctaLink: "/pages/about-us"
   }
 };
 

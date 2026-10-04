@@ -4,8 +4,7 @@ import { getAdminPayload } from "@/lib/auth"
 import { invalidateSettingsCache } from "@/lib/settings"
 import {
   FREE_SHIPPING_THRESHOLD_KEY,
-  BKASH_FREE_SHIPPING_MAX_KEY,
-  DEFAULT_BKASH_FREE_SHIPPING_MAX,
+  FULL_PAYMENT_FREE_SHIPPING_KEY,
   SHIPPING_METHODS_KEY,
   parseShippingMethods,
   slugifyMethodId,
@@ -51,7 +50,7 @@ export async function GET(req: NextRequest) {
             "shipping_enabled",
             SHIPPING_METHODS_KEY,
             FREE_SHIPPING_THRESHOLD_KEY,
-            BKASH_FREE_SHIPPING_MAX_KEY,
+            FULL_PAYMENT_FREE_SHIPPING_KEY,
             WAREHOUSE_KEY,
             ...UPS_KEYS,
           ],
@@ -67,10 +66,8 @@ export async function GET(req: NextRequest) {
       // A string so the form can hold "" for "not set" — the number input
       // needs an empty value to render blank rather than a spurious 0.
       shipping_free_threshold: obj[FREE_SHIPPING_THRESHOLD_KEY] ?? "",
-      // Unset in the DB still means the default cap (not "no offer") — see
-      // parseBkashFreeShippingMax. Reflect that same default here so a store
-      // that has never touched this field sees the real value, not a blank.
-      bkash_free_shipping_max_amount: obj[BKASH_FREE_SHIPPING_MAX_KEY] ?? String(DEFAULT_BKASH_FREE_SHIPPING_MAX),
+      // On unless explicitly "false" — see fullPaymentFreeShippingFromSettings.
+      free_shipping_full_payment: obj[FULL_PAYMENT_FREE_SHIPPING_KEY] === "false" ? "false" : "true",
       warehouse_address: parseWarehouse(obj[WAREHOUSE_KEY]),
       // Masked: the secret itself is never returned, only whether one exists.
       ...maskUpsConfig(upsConfigFromSettings(obj)),
@@ -235,28 +232,15 @@ export async function POST(req: NextRequest) {
 
     const roundedThreshold = Math.round(freeThreshold * 100) / 100
 
-    // Blank keeps the built-in default (see parseBkashFreeShippingMax); "0"
-    // is the explicit way to switch the promo off.
-    const rawBkashMax = body.bkash_free_shipping_max_amount
-    const bkashMax =
-      rawBkashMax === "" || rawBkashMax === null || rawBkashMax === undefined
-        ? DEFAULT_BKASH_FREE_SHIPPING_MAX
-        : Number(rawBkashMax)
-
-    if (!Number.isFinite(bkashMax) || bkashMax < 0) {
-      return NextResponse.json(
-        { message: "bKash free-shipping amount must be a number of 0 or more." },
-        { status: 400 }
-      )
-    }
-
-    const roundedBkashMax = Math.round(bkashMax * 100) / 100
+    // Free delivery on full online payment: on unless explicitly turned off.
+    const fullPaymentFree =
+      body.free_shipping_full_payment === false || body.free_shipping_full_payment === "false" ? "false" : "true"
 
     const updates: Array<{ key: string; value: string }> = [
       { key: "shipping_enabled", value: String(shipping_enabled ?? "true") },
       { key: SHIPPING_METHODS_KEY, value: JSON.stringify(methods) },
       { key: FREE_SHIPPING_THRESHOLD_KEY, value: String(roundedThreshold) },
-      { key: BKASH_FREE_SHIPPING_MAX_KEY, value: String(roundedBkashMax) },
+      { key: FULL_PAYMENT_FREE_SHIPPING_KEY, value: fullPaymentFree },
       { key: WAREHOUSE_KEY, value: JSON.stringify(parseWarehouse(warehouse_address)) },
       { key: "ups_enabled", value: String(body.ups_enabled === true || body.ups_enabled === "true") },
       { key: "ups_environment", value: body.ups_environment === "production" ? "production" : "sandbox" },
@@ -289,7 +273,7 @@ export async function POST(req: NextRequest) {
       success: true,
       shipping_methods: methods,
       shipping_free_threshold: String(roundedThreshold),
-      bkash_free_shipping_max_amount: String(roundedBkashMax),
+      free_shipping_full_payment: fullPaymentFree,
       warehouse_address: parseWarehouse(warehouse_address),
       ...maskUpsConfig(upsConfigFromSettings(savedObj)),
     })

@@ -68,7 +68,7 @@ export default function FooterOpenGrid({ categories }: { categories: Category[] 
     {
       title: "About Us",
       links: [
-        { href: "/about", label: "About Our Brand" },
+        { href: "/pages/about-us", label: "About Our Brand" },
         { href: "/journal", label: "Journal" },
       ],
     },

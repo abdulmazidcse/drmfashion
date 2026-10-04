@@ -18,7 +18,21 @@ import { footerCategories, formatImageUrl, stripScriptTags } from "@/lib/utils";
  * homepage brand slider and /brands.
  */
 
-const PER_PAGE = 35; // 5 full rows at 7 across, 7 at 5 across
+const PER_PAGE = 35;
+
+/**
+ * Brand descriptions are often pasted in from a search result or another site
+ * and arrive with leftovers: horizontal rules and empty blocks holding only a
+ * non-breaking space. They draw a stray line and dead space under the copy on
+ * this dark header, so they are dropped for display (the stored text is kept).
+ */
+function cleanBrandDescription(html: string) {
+  const EMPTY_BLOCK = /<(div|p)\b[^>]*>(?:\s|&nbsp;|&#160;|<br\s*\/?>)*<\/\1>/gi
+  let out = stripScriptTags(html).replace(/<hr\b[^>]*\/?>/gi, "")
+  // Repeat: removing an empty block can leave its now-empty parent behind.
+  for (let i = 0; i < 3; i++) out = out.replace(EMPTY_BLOCK, "")
+  return out.trim()
+} // 5 full rows at 7 across, 7 at 5 across
 
 type Props = {
   params: Promise<{ slug: string }>;
@@ -84,7 +98,7 @@ export default async function BrandPage({ params, searchParams }: Props) {
           <div className="grid h-28 w-28 shrink-0 place-items-center overflow-hidden rounded-2xl bg-white p-4 md:h-36 md:w-36">
             <BrandLogo src={brand.image} name={brand.name} className="max-h-full max-w-full object-contain" fallbackClassName="text-center text-sm font-black uppercase tracking-widest text-zinc-900" />
           </div>
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <nav aria-label="Breadcrumb" className="mb-3 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-500">
               <Link href="/" className="transition-colors hover:text-white">Home</Link>
               <ChevronRight className="h-3 w-3" />
@@ -98,8 +112,10 @@ export default async function BrandPage({ params, searchParams }: Props) {
             </p>
             {brand.description && (
               <div
-                className="page-content mt-5 max-w-3xl text-sm leading-relaxed text-zinc-300 [&_*]:!text-zinc-300"
-                dangerouslySetInnerHTML={{ __html: stripScriptTags(brand.description) }}
+                // Descriptions are often pasted from elsewhere (this one from Google) and
+                // carry their own font and size inline; the page's own type wins.
+                className="page-content mt-5 text-sm leading-relaxed text-zinc-300 sm:text-[15px] [&_*]:!text-zinc-300 [&_*]:![font-family:inherit] [&_*]:![font-size:inherit] [&_a]:!text-white [&_a]:underline"
+                dangerouslySetInnerHTML={{ __html: cleanBrandDescription(brand.description) }}
               />
             )}
           </div>

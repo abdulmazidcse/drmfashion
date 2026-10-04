@@ -16,6 +16,12 @@ import {
 // only pays for one trip.
 const RESPONSE_CACHE_KEY = PUBLIC_SETTINGS_CACHE_KEY
 const RESPONSE_CACHE_TTL = PUBLIC_SETTINGS_CACHE_TTL
+// The browser's copy is kept much shorter than the server's. The server cache
+// is cleared the moment an admin saves; a browser cannot be told, so at 300s an
+// edit (e.g. limiting a shipping method to one country) kept showing the old
+// rule to that shopper for five minutes. 30s still coalesces the near-
+// simultaneous calls a single page load makes.
+const BROWSER_MAX_AGE = 30
 
 async function resolveSquareLocationId(squareAppId: string): Promise<string> {
   const fromEnv = process.env.NEXT_PUBLIC_SQUARE_LOCATION_ID || process.env.SQ_LOCATION_ID || ""
@@ -55,7 +61,7 @@ export async function GET() {
     const cached = await getCache<Record<string, string>>(RESPONSE_CACHE_KEY)
     if (cached) {
       return NextResponse.json(cached, {
-        headers: { "Cache-Control": `private, max-age=${RESPONSE_CACHE_TTL}` }
+        headers: { "Cache-Control": `private, max-age=${BROWSER_MAX_AGE}` }
       })
     }
 
@@ -72,7 +78,7 @@ export async function GET() {
     await setCache(RESPONSE_CACHE_KEY, settingsObj, RESPONSE_CACHE_TTL)
 
     return NextResponse.json(settingsObj, {
-      headers: { "Cache-Control": `private, max-age=${RESPONSE_CACHE_TTL}` }
+      headers: { "Cache-Control": `private, max-age=${BROWSER_MAX_AGE}` }
     })
   } catch (error: any) {
     console.error("[PUBLIC_SETTINGS_GET]", error)

@@ -60,7 +60,7 @@ export default function FooterClassic({ categories }: { categories: Category[] }
             <div>
               <h4 className="text-lg font-bold text-zinc-950 mb-2.5">About Us</h4>
               <ul className="text-[15px] font-medium text-zinc-500">
-                <li><Link href="/about" className="hover:text-zinc-950 transition-colors">About Our Brand</Link></li>
+                <li><Link href="/pages/about-us" className="hover:text-zinc-950 transition-colors">About Our Brand</Link></li>
                 <li><Link href="/journal" className="hover:text-zinc-950 transition-colors">Journal</Link></li>
               </ul>
             </div>

@@ -27,7 +27,9 @@ export async function POST(req: NextRequest) {
 
     const { invalidateCache } = await import("@/lib/redis")
     try {
-      await invalidateCache("header:menus")
+      // The header reads "header:menus:v2" (components/Header.tsx); the bare key
+      // this cleared before matched nothing, so edits waited out the 10-min TTL.
+      await Promise.all([invalidateCache("header:menus:v2"), invalidateCache("menu:category-links:v1")])
     } catch (e) {
       console.warn("Could not invalidate menus cache:", e)
     }

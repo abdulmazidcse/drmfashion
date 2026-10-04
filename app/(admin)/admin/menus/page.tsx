@@ -348,7 +348,7 @@ export default function MenusPage() {
                     { id: 'sys-home', title: 'Home', url: '/' },
                     { id: 'sys-shop', title: 'Shop All', url: '/shop' },
                     { id: 'sys-gift', title: 'Gift Cards', url: '/gift-cards' },
-                    { id: 'sys-about', title: 'About Us', url: '/about' },
+                    { id: 'sys-about', title: 'About Us', url: '/pages/about-us' },
                   ].map((page) => (
                     <div key={page.id} className="flex items-center justify-between hover:bg-muted/50 p-1.5 rounded">
                       <span className="text-foreground text-sm">{page.title}</span>

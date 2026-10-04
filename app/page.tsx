@@ -214,8 +214,9 @@ export default async function Home() {
       return [...thisMonth, ...allTime.filter((p: any) => !seen.has(p.id))];
     }),
     fetchWithCache(CACHE_KEYS.brands, async () => {
-      // Every brand with live products (the slider scrolls, so there is no
-      // need to cap it at six), most-stocked first.
+      // Every brand that has a logo or live products (the slider scrolls, so
+      // there is no need to cap it at six), most-stocked first. A brand added
+      // with just a logo shows straight away, marked "Coming soon".
       const raw = await prisma.brand.findMany({
         select: {
           id: true,
@@ -227,7 +228,7 @@ export default async function Home() {
         take: 40,
       });
       return raw
-        .filter((b) => b._count.products > 0)
+        .filter((b) => b._count.products > 0 || !!b.image)
         .sort((a, b) => b._count.products - a._count.products)
         .map((b) => ({
           id: b.id,

@@ -5,7 +5,7 @@ import { getSettings, getStoreName } from "@/lib/settings";
 import { formatImageUrl } from "@/lib/utils";
 import LandingRenderer from "@/components/landing/LandingRenderer";
 import { legacySections, LEGACY_THEME, parseSections, parseTheme } from "@/lib/landing/sections";
-import { bkashFreeShippingMaxFromSettings, freeShippingThresholdFromSettings, shippingMethodsFromSettings } from "@/lib/shipping";
+import { fullPaymentFreeShippingFromSettings, freeShippingThresholdFromSettings, shippingMethodsFromSettings } from "@/lib/shipping";
 import { taxSettingsFromSettings } from "@/lib/tax";
 
 interface LandingPageProps {
@@ -124,7 +124,7 @@ export default async function LandingPage({ params }: LandingPageProps) {
         enabled: settings.shipping_enabled !== "false",
         methods: shippingMethodsFromSettings(settings),
         freeThreshold: freeShippingThresholdFromSettings(settings),
-        bkashFreeShippingMax: bkashFreeShippingMaxFromSettings(settings),
+        fullPaymentFreeShipping: fullPaymentFreeShippingFromSettings(settings),
       }}
       tax={taxSettingsFromSettings(settings)}
     />

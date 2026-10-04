@@ -66,7 +66,7 @@ export default function FooterSignature({ categories }: { categories: Category[]
     {
       title: "Company",
       links: [
-        { href: "/about", label: "About Us" },
+        { href: "/pages/about-us", label: "About Us" },
         { href: "/journal", label: "Journal" },
         { href: "/pages/contact-support", label: "Contact" },
         { href: "/reviews", label: "Reviews" },

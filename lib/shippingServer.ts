@@ -152,5 +152,15 @@ export async function resolveOrderShipping({
     { shippingEnabled, countryCode: destination?.countryCode, regionCode: destination?.state }
   )
 
+  // No tier covers this address (a country the store does not ship to, or a
+  // region every tier excludes). This used to fall through as a free
+  // "Standard Shipping" order; refuse it instead. With shipping switched off
+  // store-wide, delivery is free everywhere, so that case still goes through.
+  if (!resolved.method && shippingEnabled) {
+    throw new Error(
+      "We don't deliver to this address yet. Please choose a delivery address in a country or region we ship to."
+    )
+  }
+
   return { methodName: resolved.methodName, carrier: null, fee: resolved.fee }
 }

@@ -27,9 +27,9 @@ import {
 } from "@/lib/tax";
 import {
   DEFAULT_SHIPPING_METHODS,
-  applyBkashFreeShipping,
+  applyFullPaymentFreeShipping,
   applyFreeShippingThreshold,
-  bkashFreeShippingMaxFromSettings,
+  fullPaymentFreeShippingFromSettings,
   defaultShippingMethod,
   freeShippingThresholdFromSettings,
   parseShippingMethods,
@@ -199,7 +199,7 @@ export default function CheckoutPage() {
   const [selectedMethodId, setSelectedMethodId] = useState("");
   const [shippingEnabled, setShippingEnabled] = useState(true);
   const [freeShippingThreshold, setFreeShippingThreshold] = useState<number | null>(null);
-  const [bkashFreeShippingMax, setBkashFreeShippingMax] = useState<number | null>(null);
+  const [fullPaymentFreeShipping, setFullPaymentFreeShipping] = useState(true);
   const [upsRates, setUpsRates] = useState<UpsRate[]>([]);
   const [upsRatesAreMock, setUpsRatesAreMock] = useState(false);
   const [fetchingRates, setFetchingRates] = useState(false);
@@ -547,8 +547,12 @@ export default function CheckoutPage() {
 
           // Shipping settings are now in the same public API call
           setShippingEnabled(data.shipping_enabled !== "false");
+          // UPS switched off in Admin → the UPS block never shows. It used to
+          // appear on every checkout (Bangladesh included) until a rate lookup
+          // happened to report "unavailable".
+          if (data.ups_enabled !== "true") setUpsAvailable(false);
           setFreeShippingThreshold(freeShippingThresholdFromSettings(data));
-          setBkashFreeShippingMax(bkashFreeShippingMaxFromSettings(data));
+          setFullPaymentFreeShipping(fullPaymentFreeShippingFromSettings(data));
           setTaxSettings(taxSettingsFromSettings(data));
           const methods = parseShippingMethods(data.shipping_methods);
           setShippingMethods(methods);
@@ -743,18 +747,34 @@ export default function CheckoutPage() {
   const selectedMethod =
     [...availableMethods, ...upsAsMethods].find((m) => m.id === selectedMethodId) ??
     defaultShippingMethod(shippingMethods, form.country, form.area);
-  const shipping = applyBkashFreeShipping(
+  const shipping = applyFullPaymentFreeShipping(
     applyFreeShippingThreshold(
       shippingEnabled && selectedMethod
         ? shippingPriceForCountry(selectedMethod, form.country)
         : 0,
       subtotal,
-      freeShippingThreshold
+      freeShippingThreshold,
+      form.country
     ),
-    subtotal,
     form.paymentMethod,
-    bkashFreeShippingMax
+    fullPaymentFreeShipping,
+    form.country
   );
+
+  // No delivery method in Admin → Settings → Shipping covers this address
+  // (e.g. a country the store does not ship to). The fee used to fall to 0
+  // and show as "FREE"; now the shopper is told and cannot continue. Waits
+  // for a region, which checkout requires anyway, so a region-limited tier is
+  // not ruled out before the shopper has picked one.
+  const noDeliveryForDestination =
+    shippingEnabled &&
+    !!form.country &&
+    !!form.area &&
+    availableMethods.length === 0 &&
+    upsAsMethods.length === 0 &&
+    upsAvailable === false;
+  const destinationCountryName =
+    COUNTRIES.find((c) => c.code === form.country)?.name ?? "this country";
 
   const shippingDestination = {
     city: form.city,
@@ -1180,6 +1200,13 @@ export default function CheckoutPage() {
                   </div>
                 )}
 
+                {noDeliveryForDestination && (
+                  <div role="alert" className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+                    <p className="font-bold">We don&apos;t deliver to {destinationCountryName} yet.</p>
+                    <p className="mt-1 text-xs">Please choose a delivery address in a country or region we ship to.</p>
+                  </div>
+                )}
+
                 {/* Shipping methods selector */}
                 {(availableMethods.length > 0 ||
                   upsAsMethods.length > 0 ||
@@ -1336,6 +1363,8 @@ export default function CheckoutPage() {
                     if (Object.keys(newErrors).length > 0) {
                       return;
                     }
+                    // Nowhere to ship to — the red notice above says why.
+                    if (noDeliveryForDestination) return;
 
                     // Fetch reward points balance for returning customer
                     try {
@@ -1465,7 +1494,7 @@ export default function CheckoutPage() {
                     <p className="text-xs font-bold text-zinc-900 mt-0.5">
                       {selectedMethod?.name ?? "Standard Shipping"}
                       {selectedMethod?.deliveryTime ? ` · ${selectedMethod.deliveryTime}` : ""} (
-                      {shipping === 0 ? "FREE" : formatPrice(shipping)})
+                      {noDeliveryForDestination ? "not available" : shipping === 0 ? "FREE" : formatPrice(shipping)})
                     </p>
                   </div>
                 </div>
@@ -1666,7 +1695,7 @@ export default function CheckoutPage() {
 
               <div className="border-t border-zinc-100 pt-4 space-y-2">
                 <div className="flex justify-between text-xs text-zinc-500"><span>Subtotal</span><span className="font-bold text-zinc-700">{formatPrice(subtotal)}</span></div>
-                <div className="flex justify-between text-xs text-zinc-500"><span>Shipping</span><span className={shipping === 0 ? "text-emerald-600 font-bold" : "font-bold text-zinc-700"}>{shipping === 0 ? "FREE" : formatPrice(shipping)}</span></div>
+                <div className="flex justify-between text-xs text-zinc-500"><span>Shipping</span><span className={noDeliveryForDestination ? "font-bold text-red-600" : shipping === 0 ? "text-emerald-600 font-bold" : "font-bold text-zinc-700"}>{noDeliveryForDestination ? "Not available" : shipping === 0 ? "FREE" : formatPrice(shipping)}</span></div>
                 <div className="flex justify-between text-xs text-zinc-500"><span>{taxLineLabel(resolvedTax.rate, resolvedTax.label)}</span><span className="font-bold text-zinc-700">{formatPrice(tax)}</span></div>
               </div>
               {discountPercentage > 0 && (

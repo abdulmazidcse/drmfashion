@@ -230,7 +230,7 @@ export default function VideoBannersCard() {
                         type="text"
                         value={banner.primaryHref}
                         onChange={(e) => updateVideoBanner(index, { primaryHref: e.target.value })}
-                        placeholder="/men"
+                        placeholder="/category/men"
                         className="font-mono"
                       />
                     </div>
@@ -246,7 +246,7 @@ export default function VideoBannersCard() {
                         type="text"
                         value={banner.secondaryHref}
                         onChange={(e) => updateVideoBanner(index, { secondaryHref: e.target.value })}
-                        placeholder="/women"
+                        placeholder="/category/women"
                         className="font-mono"
                       />
                     </div>

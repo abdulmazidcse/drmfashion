@@ -19,7 +19,7 @@ import Swal from "@/lib/swal";
 import { startBkashCheckout } from "@/lib/bkashCheckoutClient";
 import { startSslcommerzCheckout } from "@/lib/sslcommerzCheckoutClient";
 import {
-  applyBkashFreeShipping,
+  applyFullPaymentFreeShipping,
   applyFreeShippingThreshold,
   defaultShippingMethod,
   shippableMethodsForDestination,
@@ -66,8 +66,8 @@ interface QuickBuyProps {
     methods: ShippingMethod[];
     /** Base-currency subtotal above which shipping is free, or null. */
     freeThreshold: number | null;
-    /** Base-currency subtotal at or below which a bKash order ships free, or null. */
-    bkashFreeShippingMax: number | null;
+    /** Free delivery when the order is paid in full online (lib/shipping.ts). */
+    fullPaymentFreeShipping: boolean;
   };
   tax: TaxSettings;
   /** Admin → Settings → Branding → Product Page. */
@@ -152,17 +152,18 @@ export default function QuickBuy({ product, payments, shipping, tax: taxSettings
   const selectedMethod =
     shippingOptions.find((m) => m.id === selectedMethodId) ??
     defaultShippingMethod(shipping.methods, form.country, form.area);
-  const shippingFee = applyBkashFreeShipping(
+  const shippingFee = applyFullPaymentFreeShipping(
     applyFreeShippingThreshold(
       shipping.enabled && selectedMethod
         ? shippingPriceForCountry(selectedMethod, form.country)
         : 0,
       subtotal,
-      shipping.freeThreshold
+      shipping.freeThreshold,
+      form.country
     ),
-    subtotal,
     form.paymentMethod,
-    shipping.bkashFreeShippingMax
+    shipping.fullPaymentFreeShipping,
+    form.country
   );
 
   // Destination-based, and after shipping because the fee may itself be taxed.

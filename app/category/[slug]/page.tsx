@@ -29,6 +29,8 @@ import {
   type CollectionQuery,
   type FacetOptions,
 } from "@/lib/collectionView";
+import { getCategoryMenuLinks } from "@/lib/menuLinks";
+import PromoBanners from "@/components/PromoBanners";
 
 
 /**
@@ -198,16 +200,16 @@ export default async function CategoryPage({ params, searchParams }: CategoryPag
 
   if (!category) notFound();
 
-  // Breadcrumb trail: Home › [grandparent] › [parent] › current. The gender
-  // roots have their own landing pages (/men, /women); every other level is a
-  // /category/[slug] page.
-  const catHref = (s: string) => (s === "men" || s === "women" ? `/${s}` : `/category/${s}`);
+  // Breadcrumb trail: Home › [grandparent] › [parent] › current. Each level
+  // links wherever the site menu (Admin → Menus) sends that category, so
+  // "Men" here goes to the same page as "Men" in the header.
+  const catHref = await getCategoryMenuLinks();
   const breadcrumbTrail: { name: string; href: string }[] = [];
   if (category.parent?.parent) {
-    breadcrumbTrail.push({ name: category.parent.parent.name, href: catHref(category.parent.parent.slug) });
+    breadcrumbTrail.push({ name: category.parent.parent.name, href: catHref(category.parent.parent) });
   }
   if (category.parent) {
-    breadcrumbTrail.push({ name: category.parent.name, href: catHref(category.parent.slug) });
+    breadcrumbTrail.push({ name: category.parent.name, href: catHref(category.parent) });
   }
 
   // Resolve which sub is active
@@ -470,6 +472,12 @@ export default async function CategoryPage({ params, searchParams }: CategoryPag
             )}
           </section>
         ))}
+
+      {/* The "Men – below hero" / "Women – below hero" banner slots. They used
+          to live on the old /men and /women landing pages, which now redirect
+          here (next.config.ts), so they render on the gender root categories. */}
+      {category.slug === "men" && <PromoBanners position="men_top" />}
+      {category.slug === "women" && <PromoBanners position="women_top" />}
 
       {/* SUBCATEGORY TILES — American Tall "Enhanced Collections" style: each
           child category as an image card linking to its own page.

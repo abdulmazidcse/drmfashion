@@ -63,6 +63,18 @@ const nextConfig: NextConfig = {
     },
     proxyClientMaxBodySize: 100 * 1024 * 1024,
   } as any,
+  async redirects() {
+    return [
+      // The old /men and /women landing pages were removed; the menu links
+      // are /category/men and /category/women. Permanent, so bookmarks and
+      // search results move too.
+      { source: "/men", destination: "/category/men", permanent: true },
+      { source: "/women", destination: "/category/women", permanent: true },
+      // Old About pages: one About page now, the CMS one.
+      { source: "/about", destination: "/pages/about-us", permanent: true },
+      { source: "/about-us", destination: "/pages/about-us", permanent: true },
+    ];
+  },
   async rewrites() {
     const storage = `${process.env.MINIO_ENDPOINT || "https://storage.tallplus.co"}/${process.env.MINIO_BUCKET_NAME || "fashion-store-bucket"}`;
 

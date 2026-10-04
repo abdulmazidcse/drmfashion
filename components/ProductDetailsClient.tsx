@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { Star, ChevronLeft, ChevronRight, Plus, Minus, Heart, Check, ShoppingBag, X, ChevronDown, Maximize2, Truck, RotateCcw, ShieldCheck } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
@@ -12,7 +12,6 @@ import { addToCart, getCart } from "@/lib/cart";
 import { flyToCart } from "@/lib/flyToCart";
 import { toggleWishlist, isInWishlist } from "@/lib/wishlist";
 import { useSettings } from "@/providers/SettingsProvider";
-import { parseHeightsGuide, HEIGHTS_GUIDE_SETTING_KEY } from "@/lib/heightsGuide";
 import { freeShippingThresholdFromSettings } from "@/lib/shipping";
 import ProductCard from "./ProductCard";
 import Footer from "./Footer";
@@ -307,17 +306,6 @@ const AT_PROSE =
   "product-prose text-[13px] font-normal leading-5 tracking-[0.02em] text-[var(--pk-muted)]";
 
 /**
- * First column hugs the left edge, last hugs the right, everything between is
- * centred — the alignment the fixed three-column heights table used, generalised
- * to whatever width an admin builds. With a single column the left rule wins.
- */
-function headingCellAlign(index: number, total: number): string {
-  if (index === 0) return "text-left pl-6"
-  if (index === total - 1) return "text-right pr-6"
-  return "text-center"
-}
-
-/**
  * Column spans for the media wall, over a six-column grid.
  *
  * The rhythm is the point: the first shots run two-up at half width, and once
@@ -402,16 +390,6 @@ export default function ProductDetailsClient({ product, categories, relatedProdu
   // shared helper so this promise and what checkout charges cannot disagree.
   const freeShippingThreshold = freeShippingThresholdFromSettings(settings);
   const router = useRouter();
-  // Brand-level, identical on every product — edited in Settings → Branding.
-  const heightsGuide = useMemo(
-    () => parseHeightsGuide(settings[HEIGHTS_GUIDE_SETTING_KEY]),
-    [settings]
-  );
-  // Blank entries are dropped here rather than in parseHeightsGuide, so a
-  // half-filled row an admin left behind never reaches a shopper while still
-  // surviving a round trip through the settings form.
-  const heightsRows = heightsGuide.rows.filter((row) => row.some((cell) => cell.trim()));
-  const heightsModels = heightsGuide.models.filter((m) => m.image.trim());
   // Extract unique variants properties dynamically
   const uniqueColors = Array.from(new Set(product.variants.map(v => v.color))).filter(Boolean);
   const uniqueSizes = sortSizes(Array.from(new Set(product.variants.map(v => v.size))).filter(Boolean));
@@ -574,9 +552,11 @@ export default function ProductDetailsClient({ product, categories, relatedProdu
 
   /** The reviews accordion, so the star rating beside the price can jump to it. */
   const reviewsRef = useRef<HTMLDivElement>(null);
-  const [activeSizeTab, setActiveSizeTab] = useState<"heights" | "size-chart" | "measure">("heights");
+  // "heights" is the Find My Size wizard (opened from its own button); the
+  // "Our Heights & Fit" tab and its heights table were removed from the guide.
+  const [activeSizeTab, setActiveSizeTab] = useState<"heights" | "size-chart" | "measure">("size-chart");
   const [sizeUnit, setSizeUnit] = useState<"inches" | "cm">("inches");
-  const [wizardStep, setWizardStep] = useState<"heights-list" | "wizard-input" | "wizard-scanning" | "wizard-result">("heights-list");
+  const [wizardStep, setWizardStep] = useState<"wizard-input" | "wizard-scanning" | "wizard-result">("wizard-input");
   const [scanZone, setScanZone] = useState<number>(1);
   const [scanProgress, setScanProgress] = useState<number>(0);
   const [isMetric, setIsMetric] = useState<boolean>(false);
@@ -596,6 +576,14 @@ export default function ProductDetailsClient({ product, categories, relatedProdu
     const table = resolveSizeChart(product).table;
     // Height drives the length band, not a chart column, so it keeps its own box.
     return table ? chartPoints(table).filter((p) => p !== "waist") : [];
+  }, [product]);
+
+  // The Pant Waist box only means something when this garment's chart has a
+  // waist column (trousers). A blazer's chart compares chest and sleeve, so
+  // asking for — and requiring — a pant waist there was just in the way.
+  const chartUsesWaist = React.useMemo(() => {
+    const table = resolveSizeChart(product).table;
+    return table ? chartPoints(table).includes("waist") : false;
   }, [product]);
 
   // Raw strings keyed by body point, in whichever unit the toggle is showing.
@@ -629,7 +617,9 @@ export default function ProductDetailsClient({ product, categories, relatedProdu
     }
 
     const fromChart = table ? recommendSize(table, body, uniqueSizes) : null;
-    const length = recommendLength(wizardBody.heightInches, uniqueLengths);
+    // Only products sold in lengths get a length — a blazer with none was
+    // being told "Semi-Tall", which no variant of it carries.
+    const length = uniqueLengths.length > 0 ? recommendLength(wizardBody.heightInches, uniqueLengths) : null;
 
     if (fromChart) {
       return { size: fromChart.size, length, substituted: fromChart.substituted, fromChart: true };
@@ -1815,9 +1805,14 @@ export default function ProductDetailsClient({ product, categories, relatedProdu
                         <span>Product Description</span>
                         <Plus className={`h-4 w-4 shrink-0 transition-transform duration-500 ${openAccordions.description ? "rotate-45" : ""}`} />
                       </button>
-                      <div className={`overflow-hidden transition-all duration-500 ${openAccordions.description ? "max-h-[40rem] opacity-100" : "max-h-0 opacity-0"}`}>
+                      {/* Opens to the content's own height (grid row 0fr → 1fr) —
+                          the old max-h-[40rem] cap cut long descriptions off
+                          mid-list with no way to read the rest (e.g. B-141).
+                          Bottom padding sits on the panel, only while open,
+                          so a closed panel collapses to exactly 0px. */}
+                      <div className={`grid overflow-hidden transition-all duration-500 ${openAccordions.description ? "grid-rows-[1fr] pb-5 opacity-100" : "grid-rows-[0fr] opacity-0"}`}>
                         <div
-                          className={`max-w-none pb-5 ${AT_PROSE}`}
+                          className={`min-h-0 overflow-hidden max-w-none ${AT_PROSE}`}
                           dangerouslySetInnerHTML={{ __html: stripScriptTags(product.description ?? "") }}
                         />
                       </div>
@@ -1834,9 +1829,9 @@ export default function ProductDetailsClient({ product, categories, relatedProdu
                           <span>Size &amp; Fit</span>
                           <Plus className={`h-4 w-4 shrink-0 transition-transform duration-500 ${openAccordions.fit ? "rotate-45" : ""}`} />
                         </button>
-                        <div className={`overflow-hidden transition-all duration-500 ${openAccordions.fit ? "max-h-[40rem] opacity-100" : "max-h-0 opacity-0"}`}>
+                        <div className={`grid overflow-hidden transition-all duration-500 ${openAccordions.fit ? "grid-rows-[1fr] pb-5 opacity-100" : "grid-rows-[0fr] opacity-0"}`}>
                           <div
-                            className={`max-w-none pb-5 ${AT_PROSE}`}
+                            className={`min-h-0 overflow-hidden max-w-none ${AT_PROSE}`}
                             dangerouslySetInnerHTML={{ __html: stripScriptTags((product as any).sizeAndFit) }}
                           />
                         </div>
@@ -1856,9 +1851,9 @@ export default function ProductDetailsClient({ product, categories, relatedProdu
                           <span>Material &amp; Care</span>
                           <Plus className={`h-4 w-4 shrink-0 transition-transform duration-500 ${openAccordions.care ? "rotate-45" : ""}`} />
                         </button>
-                        <div className={`overflow-hidden transition-all duration-500 ${openAccordions.care ? "max-h-[40rem] opacity-100" : "max-h-0 opacity-0"}`}>
+                        <div className={`grid overflow-hidden transition-all duration-500 ${openAccordions.care ? "grid-rows-[1fr] pb-5 opacity-100" : "grid-rows-[0fr] opacity-0"}`}>
                           <div
-                            className={`max-w-none pb-5 ${AT_PROSE}`}
+                            className={`min-h-0 overflow-hidden max-w-none ${AT_PROSE}`}
                             dangerouslySetInnerHTML={{ __html: stripScriptTags((product as any).fabricAndCare) }}
                           />
                         </div>
@@ -1902,8 +1897,8 @@ export default function ProductDetailsClient({ product, categories, relatedProdu
                         </span>
                         <Plus className={`h-4 w-4 shrink-0 transition-transform duration-500 ${openAccordions.reviews ? "rotate-45" : ""}`} />
                       </button>
-                      <div className={`overflow-hidden transition-all duration-500 ${openAccordions.reviews ? "max-h-[1400px] opacity-100" : "max-h-0 opacity-0"}`}>
-                        <div className={`pb-6 ${AT_LABEL} font-normal text-[var(--pk-muted)]`}>
+                      <div className={`grid overflow-hidden transition-all duration-500 ${openAccordions.reviews ? "grid-rows-[1fr] pb-6 opacity-100" : "grid-rows-[0fr] opacity-0"}`}>
+                        <div className={`min-h-0 overflow-hidden ${AT_LABEL} font-normal text-[var(--pk-muted)]`}>
                           {reviewsLoading ? (
                             <p>Loading reviews…</p>
                           ) : reviews.length === 0 ? (
@@ -2253,18 +2248,6 @@ export default function ProductDetailsClient({ product, categories, relatedProdu
             ) : (
               <div className="flex items-stretch border-b border-zinc-150 -mx-6 -mt-6 sm:-mx-8 sm:-mt-8 mb-8 bg-zinc-50">
                 <button
-                  onClick={() => {
-                    setActiveSizeTab("heights");
-                    setWizardStep("heights-list");
-                  }}
-                  className={`flex-1 py-4 text-center text-[10px] sm:text-xs font-bold tracking-widest uppercase transition-all cursor-pointer border-r border-b border-zinc-150 ${activeSizeTab === "heights"
-                      ? "bg-white text-zinc-955 border-b-transparent"
-                      : "text-zinc-400 hover:text-zinc-700 bg-zinc-50/50"
-                    }`}
-                >
-                  Our Heights & Fit
-                </button>
-                <button
                   onClick={() => setActiveSizeTab("size-chart")}
                   className={`flex-1 py-4 text-center text-[10px] sm:text-xs font-bold tracking-widest uppercase transition-all cursor-pointer border-r border-b border-zinc-150 ${activeSizeTab === "size-chart"
                       ? "bg-white text-zinc-955 border-b-transparent"
@@ -2292,100 +2275,6 @@ export default function ProductDetailsClient({ product, categories, relatedProdu
               </div>
             )}
 
-            {/* TAB 1: OUR HEIGHTS & FIT - HEIGHTS LIST VIEW */}
-            {activeSizeTab === "heights" && wizardStep === "heights-list" && (
-              <div className="flex flex-col animate-in fade-in duration-250">
-                <div className="text-center mb-8">
-                  <h2 className="text-2xl font-black uppercase tracking-wider text-zinc-900 mb-2">
-                    {heightsGuide.heading}
-                  </h2>
-                  <p className="text-[10px] sm:text-xs text-zinc-500 font-bold uppercase tracking-widest leading-relaxed max-w-md mx-auto">
-                    {heightsGuide.subtitle}
-                  </p>
-                </div>
-
-                {heightsRows.length > 0 && heightsGuide.columns.length > 0 && (
-                  <div className="border border-zinc-150 rounded-sm overflow-x-auto mb-8 shadow-sm">
-                    <table className="w-full text-center border-collapse text-xs">
-                      <thead>
-                        <tr className="bg-zinc-50 border-b border-zinc-150 text-[10px] uppercase tracking-wider font-extrabold text-zinc-700">
-                          {heightsGuide.columns.map((column, idx) => (
-                            <th key={idx} className={`p-3.5 ${headingCellAlign(idx, heightsGuide.columns.length)}`}>
-                              {column}
-                            </th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-zinc-100 text-zinc-600 font-bold">
-                        {heightsRows.map((row, rowIdx) => (
-                          <tr key={rowIdx} className="hover:bg-zinc-50/50 transition-colors">
-                            {heightsGuide.columns.map((_, colIdx) => (
-                              <td
-                                key={colIdx}
-                                className={`p-4 ${headingCellAlign(colIdx, heightsGuide.columns.length)} ${
-                                  colIdx === 0 ? "text-zinc-950 font-black" : ""
-                                }`}
-                              >
-                                {row[colIdx] ?? ""}
-                              </td>
-                            ))}
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-
-                {/* Model Heights Collage. Hidden until at least one photo is
-                    set in Settings → Branding: three empty tiles read as a
-                    broken page to a shopper, and the heading and table above
-                    already stand on their own without them. */}
-                {heightsModels.length > 0 && (
-                  <div className="bg-zinc-50 p-6 rounded-sm border border-zinc-100">
-                    <div
-                      className="grid gap-4"
-                      style={{ gridTemplateColumns: `repeat(${heightsModels.length}, minmax(0, 1fr))` }}
-                    >
-                      {heightsModels.map((model, idx) => (
-                        <div
-                          key={idx}
-                          className="relative overflow-hidden aspect-[3/4] bg-zinc-200 border border-zinc-200 rounded-xs shadow-xs group"
-                        >
-                          {/* Decorative: the table above carries the actual
-                              height-to-length mapping, so an invented alt here
-                              would only repeat it to a screen reader. */}
-                          <Image
-                            src={model.image.trim()}
-                            alt=""
-                            fill
-                            className="object-cover grayscale contrast-[1.05] brightness-95 group-hover:scale-105 transition-transform duration-300"
-                          />
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Footer Controls with Interactive Wizard Button */}
-                <div className="flex items-center justify-between mt-8 pt-6 border-t border-zinc-150">
-                  <div className="w-10 h-10" />
-
-                  <div className="flex items-center justify-center">
-                    <svg className="w-5 h-5 text-indigo-600 fill-indigo-600" viewBox="0 0 24 24">
-                      <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z" />
-                    </svg>
-                  </div>
-
-                  <button
-                    onClick={() => setWizardStep("wizard-input")}
-                    className="bg-zinc-950 hover:bg-zinc-800 text-white px-8 py-3 text-[10px] font-black uppercase tracking-widest transition-colors rounded-sm cursor-pointer shadow-md"
-                  >
-                    Input Measurements
-                  </button>
-                </div>
-              </div>
-            )}
-
             {/* TAB 1: OUR HEIGHTS & FIT - INTERACTIVE WIZARD INPUT (Matches Screenshots exactly) */}
             {activeSizeTab === "heights" && wizardStep === "wizard-input" && (() => {
               // Every chart-driven box counts too — a blank one is a measurement
@@ -2396,11 +2285,21 @@ export default function ProductDetailsClient({ product, categories, relatedProdu
                 return Number.isFinite(v) && v > 0;
               });
 
-              const isFormValid = Boolean(
-                (!isMetric
-                  ? heightFt && heightIn && weightLbs && age && waistIn
-                  : heightCm && weightKg && age && waistIn) && chartBoxesFilled
-              );
+              // Age is optional: nothing in the recommendation uses it, yet it
+              // was required, so a blank Age left CONTINUE greyed out with no
+              // reason given. Pant Waist only counts when the chart uses it.
+              const missingFields = [
+                ...(!isMetric ? (!heightFt || !heightIn ? ["Height"] : []) : !heightCm ? ["Height"] : []),
+                ...((!isMetric ? !weightLbs : !weightKg) ? ["Weight"] : []),
+                ...(chartUsesWaist && !(isMetric ? waistCm : waistIn) ? ["Pant Waist"] : []),
+                ...wizardPoints
+                  .filter((p) => {
+                    const v = parseFloat(bodyInputs[p] ?? "");
+                    return !(Number.isFinite(v) && v > 0);
+                  })
+                  .map((p) => POINT_LABELS[p].label),
+              ];
+              const isFormValid = missingFields.length === 0 && chartBoxesFilled;
               
               return (
                 <div className="flex flex-col animate-in fade-in duration-250">
@@ -2516,7 +2415,7 @@ export default function ProductDetailsClient({ product, categories, relatedProdu
                       </button>
                       
                       <div className="border border-zinc-150 p-5 rounded-xs flex items-center justify-between bg-white shadow-sm transition-all">
-                        <span className="text-sm font-semibold text-zinc-800">Age</span>
+                        <span className="text-sm font-semibold text-zinc-800">Age <span className="font-normal text-zinc-400">(optional)</span></span>
                         <div className="flex items-center gap-2 font-semibold text-zinc-800">
                           <div className="flex items-center gap-1.5">
                             <input
@@ -2532,7 +2431,8 @@ export default function ProductDetailsClient({ product, categories, relatedProdu
                       </div>
                     </div>
 
-                    {/* Pant Waist Box */}
+                    {/* Pant Waist Box — only for charts with a waist column. */}
+                    {chartUsesWaist && (
                     <div className="relative w-full">
                       {/* Circle Info Tooltip above input box */}
                       <button 
@@ -2553,16 +2453,17 @@ export default function ProductDetailsClient({ product, categories, relatedProdu
                           <div className="flex items-center gap-1.5">
                             <input
                               type="number"
-                              value={waistIn}
-                              onChange={(e) => setWaistIn(e.target.value)}
+                              value={isMetric ? waistCm : waistIn}
+                              onChange={(e) => (isMetric ? setWaistCm(e.target.value) : setWaistIn(e.target.value))}
                               className="w-16 text-center border-b border-zinc-200 py-0.5 text-sm font-bold focus:border-zinc-955 focus:outline-none placeholder-zinc-350"
-                              placeholder="inches"
+                              placeholder={isMetric ? "cm" : "inches"}
                             />
-                            <span className="text-xs text-zinc-400 font-bold uppercase">inches</span>
+                            <span className="text-xs text-zinc-400 font-bold uppercase">{isMetric ? "cm" : "inches"}</span>
                           </div>
                         </div>
                       </div>
                     </div>
+                    )}
 
                     {/* Whatever else this garment's size chart compares on —
                         chest and sleeve for a shirt, inseam for trousers, bust
@@ -2595,7 +2496,12 @@ export default function ProductDetailsClient({ product, categories, relatedProdu
                   </div>
 
                   {/* Footer Controls */}
-                  <div className="max-w-md w-full mx-auto flex items-center justify-end mt-10 pt-4 border-t border-zinc-100">
+                  <div className="max-w-md w-full mx-auto flex items-center justify-between gap-4 mt-10 pt-4 border-t border-zinc-100">
+                    <p className="text-[11px] leading-snug text-zinc-500" aria-live="polite">
+                      {missingFields.length > 0
+                        ? `Fill in ${missingFields.length > 1 ? `${missingFields.slice(0, -1).join(", ")} and ${missingFields[missingFields.length - 1]}` : missingFields[0]} to continue.`
+                        : ""}
+                    </p>
                     {/* Right CONTINUE button */}
                     <button
                       onClick={() => {

@@ -300,7 +300,9 @@ export default function AdminOrdersPage() {
       {/* SIDE SHEET DETAIL PANEL */}
       {selectedOrder && (
         <div className="fixed inset-0 z-50 flex justify-end bg-black/40 backdrop-blur-xs transition duration-300">
-          <div className="bg-card w-full max-w-lg h-full shadow-2xl flex flex-col relative animate-in slide-in-from-right duration-350">
+          {/* Wider on larger screens — at 512px the item list, addresses and
+              delivery form were cramped into a narrow strip. */}
+          <div className="bg-card w-full max-w-lg md:max-w-2xl xl:max-w-3xl h-full shadow-2xl flex flex-col relative animate-in slide-in-from-right duration-350">
             {/* Modal Header */}
             <div className="p-5 border-b border-border flex items-center justify-between bg-primary text-primary-foreground">
               <div className="flex items-center gap-2">

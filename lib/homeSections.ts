@@ -27,7 +27,7 @@ export const HOME_SECTIONS_SETTING_KEY = "home_sections"
 export const HOME_SECTIONS = [
   { key: "hero", label: "Hero card", hint: "The split card at the top of the page." },
   { key: "trending", label: "Shop by category", hint: "Men/Women category tiles." },
-  { key: "bestsellers", label: "This month's best sellers", hint: "Computed from orders this month." },
+  { key: "bestsellers", label: "This month's best selling items", hint: "Computed from orders this month." },
   { key: "flash-sale", label: "Flash deal band", hint: "Countdown band. Has its own on/off in the Flash Sale tab." },
   { key: "value-props", label: "Value proposition cards", hint: "Shipping / returns / secure checkout." },
   { key: "reviews", label: "Customer reviews", hint: "Three review cards. Hidden until there is a review." },

@@ -16,22 +16,10 @@ import { sortLengths, sortSizes } from "@/lib/variants";
 import Header from "@/components/HeaderClient";
 import Footer from "@/components/Footer";
 import { useCurrency } from "@/providers/CurrencyProvider";
-import { COUNTRIES } from "@/lib/countries";
-import {
-  applyFreeShippingThreshold,
-  DEFAULT_SHIPPING_METHODS,
-  defaultShippingMethod,
-  freeShippingThresholdFromSettings,
-  parseShippingMethods,
-  shippingPriceForCountry,
-  type ShippingMethod,
-} from "@/lib/shipping";
-
-// Removed hardcoded shipping constants
 
 export default function CartPage() {
   const router = useRouter();
-  const { formatPrice, selectedCountry } = useCurrency();
+  const { formatPrice } = useCurrency();
   const [items, setItems] = useState<CartItem[]>([]);
   const [mounted, setMounted] = useState(false);
   const [promoCode, setPromoCode] = useState("");
@@ -40,13 +28,6 @@ export default function CartPage() {
   const [discountPercentage, setDiscountPercentage] = useState(0);
   const [removingId, setRemovingId] = useState<string | null>(null);
   const [productsMap, setProductsMap] = useState<Record<string, any>>({});
-
-  // Shipping state
-  const [shippingEnabled, setShippingEnabled] = useState(true);
-  // The cart only previews a figure — the shopper picks the actual tier at
-  // checkout, so this shows the cheapest one on offer.
-  const [shippingMethods, setShippingMethods] = useState<ShippingMethod[]>(DEFAULT_SHIPPING_METHODS);
-  const [freeShippingThreshold, setFreeShippingThreshold] = useState<number | null>(null);
 
   // Hydrate from localStorage on mount
   useEffect(() => {
@@ -62,18 +43,6 @@ export default function CartPage() {
         }
       } catch (e) {}
     }
-
-    // Fetch settings
-    fetch("/api/settings")
-      .then((res) => res.json())
-      .then((data) => {
-        if (data) {
-          setShippingEnabled(data.shipping_enabled !== "false");
-          setShippingMethods(parseShippingMethods(data.shipping_methods));
-          setFreeShippingThreshold(freeShippingThresholdFromSettings(data));
-        }
-      })
-      .catch((err) => console.error("Failed to load settings", err));
 
     setMounted(true);
   }, []);
@@ -205,20 +174,11 @@ export default function CartPage() {
 
   const subtotal = cartTotal(items);
   const discount = promoApplied ? Math.round(subtotal * (discountPercentage / 100)) : 0;
-  // The cart has no address yet, so the estimate uses the country the shopper
-  // picked in the currency switcher — the same one checkout preselects, so the
-  // figure here is the one they see on the next page.
-  const estimateCountry =
-    COUNTRIES.find((c) => c.name.toLowerCase() === selectedCountry?.toLowerCase())?.code ?? "";
-  const cheapestMethod = defaultShippingMethod(shippingMethods, estimateCountry);
-  const shipping = applyFreeShippingThreshold(
-    shippingEnabled && cheapestMethod
-      ? shippingPriceForCountry(cheapestMethod, estimateCountry)
-      : 0,
-    subtotal,
-    freeShippingThreshold
-  );
-  const total = subtotal - discount + shipping;
+  // No delivery charge here: it depends on the address (Inside / Outside
+  // Dhaka) and the payment method (online payment ships free), neither of
+  // which the cart knows — an estimate showed the wrong figure to most
+  // shoppers. Checkout prices it once both are chosen.
+  const total = subtotal - discount;
   const count = cartCount(items);
 
   if (!mounted) {
@@ -550,20 +510,6 @@ export default function CartPage() {
                       <span>− {formatPrice(discount)}</span>
                     </div>
                   )}
-                  <div className="flex justify-between items-center text-sm">
-                    <span className="text-zinc-500 font-medium">Shipping</span>
-                    <span className="font-bold text-zinc-700">
-                      {shipping === 0 ? "FREE" : formatPrice(shipping)}
-                    </span>
-                  </div>
-                  {cheapestMethod && (
-                    <div className="bg-amber-50 text-amber-600 p-3 rounded-lg text-xs font-bold flex items-center justify-center gap-2 text-center">
-                      <Truck className="w-4 h-4 shrink-0" />
-                      {cheapestMethod.name}
-                      {cheapestMethod.deliveryTime ? ` · ${cheapestMethod.deliveryTime}` : ""} — faster
-                      options at checkout
-                    </div>
-                  )}
                 </div>
 
                 {/* Total */}
@@ -573,6 +519,7 @@ export default function CartPage() {
                     {formatPrice(total)}
                   </span>
                 </div>
+                <p className="-mt-2 text-right text-[11px] text-zinc-400">Delivery charge is calculated at checkout.</p>
 
                 {/* Checkout CTA */}
                 <button

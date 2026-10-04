@@ -133,14 +133,30 @@ export function recommendSize(
     return { ...best, substituted: false }
   }
 
-  const inStock = scored.filter((r) => available.includes(normalise(r.size)))
+  // A chart row is often labelled with both systems — "40 (2XL)" — while the
+  // product's sizes are just "2XL". Match on the whole label, the part in
+  // brackets, or the part before them, and answer with the product's own
+  // size name, so "Apply" selects a size that actually exists on the product.
+  const productSizeFor = (label: string) => {
+    const whole = normalise(label)
+    const inBrackets = normalise(label.match(/\(([^)]+)\)/)?.[1] ?? "")
+    const outside = normalise(label.replace(/\([^)]*\)/g, ""))
+    const candidates = [whole, inBrackets, outside].filter(Boolean)
+    return availableSizes.find((size) => candidates.includes(normalise(size)))
+  }
+
+  const inStock = scored
+    .map((r) => ({ ...r, productSize: productSizeFor(r.size) }))
+    .filter((r): r is typeof r & { productSize: string } => Boolean(r.productSize))
   if (inStock.length === 0) {
     return { ...best, substituted: false }
   }
 
   const bestInStock = inStock.reduce((a, b) => (b.distance < a.distance ? b : a))
   return {
-    ...bestInStock,
+    size: bestInStock.productSize,
+    distance: bestInStock.distance,
+    matchedOn: bestInStock.matchedOn,
     substituted: normalise(bestInStock.size) !== normalise(best.size),
   }
 }

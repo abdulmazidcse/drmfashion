@@ -698,21 +698,21 @@ function useSettingsFormState() {
   const [tabHeightsDescription, setTabHeightsDescription] = useState("We engineer clothing specifically for tall men from 6'3\" to 7'1\" and tall women from 5'9\" to 6'6\". Every pattern is scaled vertically to ensure the waist, elbows, and knees land exactly where they should.")
   const [tabHeightsImage, setTabHeightsImage] = useState("/images/men_hero.png")
   const [tabHeightsCtaText, setTabHeightsCtaText] = useState("Explore Heights")
-  const [tabHeightsCtaLink, setTabHeightsCtaLink] = useState("/about")
+  const [tabHeightsCtaLink, setTabHeightsCtaLink] = useState("/pages/about-us")
 
   const [tabFitLabel, setTabFitLabel] = useState("Our Fit")
   const [tabFitHeading, setTabFitHeading] = useState("Proportions, Perfected.")
   const [tabFitDescription, setTabFitDescription] = useState("Standard grading just adds width. We adjust every single measurement—sleeve length, torso length, shoulder width, and rise—to create a tailored fit that respects your height without being baggy.")
   const [tabFitImage, setTabFitImage] = useState("/images/pants.png")
   const [tabFitCtaText, setTabFitCtaText] = useState("Explore Fit Guide")
-  const [tabFitCtaLink, setTabFitCtaLink] = useState("/about")
+  const [tabFitCtaLink, setTabFitCtaLink] = useState("/pages/about-us")
 
   const [tabPurposeLabel, setTabPurposeLabel] = useState("Our Purpose")
   const [tabPurposeHeading, setTabPurposeHeading] = useState("We're All About Community.")
   const [tabPurposeDescription, setTabPurposeDescription] = useState("We know the frustration of searching endlessly for clothing that fits—and coming up short. What started as one family's mission to solve fit challenges with better options has reached a global community of tall people with a shared vision.")
   const [tabPurposeImage, setTabPurposeImage] = useState("/images/community.png")
   const [tabPurposeCtaText, setTabPurposeCtaText] = useState("Learn More")
-  const [tabPurposeCtaLink, setTabPurposeCtaLink] = useState("/about")
+  const [tabPurposeCtaLink, setTabPurposeCtaLink] = useState("/pages/about-us")
 
   // Fourth carousel slide — a video rather than a still, so no image field.
   const [tabProductLabel, setTabProductLabel] = useState("Our Product")
