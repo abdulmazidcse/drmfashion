@@ -9,33 +9,16 @@ concurrency:
   group: deploy
   cancel-in-progress: false
 
+# The build runs on the server, not on the GitHub runner: pages are
+# pre-rendered from the live database (localhost:6432 there), which is not
+# reachable from outside — and must not be. It happens in a separate checkout
+# ($APP_DIR-build) so the running site keeps serving the old build until the
+# new one has finished; only then are .next and node_modules swapped in.
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-
-      - run: npm ci
-
-      # NEXT_PUBLIC_* values are inlined into the bundle at build time, so they
-      # must exist here. Store them as one multi-line secret, KEY=value per line.
-      - name: Write build env
-        run: printf '%s\n' "$BUILD_ENV" > .env.production
-        env:
-          BUILD_ENV: ${{ secrets.BUILD_ENV }}
-
-      - run: npx next build
-        env:
-          NODE_OPTIONS: --max-old-space-size=4096
-
-      - name: Package .next
-        run: tar -czf next-build.tar.gz .next
-
       - name: Set up SSH
         run: |
           mkdir -p ~/.ssh
@@ -43,37 +26,44 @@ jobs:
           chmod 600 ~/.ssh/id_deploy
           ssh-keyscan -H "${{ secrets.SSH_HOST }}" >> ~/.ssh/known_hosts
 
-      - name: Upload build
+      - name: Build and activate on server
         run: |
-          scp -i ~/.ssh/id_deploy next-build.tar.gz \
-            ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/tmp/next-build.tar.gz
-
-      - name: Activate on server
-        run: |
-          ssh -i ~/.ssh/id_deploy ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} \
+          ssh -i ~/.ssh/id_deploy -o ServerAliveInterval=30 \
+            ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} \
             "APP_DIR='${{ secrets.APP_DIR }}' bash -s" <<'REMOTE'
           set -euo pipefail
-          cd "$APP_DIR"
+          BUILD_DIR="${APP_DIR%/}-build"
 
-          # DB backup before any schema change
+          # 1. Fresh copy of main in the build folder (the live folder is untouched)
+          if [ ! -d "$BUILD_DIR/.git" ]; then
+            git clone "$(git -C "$APP_DIR" remote get-url origin)" "$BUILD_DIR"
+          fi
+          cd "$BUILD_DIR"
+          git fetch origin main
+          git reset --hard origin/main
+          cp "$APP_DIR/.env" .env
+
+          # 2. Install + build (the live site keeps running meanwhile). The box
+          # has 1 vCPU / 2 GB RAM + 4 GB swap: low priority keeps the live site
+          # responsive, at the cost of a slower build.
+          nice -n 10 npm ci
+          nice -n 10 npm run build
+
+          # 3. DB backup, then schema update
           mkdir -p ~/backups
           sudo -u postgres pg_dump -d fashion_store -F c > ~/backups/pre_deploy_$(date +%Y%m%d_%H%M%S).dump
           ls -t ~/backups/pre_deploy_*.dump | tail -n +8 | xargs -r rm --
+          npx prisma db push
 
+          # 4. Swap the new code, packages and build into the live folder
+          cd "$APP_DIR"
           git fetch origin main
           git reset --hard origin/main
-
-          # The old build keeps serving while this runs
-          npm ci
-          npx prisma db push
-          npx prisma generate
-
-          # Swap the build in, then reload (cluster mode = rolling restart)
-          rm -rf .next.new .next.old
-          mkdir .next.new
-          tar -xzf /tmp/next-build.tar.gz -C .next.new --strip-components=1
+          rsync -a --delete "$BUILD_DIR/node_modules/" "$APP_DIR/node_modules/"
+          rm -rf .next.old
           mv .next .next.old
-          mv .next.new .next
+          cp -a "$BUILD_DIR/.next" .next
           pm2 reload ecosystem.config.js --update-env
-          rm -rf .next.old /tmp/next-build.tar.gz
+          rm -rf .next.old
+          echo "Deployed $(git rev-parse --short HEAD)"
           REMOTE
