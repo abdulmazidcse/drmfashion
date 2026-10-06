@@ -78,7 +78,7 @@ export default function ContactPageCard() {
             <Input
               value={contactPage.hours}
               onChange={(e) => updateContactPage({ hours: e.target.value })}
-              placeholder="Sun – Thu, 10:00 AM – 6:00 PM"
+              placeholder="Open 24/7 — every day"
             />
           </div>
           <div className="space-y-3">

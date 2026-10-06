@@ -19,7 +19,7 @@ import CtaRender from "@/components/landing/sections/CtaRender"
 import FaqRender from "@/components/landing/sections/FaqRender"
 import SpacerRender from "@/components/landing/sections/SpacerRender"
 import HtmlRender from "@/components/landing/sections/HtmlRender"
-import OrderRender from "@/components/landing/sections/OrderRender"
+import OrderRender, { type CardProduct } from "@/components/landing/sections/OrderRender"
 
 const BANGLA_FONT = "'Noto Sans Bengali', 'Hind Siliguri', system-ui, sans-serif"
 
@@ -27,6 +27,8 @@ interface LandingRendererProps {
   sections: Section[]
   theme: LandingTheme
   products: LandingProduct[]
+  /** Same products in ProductCard's shape, for the order section's card view. */
+  cardProducts?: CardProduct[]
   showLowStockNotice: boolean
   payments: PaymentSettings
   shipping: ShippingSettings
@@ -37,6 +39,7 @@ export default function LandingRenderer({
   sections,
   theme,
   products,
+  cardProducts,
   showLowStockNotice,
   payments,
   shipping,
@@ -76,6 +79,7 @@ export default function LandingRenderer({
                     subheading={s.data.subheading}
                     buttonText={s.data.buttonText}
                     products={products}
+                    cardProducts={cardProducts}
                     showLowStockNotice={showLowStockNotice}
                     payments={payments}
                     shipping={shipping}

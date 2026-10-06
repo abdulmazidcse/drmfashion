@@ -53,3 +53,6 @@ public/uploads/fashion-1784542588372-419372750.mp4
 # WebKit/Safari compatibility screenshots (npm run check:safari) — regenerated on demand
 scratch/webkit/
 scratch/hero-measure.mjs
+
+# files uploaded through the site live only on the server
+/public/uploads/

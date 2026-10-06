@@ -19,7 +19,7 @@ type SearchParams = Promise<{ page?: string; sort?: string }>
 export async function generateMetadata(): Promise<Metadata> {
   const storeName = await getStoreName()
   return {
-    title: `Reviewed by Tall Customers | ${storeName}`,
+    title: `Reviews from Happy Customers | ${storeName}`,
     description: `Every ${storeName} piece our customers have reviewed, ranked by what they rated highest.`,
     // Pagination and sort variants all resolve back to the index.
     alternates: { canonical: "/reviews" },
@@ -105,7 +105,7 @@ export default async function ReviewsPage({ searchParams }: { searchParams: Sear
         <section className="border-b border-zinc-100 bg-white px-6 pb-10 pt-14 text-center md:px-12 md:pb-14 md:pt-20">
           <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-zinc-400">{storeName}</p>
           <h1 className="mt-4 text-4xl font-black uppercase leading-none tracking-tight md:text-6xl">
-            Shop The Reviews
+            Reviews from Happy Customers
           </h1>
           <p className="mx-auto mt-5 max-w-xl text-sm leading-relaxed text-zinc-600 md:text-base">
             Every piece our customers have reviewed, ranked by what they rated highest. Open one to
@@ -174,7 +174,7 @@ export default async function ReviewsPage({ searchParams }: { searchParams: Sear
                     product={item.product}
                     idPrefix="reviewed"
                     listId="reviews"
-                    listName="Shop The Reviews"
+                    listName="Reviews from Happy Customers"
                     priority={i < 4}
                   />
                   {/* The whole reason this listing exists, so it sits with the

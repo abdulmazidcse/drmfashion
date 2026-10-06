@@ -7,6 +7,7 @@ import LandingRenderer from "@/components/landing/LandingRenderer";
 import { legacySections, LEGACY_THEME, parseSections, parseTheme } from "@/lib/landing/sections";
 import { fullPaymentFreeShippingFromSettings, freeShippingThresholdFromSettings, shippingMethodsFromSettings } from "@/lib/shipping";
 import { taxSettingsFromSettings } from "@/lib/tax";
+import { PRODUCT_CARD_SELECT } from "@/lib/productSelect";
 
 interface LandingPageProps {
   params: Promise<{ slug: string }>;
@@ -92,6 +93,15 @@ export default async function LandingPage({ params }: LandingPageProps) {
 
   if (products.length === 0) notFound();
 
+  // The same products in the storefront card's shape, for the order
+  // section's card view (ProductCard: badges, colour swatches, quick add).
+  const cardRows = await prisma.product.findMany({
+    where: { id: { in: products.map((p) => p.id) }, deletedAt: null },
+    select: PRODUCT_CARD_SELECT,
+  });
+  const cardById = new Map(cardRows.map((p) => [p.id, p]));
+  const cardProducts = products.map((p) => cardById.get(p.id)).filter((p): p is NonNullable<typeof p> => Boolean(p));
+
   // Pages saved before the section builder existed have no `sections` — render
   // them as the equivalent section list instead, so they keep their exact old
   // look (see lib/landing/sections.ts's legacySections/LEGACY_THEME).
@@ -110,6 +120,7 @@ export default async function LandingPage({ params }: LandingPageProps) {
       sections={sections}
       theme={theme}
       products={products}
+      cardProducts={cardProducts}
       showLowStockNotice={settings.product_low_stock_notice_enabled !== "false"}
       payments={{
         cod: settings.payment_cod_enabled !== "false",

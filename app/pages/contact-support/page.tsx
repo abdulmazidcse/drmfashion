@@ -40,7 +40,7 @@ export default async function ContactPage() {
     { icon: Mail, label: "Email", value: email, href: `mailto:${email}`, note: "Best for anything with an order number." },
     ...(phone ? [{ icon: Phone, label: "Phone", value: phone, href: `tel:${phone.replace(/\s+/g, "")}`, note: "Available during working hours." }] : []),
     ...(address ? [{ icon: MapPin, label: "Address", value: address, href: page.mapUrl || undefined, note: page.mapUrl ? "Open in Google Maps." : "Returns are only accepted by prior arrangement." }] : []),
-    { icon: Clock, label: "Working Hours", value: hours, href: undefined, note: "Replies pause outside these hours." },
+    { icon: Clock, label: "Working Hours", value: hours, href: undefined, note: "Message us any time — we're always open." },
   ]
 
   return (

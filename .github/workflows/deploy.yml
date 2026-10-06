@@ -1,0 +1,79 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # NEXT_PUBLIC_* values are inlined into the bundle at build time, so they
+      # must exist here. Store them as one multi-line secret, KEY=value per line.
+      - name: Write build env
+        run: printf '%s\n' "$BUILD_ENV" > .env.production
+        env:
+          BUILD_ENV: ${{ secrets.BUILD_ENV }}
+
+      - run: npx next build
+        env:
+          NODE_OPTIONS: --max-old-space-size=4096
+
+      - name: Package .next
+        run: tar -czf next-build.tar.gz .next
+
+      - name: Set up SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_KEY }}" > ~/.ssh/id_deploy
+          chmod 600 ~/.ssh/id_deploy
+          ssh-keyscan -H "${{ secrets.SSH_HOST }}" >> ~/.ssh/known_hosts
+
+      - name: Upload build
+        run: |
+          scp -i ~/.ssh/id_deploy next-build.tar.gz \
+            ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/tmp/next-build.tar.gz
+
+      - name: Activate on server
+        run: |
+          ssh -i ~/.ssh/id_deploy ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} \
+            "APP_DIR='${{ secrets.APP_DIR }}' bash -s" <<'REMOTE'
+          set -euo pipefail
+          cd "$APP_DIR"
+
+          # DB backup before any schema change
+          mkdir -p ~/backups
+          sudo -u postgres pg_dump -d fashion_store -F c > ~/backups/pre_deploy_$(date +%Y%m%d_%H%M%S).dump
+          ls -t ~/backups/pre_deploy_*.dump | tail -n +8 | xargs -r rm --
+
+          git fetch origin main
+          git reset --hard origin/main
+
+          # The old build keeps serving while this runs
+          npm ci
+          npx prisma db push
+          npx prisma generate
+
+          # Swap the build in, then reload (cluster mode = rolling restart)
+          rm -rf .next.new .next.old
+          mkdir .next.new
+          tar -xzf /tmp/next-build.tar.gz -C .next.new --strip-components=1
+          mv .next .next.old
+          mv .next.new .next
+          pm2 reload ecosystem.config.js --update-env
+          rm -rf .next.old /tmp/next-build.tar.gz
+          REMOTE

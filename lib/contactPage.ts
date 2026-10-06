@@ -39,7 +39,7 @@ export const DEFAULT_CONTACT_PAGE: ContactPageConfig = {
   phone: "",
   address: "House #55, 3rd Floor, Eastern Mollika Lane, New Elephant Road, Dhaka-1205",
   mapUrl: "https://maps.app.goo.gl/SFniRK51kLArf1Sh9",
-  hours: "Sun – Thu, 10:00 AM – 6:00 PM",
+  hours: "Open 24/7 — every day",
   faqs: [
     {
       q: "How long does it take to get a reply?",

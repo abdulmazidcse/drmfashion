@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { Check, ChevronRight, Loader2, MapPin, Plus, Shield, Truck } from "lucide-react";
+import { Check, ChevronRight, LayoutGrid, List, Loader2, MapPin, Plus, Shield, Truck } from "lucide-react";
+import ProductCard from "@/components/ProductCard";
 import StripeCheckout from "@/components/StripeCheckout";
 import SquareCheckout from "@/components/SquareCheckout";
 import { useCurrency } from "@/providers/CurrencyProvider";
@@ -51,6 +52,9 @@ export interface LandingProduct {
   variants: Variant[];
 }
 
+/** A product in the storefront card's shape (PRODUCT_CARD_SELECT). */
+export type CardProduct = React.ComponentProps<typeof ProductCard>["product"];
+
 export interface PaymentSettings {
   cod: boolean;
   codCountry: string;
@@ -75,6 +79,8 @@ interface OrderRenderProps {
   subheading: string;
   buttonText: string;
   products: LandingProduct[];
+  /** When given, shoppers can switch between product cards and the list. */
+  cardProducts?: CardProduct[];
   showLowStockNotice: boolean;
   payments: PaymentSettings;
   shipping: ShippingSettings;
@@ -113,12 +119,18 @@ export default function OrderRender({
   subheading,
   buttonText,
   products,
+  cardProducts,
   showLowStockNotice,
   payments,
   shipping,
   tax: taxSettings,
 }: OrderRenderProps) {
   const { formatPrice, selectedCurrency } = useCurrency();
+  // Cards by default (the storefront's own product card); the original list
+  // with inline colour / size / quantity pickers is one click away.
+  const canShowCards = Boolean(cardProducts && cardProducts.length > 0);
+  const [view, setView] = useState<"cards" | "list">("cards");
+  const showCards = canShowCards && view === "cards";
 
   const [selections, setSelections] = useState<Record<string, Selection>>(() =>
     Object.fromEntries(products.map((p) => [p.id, defaultSelection(p)]))
@@ -452,7 +464,40 @@ export default function OrderRender({
         </div>
       )}
 
-      <section className="space-y-6">
+      {canShowCards && (
+        <div className="mb-6 flex justify-end">
+          <div className="inline-flex rounded-full border border-zinc-200 bg-white p-1" role="group" aria-label="Product view">
+            {([
+              { key: "cards", label: "Cards", icon: LayoutGrid },
+              { key: "list", label: "List", icon: List },
+            ] as const).map(({ key, label, icon: Icon }) => (
+              <button
+                key={key}
+                type="button"
+                aria-pressed={view === key}
+                onClick={() => setView(key)}
+                className={`inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-[11px] font-bold uppercase tracking-widest transition-colors ${
+                  view === key ? "bg-zinc-950 text-white" : "text-zinc-500 hover:text-zinc-900"
+                }`}
+              >
+                <Icon className="h-3.5 w-3.5" /> {label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {showCards && (
+        // ProductCard adds to the same cart (lib/cart.ts), which this
+        // section listens to, so the order form below picks the item up.
+        <section className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">
+          {cardProducts!.map((product, idx) => (
+            <ProductCard key={product.id} product={product} idPrefix="landing" priority={idx < 4} />
+          ))}
+        </section>
+      )}
+
+      <section className={showCards ? "hidden" : "space-y-6"}>
         {products.map((p) => {
           const sel = selections[p.id];
           const { colors, sizes, lengths, variant } = optionsFor(p);
