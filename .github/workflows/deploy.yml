@@ -55,8 +55,15 @@ jobs:
           nice -n 10 npm run build
 
           # 3. DB backup, then schema update
+          # The database is whatever .env points at. DIRECT_DATABASE_URL skips
+          # pgbouncer (pg_dump can't run through it); Prisma-only query params
+          # such as ?schema= / ?pgbouncer= are dropped because pg_dump rejects them.
+          env_url() { grep -E "^$1=" .env | tail -n1 | cut -d= -f2- | sed -e 's/^["'\'']//' -e 's/["'\'']$//'; }
+          DB_URL="$(env_url DIRECT_DATABASE_URL)"
+          [ -n "$DB_URL" ] || DB_URL="$(env_url DATABASE_URL)"
+          DB_URL="${DB_URL%%\?*}"
           mkdir -p ~/backups
-          sudo -u postgres pg_dump -d fashion_store -F c > ~/backups/pre_deploy_$(date +%Y%m%d_%H%M%S).dump
+          pg_dump "$DB_URL" -F c > ~/backups/pre_deploy_$(date +%Y%m%d_%H%M%S).dump
           ls -t ~/backups/pre_deploy_*.dump | tail -n +8 | xargs -r rm --
           npx prisma db push
 
