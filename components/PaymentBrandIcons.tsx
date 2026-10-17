@@ -33,7 +33,9 @@ function Mastercard() {
 
 function Amex() {
   return (
-    <span className={`${box} border-[#2E77BC] bg-[#2E77BC]`} title="American Express">
+    // Inline colours: `box` already sets bg-white/border, and Tailwind would let
+    // that win over a second bg-* class, leaving white text on white.
+    <span className={box} style={{ backgroundColor: "#2E77BC", borderColor: "#2E77BC" }} title="American Express">
       <span className="text-[9px] font-black leading-none tracking-tight text-white">AMEX</span>
     </span>
   )
