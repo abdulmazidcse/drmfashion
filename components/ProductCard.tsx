@@ -226,8 +226,19 @@ export default function ProductCard({
 
   const handleAddToCart = (overrideSize?: string, overrideLength?: string) => {
     const finalSize = overrideSize !== undefined ? overrideSize : (selectedSize || uniqueSizes[0] || "");
-    const finalLength = overrideLength !== undefined ? overrideLength : (selectedLength || uniqueLengths[0] || "");
     const finalColor = primaryColor;
+    // Length is optional on the card: when none is picked, take the first
+    // length this size is actually in stock in (shortest first), so the line
+    // still names a real variant for stock and checkout.
+    const finalLength =
+      overrideLength !== undefined
+        ? overrideLength
+        : selectedLength ||
+          uniqueLengths.find((len) =>
+            existsWith(product.variants, { color: finalColor || undefined, size: finalSize, length: len, inStockOnly: true })
+          ) ||
+          uniqueLengths[0] ||
+          "";
 
     // This used to add whatever pair was on screen without ever looking a
     // variant up, so an unmade combination — or a sold-out one — reached the
@@ -449,13 +460,14 @@ export default function ProductCard({
               </div>
             </div>
 
-            {/* LENGTH row */}
+            {/* LENGTH row — optional; hidden for products without a length axis */}
+            {uniqueLengths.length > 0 && (
             <div>
               <p className="text-[9px] font-black text-zinc-500 tracking-widest uppercase mb-1 text-center">
-                LENGTH
+                LENGTH <span className="font-semibold normal-case tracking-normal">(optional)</span>
               </p>
               <div className="flex justify-center flex-wrap gap-2">
-                {(uniqueLengths.length > 0 ? uniqueLengths : ["Tall", "Extra Tall"]).map((len) => (
+                {uniqueLengths.map((len) => (
                   <button
                     key={len}
                     onClick={(e) => {
@@ -473,25 +485,26 @@ export default function ProductCard({
                 ))}
               </div>
             </div>
+            )}
           </div>
 
-          {/* Select Size & Length CTA */}
+          {/* Add to Cart CTA — only a size is required */}
           <button
             onClick={(e) => {
               e.preventDefault();
-              if (selectedSize && selectedLength) {
+              if (selectedSize) {
                 handleAddToCart();
                 setShowQuickAdd(false);
               }
             }}
-            disabled={!selectedSize || !selectedLength}
+            disabled={!selectedSize}
             className={`w-full py-2.5 text-[10px] font-black tracking-widest uppercase transition-all duration-300 text-center rounded-full shadow-sm cursor-pointer ${
-              selectedSize && selectedLength
+              selectedSize
                 ? "bg-sig-copper-600 text-white hover:bg-sig-copper-500 active:scale-[0.98]"
                 : "bg-sig-copper-100 text-sig-copper-400 cursor-not-allowed"
             }`}
           >
-            {selectedSize && selectedLength ? "Add to Cart" : "Select Size & Length"}
+            {selectedSize ? "Add to Cart" : "Select Size"}
           </button>
         </div>
       </div>

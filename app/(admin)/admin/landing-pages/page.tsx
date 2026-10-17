@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react"
 import { useForm } from "react-hook-form"
 import Link from "next/link"
-import { Plus, Trash2, Rocket, Loader2, Pencil, X, Search } from "lucide-react"
+import { Plus, Trash2, Rocket, Loader2, Pencil, X, Search, Eye } from "lucide-react"
 import api from "@/lib/axios"
 import Swal from "sweetalert2"
 import { confirmDelete } from "@/lib/confirmDelete"
@@ -186,6 +186,9 @@ export default function LandingPagesPage() {
                   </div>
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
+                  <Button variant="ghost" size="icon" asChild className="h-8 w-8 text-muted-foreground">
+                    <a href={`/landingpage/${l.slug}`} target="_blank" rel="noopener noreferrer" aria-label="View landing page" title="View page"><Eye size={14} /></a>
+                  </Button>
                   <Button variant="ghost" size="icon" asChild className="h-8 w-8 text-muted-foreground">
                     <Link href={`/admin/landing-pages/${l.id}`} aria-label="Edit landing page"><Pencil size={14} /></Link>
                   </Button>
