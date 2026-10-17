@@ -502,7 +502,7 @@ export default function AdminPOSPage() {
       )}
 
       {/* POS LAYOUT */}
-      <div id="pos-main-layout" className="max-w-[1600px] mx-auto p-1 flex flex-col lg:flex-row gap-5 h-[calc(100vh-100px)] no-print print:hidden">
+      <div id="pos-main-layout" className="w-full p-1 flex flex-col lg:flex-row gap-5 h-[calc(100vh-100px)] no-print print:hidden">
         {/* LEFT COLUMN: CATALOG CONTAINER */}
         <div className="flex-1 bg-white border border-zinc-150 rounded-3xl shadow-xs p-5 flex flex-col overflow-hidden">
           {/* Header Search and categories */}

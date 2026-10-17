@@ -119,7 +119,7 @@ export async function POST(req: NextRequest) {
   } catch (error) {
     console.error("[SSLCOMMERZ_CREATE_PAYMENT_ERROR]", error)
     return NextResponse.json(
-      { message: errorMessage(error) || "Failed to start SSLCommerz payment." },
+      { message: errorMessage(error) || "Couldn't start the online payment." },
       { status: 500 }
     )
   }

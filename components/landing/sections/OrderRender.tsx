@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
+import { ONLINE_PAYMENT_LABEL, OnlinePaymentIcons } from "@/components/PaymentBrandIcons";
 import Image from "next/image";
 import Link from "next/link";
 import { Check, ChevronRight, LayoutGrid, List, Loader2, MapPin, Plus, Shield, Truck } from "lucide-react";
@@ -367,7 +368,7 @@ export default function OrderRender({
       await startSslcommerzCheckout(buildCheckoutPayload());
       // On success the browser navigates away to SSLCommerz.
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Failed to start SSLCommerz payment.";
+      const message = err instanceof Error ? err.message : "Couldn't start the online payment.";
       Swal.fire({ text: message, confirmButtonColor: "#18181b", icon: "error" });
       setPlacing(false);
     }
@@ -426,7 +427,7 @@ export default function OrderRender({
     { key: "cod", label: "Cash on Delivery", on: payments.cod },
     { key: "card", label: "Card", on: payments.stripe },
     { key: "bkash", label: "bKash", on: payments.bkash },
-    { key: "sslcommerz", label: "SSLCommerz", on: payments.sslcommerz },
+    { key: "sslcommerz", label: ONLINE_PAYMENT_LABEL, on: payments.sslcommerz },
     { key: "nagad", label: "Nagad", on: payments.nagad },
     { key: "square", label: "Square", on: payments.square },
   ].filter((m) => m.on);
@@ -823,7 +824,12 @@ export default function OrderRender({
                       }}
                       className={chip(form.paymentMethod === m.key)}
                     >
-                      {m.label}
+                      {m.key === "sslcommerz" ? (
+                        <span className="flex flex-col items-start gap-1.5">
+                          <span>{m.label}</span>
+                          <OnlinePaymentIcons />
+                        </span>
+                      ) : m.label}
                     </button>
                   ))}
                 </div>
@@ -837,7 +843,7 @@ export default function OrderRender({
                 )}
 
                 {form.paymentMethod === "sslcommerz" && (
-                  <p className="text-xs text-zinc-500">You&apos;ll be redirected to SSLCommerz to complete payment securely.</p>
+                  <p className="text-xs text-zinc-500">You&apos;ll be redirected to a secure payment page to pay by card or mobile banking.</p>
                 )}
 
                 {form.paymentMethod === "nagad" && (
@@ -918,12 +924,12 @@ export default function OrderRender({
                 >
                   {placing ? (
                     <>
-                      <Loader2 className="w-4 h-4 animate-spin" /> {form.paymentMethod === "bkash" ? "Redirecting to bKash…" : form.paymentMethod === "sslcommerz" ? "Redirecting to SSLCommerz…" : "Placing Order…"}
+                      <Loader2 className="w-4 h-4 animate-spin" /> {form.paymentMethod === "bkash" ? "Redirecting to bKash…" : form.paymentMethod === "sslcommerz" ? "Redirecting to secure payment…" : "Placing Order…"}
                     </>
                   ) : form.paymentMethod === "bkash" ? (
                     <>Pay with bKash · {formatPrice(total)}</>
                   ) : form.paymentMethod === "sslcommerz" ? (
-                    <>Pay with SSLCommerz · {formatPrice(total)}</>
+                    <>Pay Online · {formatPrice(total)}</>
                   ) : (
                     <>{buttonText || "Place Order"} · {formatPrice(total)}</>
                   )}

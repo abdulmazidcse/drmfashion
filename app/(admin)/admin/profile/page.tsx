@@ -109,7 +109,7 @@ export default function ProfilePage() {
   }
 
   return (
-    <div className="space-y-8 max-w-5xl mx-auto p-2">
+    <div className="space-y-8 max-w-5xl p-2">
       {/* HEADER */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>

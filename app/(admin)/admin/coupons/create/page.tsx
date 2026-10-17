@@ -51,7 +51,7 @@ export default function CreateCouponPage() {
   }
 
   return (
-    <div className="max-w-4xl mx-auto space-y-8">
+    <div className="max-w-4xl space-y-8">
       {/* HEADER SECTION */}
       <div className="flex flex-col space-y-2 pb-6 border-b border-border">
         <Link

@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 
 export default function CreateGiftCardPage() {
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
+    <div className="max-w-4xl space-y-6">
       <div className="flex flex-col space-y-1 pb-4">
         <Button
           asChild

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { ONLINE_PAYMENT_LABEL, OnlinePaymentIcons } from "@/components/PaymentBrandIcons";
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
@@ -142,7 +143,7 @@ export default function CheckoutPage() {
     const params = new URLSearchParams(window.location.search);
     const bkashStatus = params.get("bkash");
     const sslcommerzStatus = params.get("sslcommerz");
-    const gateway = bkashStatus ? "bKash" : sslcommerzStatus ? "SSLCommerz" : null;
+    const gateway = bkashStatus ? "bKash" : sslcommerzStatus ? "online" : null;
     const status = bkashStatus || sslcommerzStatus;
     if (!gateway || !status) return;
 
@@ -855,7 +856,7 @@ export default function CheckoutPage() {
       // do here. setPlacing(false) only matters for the error path below.
     } catch (err: any) {
       console.error(err);
-      Swal.fire({ text: err.message || "Failed to start SSLCommerz payment. Please try again.", confirmButtonColor: "#18181b", icon: "error" });
+      Swal.fire({ text: err.message || "Couldn't start the online payment. Please try again.", confirmButtonColor: "#18181b", icon: "error" });
       setPlacing(false);
     }
   };
@@ -940,7 +941,7 @@ export default function CheckoutPage() {
         </div>
         <div className="bg-white border border-zinc-100 px-8 py-6 max-w-sm w-full">
           <div className="flex justify-between text-xs mb-2 text-zinc-500"><span>Order Total</span><span className="font-black text-zinc-950">{formatPrice(gatewayOrderInfo?.total ?? total)}</span></div>
-          <div className="flex justify-between text-xs text-zinc-500"><span>Payment</span><span className="font-bold text-zinc-700 uppercase">{bkashOrderInfo ? "bKash (Online Payment)" : sslcommerzOrderInfo ? "SSLCommerz (Online Payment)" : form.paymentMethod === "cod" ? "Cash on Delivery" : form.paymentMethod === "card" ? "Credit / Debit Card" : form.paymentMethod === "square" ? "Square" : form.paymentMethod}</span></div>
+          <div className="flex justify-between text-xs text-zinc-500"><span>Payment</span><span className="font-bold text-zinc-700 uppercase">{bkashOrderInfo ? "bKash (Online Payment)" : sslcommerzOrderInfo ? "Online Payment (Card / Mobile Banking)" : form.paymentMethod === "cod" ? "Cash on Delivery" : form.paymentMethod === "card" ? "Credit / Debit Card" : form.paymentMethod === "square" ? "Square" : form.paymentMethod}</span></div>
         </div>
         <div className="flex gap-4">
           <Link href="/account" className="border border-zinc-950 text-zinc-950 px-8 py-3 text-xs font-bold tracking-widest uppercase hover:bg-zinc-50 transition-colors">Go to Account</Link>
@@ -1400,7 +1401,7 @@ export default function CheckoutPage() {
                   { value: "card", label: "Credit / Debit Card (Stripe)", desc: "Visa, Mastercard, Amex", enabled: paymentMethods.card },
                   { value: "square", label: "Square", desc: "Pay securely with Square", enabled: paymentMethods.square },
                   { value: "bkash", label: "bKash", desc: "Pay securely online via bKash", enabled: paymentMethods.bkash },
-                  { value: "sslcommerz", label: "SSLCommerz", desc: "Cards, mobile banking & more via SSLCommerz", enabled: paymentMethods.sslcommerz },
+                  { value: "sslcommerz", label: ONLINE_PAYMENT_LABEL, desc: "Visa, Mastercard, Amex, bKash, Nagad, Rocket & more", enabled: paymentMethods.sslcommerz },
                   { value: "nagad", label: "Nagad", desc: "Pay via Nagad account", enabled: paymentMethods.nagad },
                 ].filter(opt => opt.enabled).map((opt) => (
                   <label
@@ -1410,7 +1411,7 @@ export default function CheckoutPage() {
                     <input type="radio" name="paymentMethod" value={opt.value} checked={form.paymentMethod === opt.value} onChange={set("paymentMethod")} className="mt-0.5" />
                     <div>
                       <p className="text-xs font-black uppercase tracking-wider text-zinc-900">{opt.label}</p>
-                      <p className="text-[10px] text-zinc-400 font-light mt-0.5">{opt.desc}</p>
+                      {opt.value === "sslcommerz" ? <OnlinePaymentIcons className="mt-2" /> : <p className="text-[10px] text-zinc-400 font-light mt-0.5">{opt.desc}</p>}
                     </div>
                   </label>
                 ))}
@@ -1430,7 +1431,7 @@ export default function CheckoutPage() {
 
                 {form.paymentMethod === "sslcommerz" && (
                   <div className="pt-2 text-xs text-zinc-500">
-                    <p>You&apos;ll be redirected to SSLCommerz to complete payment securely, then brought back here.</p>
+                    <p>You&apos;ll be redirected to a secure payment page to pay by card or mobile banking, then brought back here.</p>
                   </div>
                 )}
 
@@ -1503,7 +1504,7 @@ export default function CheckoutPage() {
                 <div className="bg-zinc-50 p-4">
                   <p className="text-[10px] font-black uppercase tracking-widest text-zinc-400 mb-2">Payment Method</p>
                   <p className="text-sm font-bold text-zinc-900">
-                    {form.paymentMethod === "cod" ? "Cash on Delivery" : form.paymentMethod === "card" ? "Credit/Debit Card (Stripe)" : form.paymentMethod === "square" ? "Square Payment" : form.paymentMethod === "bkash" ? "bKash (Online Payment)" : form.paymentMethod === "sslcommerz" ? "SSLCommerz (Online Payment)" : `Nagad — ${form.nagadNumber}`}
+                    {form.paymentMethod === "cod" ? "Cash on Delivery" : form.paymentMethod === "card" ? "Credit/Debit Card (Stripe)" : form.paymentMethod === "square" ? "Square Payment" : form.paymentMethod === "bkash" ? "bKash (Online Payment)" : form.paymentMethod === "sslcommerz" ? "Online Payment (Card / Mobile Banking)" : `Nagad — ${form.nagadNumber}`}
                   </p>
                 </div>
 
@@ -1545,11 +1546,11 @@ export default function CheckoutPage() {
                       className="flex-[2] bg-zinc-950 text-white py-4 text-xs font-black tracking-widest uppercase hover:bg-zinc-800 disabled:opacity-60 disabled:cursor-wait transition-all flex items-center justify-center gap-2"
                     >
                       {placing ? (
-                        <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> {form.paymentMethod === "bkash" ? "Redirecting to bKash…" : form.paymentMethod === "sslcommerz" ? "Redirecting to SSLCommerz…" : "Placing Order…"}</>
+                        <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> {form.paymentMethod === "bkash" ? "Redirecting to bKash…" : form.paymentMethod === "sslcommerz" ? "Redirecting to secure payment…" : "Placing Order…"}</>
                       ) : form.paymentMethod === "bkash" ? (
                         <>Pay with bKash · {formatPrice(total)}</>
                       ) : form.paymentMethod === "sslcommerz" ? (
-                        <>Pay with SSLCommerz · {formatPrice(total)}</>
+                        <>Pay Online · {formatPrice(total)}</>
                       ) : (
                         <>Place Order · {formatPrice(total)}</>
                       )}

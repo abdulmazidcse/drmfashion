@@ -345,7 +345,7 @@ export default function ExpensesPage() {
         </DialogContent>
       </Dialog>
 
-      <div className="space-y-6 max-w-7xl mx-auto p-2">
+      <div className="space-y-6 w-full p-2">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <div className="p-2.5 bg-primary text-primary-foreground rounded-lg"><Receipt size={20} /></div>

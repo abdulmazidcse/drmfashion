@@ -2,6 +2,7 @@
 
 import { useRef, useState } from 'react';
 import { MediaLibraryButton } from '@/components/admin/MediaLibraryPicker';
+import FullscreenPanel from '@/components/admin/FullscreenPanel';
 import { CKEditor } from '@ckeditor/ckeditor5-react';
 import {
     ClassicEditor,
@@ -72,7 +73,9 @@ export default function RichTextEditor({
   const editorRef = useRef<{ execute: (command: string, options?: unknown) => void } | null>(null);
 
   return (
-    <div className="border border-zinc-200 rounded-xl overflow-hidden">
+    <FullscreenPanel>
+    {(expanded) => (
+    <div className={`border border-zinc-200 rounded-xl overflow-hidden ${expanded ? 'rte-full' : 'mt-2'}`}>
       <CKEditor
         editor={ ClassicEditor }
         data={seedContent}
@@ -186,7 +189,16 @@ export default function RichTextEditor({
         .ck-content ol {
           padding-left: 1.5em;
         }
+        /* Full-screen mode: the writing area (rich or source) takes the
+           whole viewport below the toolbar. */
+        .rte-full .ck-editor__editable_inline,
+        .rte-full .ck-source-editing-area,
+        .rte-full .ck-source-editing-area textarea {
+          min-height: calc(100vh - 170px);
+        }
       `}</style>
     </div>
+    )}
+    </FullscreenPanel>
   );
 }

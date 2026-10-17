@@ -105,7 +105,7 @@ export default function AboutSettingsPage() {
   }
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6 pb-20">
+    <div className="max-w-4xl space-y-6 pb-20">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>

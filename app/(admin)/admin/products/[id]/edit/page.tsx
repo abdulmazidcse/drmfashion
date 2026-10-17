@@ -8,7 +8,7 @@ export default function EditProductPage() {
   const id = params.id as string
 
   return (
-    <div className="space-y-8 max-w-5xl mx-auto p-2">
+    <div className="space-y-8 max-w-5xl p-2">
       <ProductEditForm productId={id} />
     </div>
   )

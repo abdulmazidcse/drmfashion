@@ -191,7 +191,7 @@ export default function SalesReportPage() {
     : []
 
   return (
-    <div className="space-y-8 max-w-7xl mx-auto p-2">
+    <div className="space-y-8 w-full p-2">
       {/* HEADER */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>

@@ -77,7 +77,7 @@ export default function PurchasesPage() {
   const totalItemsReceived = purchases.filter(p => p.status === 'RECEIVED').reduce((sum, p) => sum + p.items.reduce((s: number, i: any) => s + i.quantity, 0), 0)
 
   return (
-    <div className="space-y-8 max-w-7xl mx-auto p-2">
+    <div className="space-y-8 w-full p-2">
       {/* HEADER */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>

@@ -1,5 +1,6 @@
 "use client"
 import { HtmlProps } from "../types"
+import FullscreenPanel from "@/components/admin/FullscreenPanel"
 
 interface Props { props: HtmlProps; onChange: (props: HtmlProps) => void }
 
@@ -18,13 +19,17 @@ export function HtmlSettings({ props: p, onChange }: Props) {
     <div className="space-y-4">
       <Field label="Raw HTML / Embed Code">
         <div className="text-[10px] text-zinc-400 mb-1">⚠️ Use with caution — injected directly into the page.</div>
-        <textarea
-          className="w-full px-3 py-2 text-sm border border-zinc-200 rounded-md bg-zinc-900 text-green-400 font-mono focus:outline-none focus:border-zinc-700 transition-colors resize-y"
-          rows={14}
-          value={p.html}
-          onChange={e => set('html', e.target.value)}
-          spellCheck={false}
-        />
+        <FullscreenPanel label="Full screen code">
+          {expanded => (
+            <textarea
+              className={`w-full px-3 py-2 text-sm border border-zinc-200 rounded-md bg-zinc-900 text-green-400 font-mono focus:outline-none focus:border-zinc-700 transition-colors ${expanded ? 'h-full resize-none' : 'mt-2 resize-y'}`}
+              rows={14}
+              value={p.html}
+              onChange={e => set('html', e.target.value)}
+              spellCheck={false}
+            />
+          )}
+        </FullscreenPanel>
       </Field>
       <div className="bg-zinc-50 border border-zinc-200 rounded-lg p-3 space-y-2">
         <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Templates</p>

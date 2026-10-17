@@ -159,7 +159,7 @@ export default function AdminDashboardPage() {
   const categoryMixTotal = categoryMix.reduce((sum, d) => sum + d.value, 0)
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto p-2">
+    <div className="space-y-6 w-full p-2">
       {/* LUXURY GREETING HEADER */}
       <div className="hidden">
       <Card className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-6 relative overflow-hidden">

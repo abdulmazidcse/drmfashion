@@ -275,7 +275,7 @@ export default function UsersPage() {
   const totalRewardPoints = users.reduce((sum, u) => sum + (u.rewardPoints || 0), 0)
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto p-2 overflow-x-hidden">
+    <div className="space-y-6 w-full p-2 overflow-x-hidden">
       {/* HEADER */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>

@@ -56,7 +56,7 @@ const newLine = (): FormLine => ({ key: ++lineKey, accountId: "", debit: "", cre
 // still be prerendered (see the Next docs for use-search-params).
 export default function JournalPage() {
   return (
-    <Suspense fallback={<div className="max-w-7xl mx-auto p-2"><div className="h-40 animate-pulse rounded-xl bg-muted/60" /></div>}>
+    <Suspense fallback={<div className="w-full p-2"><div className="h-40 animate-pulse rounded-xl bg-muted/60" /></div>}>
       <JournalPageInner />
     </Suspense>
   )
@@ -326,7 +326,7 @@ function JournalPageInner() {
         </DialogContent>
       </Dialog>
 
-      <div className="space-y-6 max-w-7xl mx-auto p-2">
+      <div className="space-y-6 w-full p-2">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <div className="p-2.5 bg-primary text-primary-foreground rounded-lg"><BookOpen size={20} /></div>

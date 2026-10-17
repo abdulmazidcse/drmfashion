@@ -734,7 +734,7 @@ export default function AdminDeliveriesPage() {
         </DialogContent>
       </Dialog>
 
-      <div className="space-y-6 max-w-7xl mx-auto p-2">
+      <div className="space-y-6 w-full p-2">
         {/* VIEW TITLE HEADER */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">

@@ -57,7 +57,7 @@ export default function SettingsShell() {
   }
 
   return (
-    <div className="space-y-6 max-w-5xl mx-auto p-2 pb-12">
+    <div className="space-y-6 max-w-5xl p-2 pb-12">
       <form onSubmit={handleSaveSettings} className="space-y-6">
         {/* STICKY HEADER WITH TITLE & SAVE BUTTON */}
         <div className="sticky top-0 z-20 bg-background/95 backdrop-blur-md py-4 border-b border-border/80 flex flex-col sm:flex-row sm:items-center justify-between gap-4">

@@ -274,7 +274,7 @@ export default function EditLandingPagePage() {
 
   if (loading) {
     return (
-      <div className="max-w-7xl mx-auto p-2">
+      <div className="w-full p-2">
         <Card className="flex flex-col items-center justify-center py-16">
           <Loader2 className="w-7 h-7 animate-spin text-muted-foreground mb-3" />
           <span className="text-muted-foreground text-sm">Loading landing page...</span>
@@ -284,7 +284,7 @@ export default function EditLandingPagePage() {
   }
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto p-2">
+    <div className="space-y-6 w-full p-2">
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3 min-w-0">

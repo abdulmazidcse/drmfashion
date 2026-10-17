@@ -199,7 +199,7 @@ export default function CreatePurchaseOrderPage() {
   }
 
   return (
-    <div className="max-w-7xl mx-auto p-0">
+    <div className="w-full p-0">
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
 
         {/* LEFT COLUMN: FORM */}

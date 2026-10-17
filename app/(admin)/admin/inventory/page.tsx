@@ -157,7 +157,7 @@ export default function InventoryPage() {
   const { totalUnits: totalItems, lowStockCount, threshold, totalValue } = stats
 
   return (
-    <div className="space-y-8 max-w-[1600px] mx-auto pb-10">
+    <div className="space-y-8 w-full pb-10">
       {/* HEADER SECTION */}
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>

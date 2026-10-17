@@ -116,7 +116,7 @@ export default function LengthsPage() {
         </DialogContent>
       </Dialog>
 
-      <div className="space-y-6 max-w-7xl mx-auto p-2">
+      <div className="space-y-6 w-full p-2">
         {/* HEADER */}
         <div className="flex items-center gap-3">
           <div className="p-2.5 bg-primary text-primary-foreground rounded-xl"><Maximize size={20} /></div>
