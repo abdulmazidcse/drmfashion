@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { notUpcomingWhere } from "@/lib/upcoming";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ChevronLeft, ChevronRight } from "lucide-react";
@@ -65,7 +66,7 @@ export default async function BrandPage({ params, searchParams }: Props) {
   if (!brand) notFound();
 
   const page = Math.max(1, parseInt(rawPage || "1", 10) || 1);
-  const where = { brandId: brand.id, published: true, deletedAt: null };
+  const where = { brandId: brand.id, published: true, deletedAt: null, ...notUpcomingWhere() };
 
   const [categories, total, products] = await Promise.all([
     prisma.category.findMany({

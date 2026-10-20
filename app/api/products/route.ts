@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { notUpcomingWhere } from "@/lib/upcoming";
 import { prisma } from "@/lib/prisma";
 import { formatProductUrls } from "@/lib/utils";
 
@@ -53,6 +54,7 @@ export async function GET(req: NextRequest) {
     const whereClause: any = {
       published: true,
       deletedAt: null,
+      ...notUpcomingWhere(),
       ...(categoryIds ? { categoryId: { in: categoryIds } } : {}),
       ...(query
         ? {

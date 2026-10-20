@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { notUpcomingWhere } from "@/lib/upcoming";
 import HeaderClient from "./HeaderClient";
 import { fetchWithCache } from "@/lib/redis";
 import { productNameSearchFilter } from "@/lib/search";
@@ -84,6 +85,7 @@ export default async function Header({ transparent = false }: { transparent?: bo
               where: {
                 published: true,
                 deletedAt: null,
+                ...notUpcomingWhere(),
                 ...(productNameSearchFilter(term) ?? {}),
               },
               select: { id: true },

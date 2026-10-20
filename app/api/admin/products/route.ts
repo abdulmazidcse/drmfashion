@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
+import { parseLaunchDate } from "@/lib/upcoming"
 import { revalidatePath } from "next/cache"
 import { prisma } from "@/lib/prisma"
 import { getAdminPayload } from "@/lib/auth"
@@ -38,6 +39,9 @@ export async function POST(
       featured,
       published,
       flashSaleEndDate,
+      upcoming,
+      launchDate,
+      upcomingShowPrice,
       images,
       variants,
       metaTitle,
@@ -102,8 +106,11 @@ export async function POST(
           categoryId,
           brandId: brandId || null,
           featured,
-          published: published ?? true,
+          published: published ?? true,
           flashSaleEndDate: flashSaleEndDate ? new Date(flashSaleEndDate) : null,
+          upcoming: !!upcoming,
+          launchDate: upcoming ? parseLaunchDate(launchDate) : null,
+          upcomingShowPrice: upcomingShowPrice !== false,
           modelWearsProductId: modelWearsProductId || null,
           ...parseCustomMeasurementInput(body),
 

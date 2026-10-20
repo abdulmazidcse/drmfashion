@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { launchDateInputValue } from "@/lib/upcoming"
 import { useForm } from "react-hook-form"
 import api from "@/lib/axios"
 import { useRouter } from "next/navigation"
@@ -52,6 +53,9 @@ type FormValues = {
   flashSaleEndDate?: string
   featured?: boolean
   published?: boolean
+  upcoming?: boolean
+  launchDate?: string
+  upcomingShowPrice?: boolean
   sizeAndFit?: string
   fabricAndCare?: string
   metaTitle?: string
@@ -184,6 +188,9 @@ export default function ProductEditForm({ productId }: Props) {
           flashSaleEndDate: product.flashSaleEndDate ? new Date(product.flashSaleEndDate).toISOString().slice(0, 16) : "",
           featured: product.featured || false,
           published: product.published ?? true,
+          upcoming: product.upcoming ?? false,
+          launchDate: launchDateInputValue(product.launchDate),
+          upcomingShowPrice: product.upcomingShowPrice ?? true,
           sizeAndFit: product.sizeAndFit || "",
           fabricAndCare: product.fabricAndCare || "",
           metaTitle: product.metaTitle || "",
@@ -1026,6 +1033,36 @@ export default function ProductEditForm({ productId }: Props) {
               />
               <span className="text-xs font-semibold text-zinc-700">Published</span>
             </label>
+          </div>
+          {/* UPCOMING (coming soon) */}
+          <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50/50 p-4 space-y-3">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                {...register("upcoming")}
+                className="w-4 h-4 text-primary border-zinc-300 rounded focus:ring-primary"
+              />
+              <span className="text-xs font-semibold text-zinc-700">Upcoming (Coming Soon)</span>
+            </label>
+            <p className="text-[11px] text-zinc-500">Shown on the homepage Coming Soon section and /upcoming with a badge. Customers can&apos;t buy it, and it stays out of the shop, categories and search.</p>
+            {watch("upcoming") && (
+              <div className="space-y-3">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" {...register("upcomingShowPrice")} className="w-4 h-4 text-primary border-zinc-300 rounded focus:ring-primary" />
+                <span className="text-xs font-semibold text-zinc-700">Show price</span>
+                <span className="text-[11px] text-zinc-500">— untick to show &ldquo;Price coming soon&rdquo; instead</span>
+              </label>
+              <div className="max-w-xs space-y-1">
+                <label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Launch date (optional)</label>
+                <input
+                  type="date"
+                  {...register("launchDate")}
+                  className="w-full border border-zinc-200 rounded-xl px-4 py-2.5 text-sm bg-white"
+                />
+                <p className="text-[11px] text-zinc-500">On this day it becomes a normal product by itself. Leave empty to switch it on manually.</p>
+              </div>
+              </div>
+            )}
           </div>
 
           <CustomMeasurementSection

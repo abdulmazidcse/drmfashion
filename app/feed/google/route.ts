@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
+import { notUpcomingWhere } from "@/lib/upcoming"
 import { prisma } from "@/lib/prisma"
 import { getSettings, getStoreName, baseCurrencyCode } from "@/lib/settings"
 import { requestSiteUrl } from "@/lib/siteUrl"
@@ -35,6 +36,7 @@ export async function GET(req: NextRequest) {
         where: {
           published: true,
           deletedAt: null,
+          ...notUpcomingWhere(),
           // A product with no sellable variant has nothing to put in the feed.
           variants: { some: { deletedAt: null } },
         },

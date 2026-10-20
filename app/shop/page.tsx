@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { notUpcomingWhere } from "@/lib/upcoming";
 import { Metadata } from "next";
 import Link from "next/link";
 import {
@@ -194,6 +195,7 @@ export default async function ShopPage({ searchParams }: ShopPageProps) {
     where: {
       published: true,
       deletedAt: null,
+      ...notUpcomingWhere(),
       ...(categoryIds ? { categoryId: { in: categoryIds } } : {}),
       // Shares its matcher with the header's suggestion panel, so "View All
       // Results" lands on the same set the panel was previewing.

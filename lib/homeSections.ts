@@ -38,6 +38,7 @@ export const HOME_SECTIONS = [
   { key: "icons", label: "Featured icons grid", hint: "Curated wall of product photography, Men/Women tabs." },
   { key: "brands", label: "Brand showcase", hint: "The dark panel listing brand logos." },
   { key: "new-arrivals", label: "New arrivals", hint: "Newest published products." },
+  { key: "upcoming", label: "Coming soon", hint: "Products marked Upcoming. Hidden when there are none." },
   { key: "social-proof", label: "Social proof stats", hint: "Rating, reviews and customer counts. Hidden until there is a review." },
   { key: "recently-viewed", label: "Recently viewed", hint: "Per-visitor, from their browser." },
   { key: "journal", label: "From the journal", hint: "Three most recent posts." },

@@ -2,10 +2,10 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "drmfashion-dev",
+      "name": "drmfashion-3001",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev"],
-      "port": 3000
+      "runtimeArgs": ["run", "dev:webpack", "--", "-p", "3001"],
+      "port": 3001
     }
   ]
 }

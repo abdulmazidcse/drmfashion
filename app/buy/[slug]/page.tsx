@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
-import { notFound } from "next/navigation";
+import { isUpcoming } from "@/lib/upcoming";
+import { notFound, redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { getSettings, getStoreName } from "@/lib/settings";
 import { formatImageUrl } from "@/lib/utils";
@@ -46,6 +47,8 @@ export default async function BuyPage({ params }: BuyPageProps) {
         thumbnail: true,
         basePrice: true,
         discountPrice: true,
+        upcoming: true,
+        launchDate: true,
         images: { select: { url: true }, take: 4 },
         variants: {
           where: { deletedAt: null },
@@ -57,6 +60,8 @@ export default async function BuyPage({ params }: BuyPageProps) {
   ]);
 
   if (!product) notFound();
+  // Not orderable yet — the product page shows it with its Coming Soon badge.
+  if (isUpcoming(product)) redirect(`/product/${product.slug}`);
 
   return (
     <QuickBuy

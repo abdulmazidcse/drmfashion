@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { upcomingWhere } from "@/lib/upcoming";
 import { Metadata } from "next";
 import { notFound } from "next/navigation";
 import ProductDetailsClient from "@/components/ProductDetailsClient";
@@ -142,7 +143,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
       published: true,
       deletedAt: null,
       categoryId: product.categoryId,
-      NOT: { id: product.id }
+      NOT: [{ id: product.id }, upcomingWhere()]
     },
     // Rendered as <ProductCard>, same as every other listing.
     select: PRODUCT_CARD_SELECT,
@@ -156,7 +157,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
       where: {
         published: true,
         deletedAt: null,
-        NOT: { id: product.id }
+        NOT: [{ id: product.id }, upcomingWhere()]
       },
       // Same card shape as the primary related-products query above.
       select: PRODUCT_CARD_SELECT,

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { notUpcomingWhere } from "@/lib/upcoming";
 import { prisma } from "@/lib/prisma";
 import { formatImageUrl } from "@/lib/utils";
 import {
@@ -45,7 +46,7 @@ export async function GET(req: NextRequest) {
     }
     const byName = productNameSearchFilter(q);
 
-    const published = { published: true, deletedAt: null };
+    const published = { published: true, deletedAt: null, ...notUpcomingWhere() };
     const broadWhere = { ...published, ...broad };
 
     // Two tiers, so the panel opens with the garments actually called this and

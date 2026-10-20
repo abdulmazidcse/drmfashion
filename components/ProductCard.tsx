@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useRef, useState } from "react";
+import { comingLabel, isUpcoming } from "@/lib/upcoming";
 import Link from "next/link";
 import Image from "next/image";
 import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
@@ -39,6 +40,10 @@ interface Product {
   discountPrice: number | null;
   flashSaleEndDate?: string | Date | null;
   featured: boolean;
+  /** Coming-soon products: badge, no add to cart (see lib/upcoming). */
+  upcoming?: boolean;
+  launchDate?: string | Date | null;
+  upcomingShowPrice?: boolean;
   brand?: { name: string } | null;
   category?: { name: string; slug: string } | null;
   variants: Variant[];
@@ -217,7 +222,8 @@ export default function ProductCard({
     });
 
   const totalStock = product.variants.reduce((acc, v) => acc + v.stock, 0);
-  const isOutOfStock = totalStock === 0;
+  const upcoming = isUpcoming(product);
+  const isOutOfStock = !upcoming && totalStock === 0;
   const isLowStock = totalStock > 0 && totalStock <= 5;
   const isGiftCard = product.category?.slug === 'gift-cards' || product.category?.name === 'Gift Cards';
 
@@ -225,6 +231,7 @@ export default function ProductCard({
   const thumbRef = useRef<HTMLDivElement>(null);
 
   const handleAddToCart = (overrideSize?: string, overrideLength?: string) => {
+    if (upcoming) return;
     const finalSize = overrideSize !== undefined ? overrideSize : (selectedSize || uniqueSizes[0] || "");
     const finalColor = primaryColor;
     // Length is optional on the card: when none is picked, take the first
@@ -354,7 +361,9 @@ export default function ProductCard({
         {/* One chip, four states. Copper is the default; aqua marks stock
             warnings and ink marks "featured", so the discount percentage — the
             only one a shopper acts on — keeps the loudest colour. */}
-        {isOutOfStock ? (
+        {upcoming ? (
+          <span className={`${chipClass} bg-sig-ink`}>{comingLabel(product.launchDate)}</span>
+        ) : isOutOfStock ? (
           <span className={`${chipClass} bg-sig-soft`}>Sold Out</span>
         ) : isLowStock ? (
           <span className={`${chipClass} bg-sig-aqua-600`}>Low Stock</span>
@@ -589,6 +598,9 @@ export default function ProductCard({
             prices and the chip on one line, so the prices wrap under each
             other rather than shoving the chip out of the card. */}
         <div className="mt-auto flex items-center justify-between gap-2 select-none sm:gap-2.5">
+          {upcoming && product.upcomingShowPrice === false ? (
+            <span className="text-[12px] font-bold uppercase tracking-wider text-sig-soft">Price coming soon</span>
+          ) : (
           <div className="flex min-w-0 flex-wrap items-baseline gap-x-[7px]">
             <span className="text-[15px] font-extrabold text-sig-copper-700 sm:text-[17px]">
               {formatPrice(activePrice)}
@@ -599,8 +611,9 @@ export default function ProductCard({
               </s>
             )}
           </div>
+          )}
 
-          {!isOutOfStock && (
+          {!isOutOfStock && !upcoming && (
             <button
               type="button"
               aria-label={isGiftCard ? "Add to cart" : "Choose size and length"}

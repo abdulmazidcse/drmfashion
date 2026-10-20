@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { notUpcomingWhere } from "@/lib/upcoming";
 import { prisma } from "@/lib/prisma";
 import { getStoreName } from "@/lib/settings";
 import Link from "next/link";
@@ -83,7 +84,7 @@ export default async function CollectionPage({ params }: CollectionPageProps) {
         startsAt: true,
         endsAt: true,
         products: {
-          where: { product: { published: true, deletedAt: null } },
+          where: { product: { published: true, deletedAt: null, ...notUpcomingWhere() } },
           orderBy: { sortOrder: "asc" },
           select: { product: { select: PRODUCT_CARD_SELECT } },
         },

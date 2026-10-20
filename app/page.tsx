@@ -1,4 +1,5 @@
 import React from "react";
+import { notUpcomingWhere, upcomingWhere } from "@/lib/upcoming";
 import { prisma } from "@/lib/prisma";
 import { Metadata } from "next";
 import { getCache, setCache } from "@/lib/redis";
@@ -147,7 +148,8 @@ export default async function Home() {
     homeReviews,
     journalPosts,
     videoBanners,
-    iconsSection
+    iconsSection,
+    upcomingProducts
   ] = await Promise.all([
     // The only consumer on this page is <Footer>, which lists four root category
     // names. The previous query pulled two levels of children and every scalar on
@@ -195,7 +197,7 @@ export default async function Home() {
     }),
     fetchWithCache(CACHE_KEYS.products, async () => {
       const raw = await prisma.product.findMany({
-        where: { published: true, deletedAt: null },
+        where: { published: true, deletedAt: null, ...notUpcomingWhere() },
         select: PRODUCT_CARD_SELECT,
         orderBy: { createdAt: 'desc' },
         take: 40
@@ -430,7 +432,7 @@ export default async function Home() {
               ...grandChildren.map(c => c.id)
             ];
             raw = await prisma.product.findMany({
-              where: { categoryId: { in: categoryIds }, published: true, deletedAt: null },
+              where: { categoryId: { in: categoryIds }, published: true, deletedAt: null, ...notUpcomingWhere() },
               select: PRODUCT_CARD_SELECT,
               orderBy: { createdAt: "desc" },
               take: row.limit
@@ -440,6 +442,7 @@ export default async function Home() {
               where: {
                 published: true,
                 deletedAt: null,
+                ...notUpcomingWhere(),
                 ...(row.source === "featured" ? { featured: true } : {})
               },
               select: PRODUCT_CARD_SELECT,
@@ -541,7 +544,18 @@ export default async function Home() {
         tiles.map(t => ({ ...t, image: formatImageUrl(t.image) }));
 
       return { ...config, men: withUrls(config.men), women: withUrls(config.women) };
-    })
+    }),
+    // Coming-soon products. Short TTL: a launch date passing should move a
+    // product out of here (and into the regular rows) within minutes.
+    fetchWithCache("home:upcoming:v1", async () => {
+      const raw = await prisma.product.findMany({
+        where: { published: true, deletedAt: null, ...upcomingWhere() },
+        select: PRODUCT_CARD_SELECT,
+        orderBy: [{ launchDate: { sort: "asc", nulls: "last" } }, { createdAt: "desc" }],
+        take: 16
+      });
+      return raw.map(p => formatProductUrls(p));
+    }, 120)
   ]);
 
   // Split trending categories into men/women for the Trending Tall Categories tabs.
@@ -816,6 +830,21 @@ export default async function Home() {
         <BrandShowcase brands={brands} />
       </ScrollReveal>
     ),
+
+    upcoming:
+      upcomingProducts.length > 0 ? (
+        <ScrollReveal>
+          <ProductShowcase
+            title="Coming"
+            highlight="Soon"
+            subtitle="New pieces on the way — take a first look."
+            ctaLabel="View all upcoming"
+            ctaHref="/upcoming"
+            products={upcomingProducts}
+            listId="upcoming"
+          />
+        </ScrollReveal>
+      ) : null,
 
     "new-arrivals":
       products.length > 0 ? (

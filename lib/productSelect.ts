@@ -23,6 +23,9 @@ export const PRODUCT_CARD_SELECT = {
   discountPrice: true,
   flashSaleEndDate: true,
   featured: true,
+  upcoming: true,
+  launchDate: true,
+  upcomingShowPrice: true,
   brand: { select: { name: true } },
   category: { select: { name: true, slug: true } },
   variants: {

@@ -299,6 +299,14 @@ model Product {
   featured        Boolean           @default(false)
   published       Boolean           @default(true)
 
+  /// "Coming soon": visible on the homepage section and /upcoming but not
+  /// buyable and kept out of the regular listings. With a launchDate it turns
+  /// into a normal product by itself once that moment passes (see lib/upcoming).
+  upcoming        Boolean           @default(false)
+  launchDate      DateTime?
+  /// Upcoming only: false shows "Price coming soon" instead of the price.
+  upcomingShowPrice Boolean         @default(true)
+
   // ─── Made-to-measure ───────────────────────────────────────────────────────
   // When enabled the customer can order this product to their own measurements.
   // The surcharge falls back to the template's unless overridden here.

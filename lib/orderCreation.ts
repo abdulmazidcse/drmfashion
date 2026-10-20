@@ -1,4 +1,5 @@
 import type { User, Order, Prisma } from "@prisma/client"
+import { isUpcoming } from "@/lib/upcoming"
 import type { Db } from "@/lib/accounting"
 import { prisma } from "@/lib/prisma"
 import Stripe from "stripe"
@@ -250,6 +251,11 @@ export async function createOrderFromCheckout(
     }
 
     const product = variant.product
+
+    // Coming-soon products are shown but not sold until they launch.
+    if (isUpcoming(product)) {
+      throw new Error(`"${product.title}" is coming soon and can't be ordered yet.`)
+    }
 
     // ─── Made-to-measure ────────────────────────────────────────────────
     // The browser only supplies raw measurements; the fee is always

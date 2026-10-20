@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useRef, useEffect } from "react";
+import { comingLabel, isUpcoming } from "@/lib/upcoming";
 import { Star, ChevronLeft, ChevronRight, Plus, Minus, Heart, Check, ShoppingBag, X, ChevronDown, Maximize2, Truck, RotateCcw, ShieldCheck } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
@@ -63,6 +64,9 @@ interface Product {
   basePrice: number;
   discountPrice: number | null;
   featured: boolean;
+  upcoming?: boolean;
+  launchDate?: string | Date | null;
+  upcomingShowPrice?: boolean;
   brand?: { name: string } | null;
   category?: {
     name: string;
@@ -1114,13 +1118,17 @@ export default function ProductDetailsClient({ product, categories, relatedProdu
 
   /** The variant the shopper has assembled, if this product is made in it. */
   const hasVariantForSelection = Boolean(activeVariant);
+  const upcoming = isUpcoming(product);
   const canAddToBag =
+    !upcoming &&
     missingChoices.length === 0 &&
     hasVariantForSelection &&
     !isOutOfStock &&
     customMeasurement.valid;
 
-  const buyLabel = missingChoices.length > 0
+  const buyLabel = upcoming
+    ? comingLabel(product.launchDate)
+    : missingChoices.length > 0
     ? `Select ${missingChoices.join(" & ")}`
     : !hasVariantForSelection
       ? "Combination Unavailable"
@@ -1131,6 +1139,7 @@ export default function ProductDetailsClient({ product, categories, relatedProdu
           : "Add To Bag";
 
   const handleAddToBag = (overrideSize?: string, overrideLength?: string) => {
+    if (upcoming) return;
     const sizeToUse = overrideSize || selectedSize;
     const lengthToUse = overrideLength || selectedLength;
 
@@ -1428,7 +1437,9 @@ export default function ProductDetailsClient({ product, categories, relatedProdu
                   changes what the number beside it means. */}
               <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2">
                 <div className={`flex items-baseline gap-2 ${AT_BASE_LARGE}`}>
-                  {currentDiscountPrice && currentDiscountPrice < currentBasePrice ? (
+                  {upcoming && product.upcomingShowPrice === false ? (
+                    <span className="text-[#717171]">Price coming soon</span>
+                  ) : currentDiscountPrice && currentDiscountPrice < currentBasePrice ? (
                     <>
                       <span className="text-[#B40C00]">{formatPrice(currentDiscountPrice)}</span>
                       <span className="line-through">{formatPrice(currentBasePrice)}</span>
@@ -1692,7 +1703,7 @@ export default function ProductDetailsClient({ product, categories, relatedProdu
               {/* Stock. Sat under the button rather than above the swatches: it
                   is a fact about the combination the shopper just assembled,
                   and about the button it disables. */}
-              {(isOutOfStock || isLowStock) && (
+              {!upcoming && (isOutOfStock || isLowStock) && (
                 <div className="mt-4">
                   {isOutOfStock ? (
                     <div>
