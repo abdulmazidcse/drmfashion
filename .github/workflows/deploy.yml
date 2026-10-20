@@ -48,13 +48,13 @@ jobs:
           git reset --hard origin/main
           cp "$APP_DIR/.env" .env
 
-          # 2. Install + build (the live site keeps running meanwhile). The box
-          # has 1 vCPU / 2 GB RAM + 4 GB swap: low priority keeps the live site
-          # responsive, at the cost of a slower build.
+          # 2. Install (the live site keeps running meanwhile). The box has 1 vCPU /
+          # 2 GB RAM + 4 GB swap: low priority keeps the live site responsive.
           nice -n 10 npm ci
-          nice -n 10 npm run build
 
-          # 3. DB backup, then schema update
+          # 3. DB backup, then schema update — BEFORE the build, because the build
+          # pre-renders pages from the live database with the new schema. Changes are
+          # additive (db push refuses data loss), so the running old code is unaffected.
           # The database is whatever .env points at. DIRECT_DATABASE_URL skips
           # pgbouncer (pg_dump can't run through it); Prisma-only query params
           # such as ?schema= / ?pgbouncer= are dropped because pg_dump rejects them.
@@ -67,7 +67,10 @@ jobs:
           ls -t ~/backups/pre_deploy_*.dump | tail -n +8 | xargs -r rm --
           npx prisma db push
 
-          # 4. Swap the new code, packages and build into the live folder
+          # 4. Build
+          nice -n 10 npm run build
+
+          # 5. Swap the new code, packages and build into the live folder
           cd "$APP_DIR"
           git fetch origin main
           git reset --hard origin/main
