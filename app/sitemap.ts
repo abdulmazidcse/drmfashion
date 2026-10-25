@@ -22,6 +22,8 @@ const STATIC_ROUTES: Array<{ path: string; priority: number; changeFrequency: Me
   { path: "/collection", priority: 0.7, changeFrequency: "weekly" },
   { path: "/journal", priority: 0.6, changeFrequency: "weekly" },
   { path: "/reviews", priority: 0.6, changeFrequency: "weekly" },
+  { path: "/brands", priority: 0.6, changeFrequency: "weekly" },
+  { path: "/upcoming", priority: 0.5, changeFrequency: "weekly" },
   { path: "/gift-cards", priority: 0.5, changeFrequency: "monthly" },
   { path: "/pages/contact-support", priority: 0.4, changeFrequency: "monthly" },
   { path: "/track-order", priority: 0.3, changeFrequency: "yearly" },
@@ -30,7 +32,7 @@ const STATIC_ROUTES: Array<{ path: string; priority: number; changeFrequency: Me
 async function loadDynamicEntries() {
   const now = new Date()
 
-  const [products, categories, collections, landingPages, posts, pages] = await Promise.all([
+  const [products, categories, collections, landingPages, posts, pages, brands] = await Promise.all([
     prisma.product.findMany({
       where: { published: true, deletedAt: null },
       // The photography comes along so each product entry can carry <image:image>
@@ -50,9 +52,17 @@ async function loadDynamicEntries() {
       },
       orderBy: { updatedAt: "desc" },
     }),
+    // With each one's own product count and parent, so empty branches can be
+    // dropped below: a category page with no products renders "No Products
+    // Yet" — thin content Google treats as a soft 404.
     prisma.category.findMany({
       where: { deletedAt: null },
-      select: { slug: true },
+      select: {
+        id: true,
+        slug: true,
+        parentId: true,
+        _count: { select: { products: { where: { published: true, deletedAt: null } } } },
+      },
     }),
     // Same liveness test as /collection/[slug]: a collection outside its
     // schedule window renders a 404, so it must not be advertised.
@@ -78,9 +88,35 @@ async function loadDynamicEntries() {
       where: { published: true },
       select: { slug: true, updatedAt: true },
     }),
+    // Brands with something to show — /brand/[slug] lists only their products.
+    prisma.brand.findMany({
+      where: { products: { some: { published: true, deletedAt: null } } },
+      select: { slug: true },
+    }),
   ])
 
-  return { products, categories, collections, landingPages, posts, pages }
+  return { products, categories: categoriesWithProducts(categories), collections, landingPages, posts, pages, brands }
+}
+
+/**
+ * Categories whose page would show products: those with products of their own
+ * or under any descendant (a parent page lists its whole subtree).
+ */
+function categoriesWithProducts(
+  rows: Array<{ id: string; slug: string; parentId: string | null; _count: { products: number } }>
+) {
+  const byId = new Map(rows.map((c) => [c.id, c]))
+  const live = new Set<string>()
+  for (const c of rows) {
+    if (c._count.products === 0) continue
+    // Mark it and every ancestor; stop at one already marked (or a cycle).
+    let cur: typeof c | undefined = c
+    while (cur && !live.has(cur.id)) {
+      live.add(cur.id)
+      cur = cur.parentId ? byId.get(cur.parentId) : undefined
+    }
+  }
+  return rows.filter((c) => live.has(c.id)).map((c) => ({ slug: c.slug }))
 }
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
@@ -91,23 +127,19 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   // routes instead — an incomplete sitemap beats no deploy.
   const dynamicEntries = await loadDynamicEntries().catch((e) => {
     console.warn("[SITEMAP] database unavailable, listing static routes only", e)
-    return { products: [], categories: [], collections: [], landingPages: [], posts: [], pages: [] }
+    return { products: [], categories: [], collections: [], landingPages: [], posts: [], pages: [], brands: [] }
   })
 
-  const { products, categories, collections, landingPages, posts, pages } = dynamicEntries
-
-  const now = new Date()
+  const { products, categories, collections, landingPages, posts, pages, brands } = dynamicEntries
 
   return [
     ...STATIC_ROUTES.map((route) => ({
       url: `${base}${route.path}`,
-      lastModified: now,
       changeFrequency: route.changeFrequency,
       priority: route.priority,
     })),
     ...categories.map((c) => ({
       url: `${base}/category/${c.slug}`,
-      lastModified: now,
       changeFrequency: "weekly" as const,
       priority: 0.8,
     })),
@@ -136,6 +168,11 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       images: productImageUrls(p)
         .map((url) => absoluteImageUrl(formatImageUrl(url), base))
         .filter((url): url is string => Boolean(url)),
+    })),
+    ...brands.map((b) => ({
+      url: `${base}/brand/${b.slug}`,
+      changeFrequency: "weekly" as const,
+      priority: 0.6,
     })),
     ...posts.map((p) => ({
       url: `${base}/journal/${p.slug}`,
