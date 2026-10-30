@@ -106,7 +106,7 @@ export async function POST(
           categoryId,
           brandId: brandId || null,
           featured,
-          published: published ?? true,
+          published: published ?? true,
           flashSaleEndDate: flashSaleEndDate ? new Date(flashSaleEndDate) : null,
           upcoming: !!upcoming,
           launchDate: upcoming ? parseLaunchDate(launchDate) : null,
@@ -282,6 +282,24 @@ export async function GET(req: NextRequest) {
         ? prisma.product.findMany({
             ...listArgs,
             select: { id: true, title: true, thumbnail: true },
+          })
+        : view === "order"
+        ? // Admin → Orders → Create Order: what the product picker needs to
+          // price a line and pick a variant, nothing else.
+          prisma.product.findMany({
+            ...listArgs,
+            select: {
+              id: true,
+              title: true,
+              productCode: true,
+              thumbnail: true,
+              basePrice: true,
+              discountPrice: true,
+              variants: {
+                where: { deletedAt: null },
+                select: { id: true, color: true, size: true, length: true, sku: true, stock: true, price: true },
+              },
+            },
           })
         : view === "inventory"
           ? prisma.product.findMany({

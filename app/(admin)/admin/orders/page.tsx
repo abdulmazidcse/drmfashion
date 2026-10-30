@@ -19,8 +19,11 @@ import {
   AlertCircle,
   Printer,
   Clock,
-  ExternalLink
+  ExternalLink,
+  ClipboardPlus
 } from "lucide-react"
+import Link from "next/link"
+import { orderSourceLabel } from "@/lib/orderSources"
 import api from "@/lib/axios"
 import type { DeliveryCarrier } from "@/lib/delivery"
 import { useCurrency } from "@/providers/CurrencyProvider"
@@ -116,6 +119,11 @@ type Order = {
   shippedAt?: string | null
   deliveredAt?: string | null
   deliveryNote?: string | null
+  /** Set on orders created in Admin → Create Order; null = website. */
+  source?: string | null
+  adminNote?: string | null
+  discountAmount?: number
+  advancePaid?: number
   currencyCode?: string
   currencySymbol?: string
   exchangeRate?: number
@@ -505,6 +513,23 @@ export default function AdminOrdersPage() {
                   <span className="block text-[8px] font-extrabold text-muted-foreground uppercase tracking-widest mb-1">Full Shipping Destination</span>
                   <p className="text-xs font-medium text-foreground leading-relaxed">{selectedOrder.shippingAddress}</p>
                 </div>
+
+                {(selectedOrder.source || selectedOrder.adminNote || (selectedOrder.advancePaid ?? 0) > 0 || (selectedOrder.discountAmount ?? 0) > 0) && (
+                  <div className="mt-2 space-y-1.5 rounded-lg border border-sky-100 bg-sky-50/60 p-3 text-xs">
+                    {selectedOrder.source && (
+                      <p><span className="font-bold text-muted-foreground">Order from:</span> {orderSourceLabel(selectedOrder.source)} (created in admin)</p>
+                    )}
+                    {(selectedOrder.discountAmount ?? 0) > 0 && (
+                      <p><span className="font-bold text-muted-foreground">Discount:</span> {formatBasePrice(selectedOrder.discountAmount!)}</p>
+                    )}
+                    {(selectedOrder.advancePaid ?? 0) > 0 && (
+                      <p><span className="font-bold text-muted-foreground">Paid in advance:</span> {formatBasePrice(selectedOrder.advancePaid!)} · <span className="font-bold text-muted-foreground">Collect on delivery:</span> {formatBasePrice(Math.max(0, selectedOrder.totalAmount - selectedOrder.advancePaid!))}</p>
+                    )}
+                    {selectedOrder.adminNote && (
+                      <p className="whitespace-pre-line"><span className="font-bold text-muted-foreground">Note:</span> {selectedOrder.adminNote}</p>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* ORDERED ITEMS breakdown */}
@@ -623,6 +648,7 @@ export default function AdminOrdersPage() {
 
       <div className="space-y-6 w-full p-2">
         {/* VIEW TITLE HEADER */}
+        <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <div className="p-2.5 bg-primary text-primary-foreground rounded-xl">
             <Package size={20} />
@@ -635,6 +661,12 @@ export default function AdminOrdersPage() {
               Manage client acquisitions, shipping pipeline, and retail checkouts.
             </p>
           </div>
+        </div>
+          <Button asChild>
+            <Link href="/admin/orders/create">
+              <ClipboardPlus className="mr-1.5 h-4 w-4" /> Create Order
+            </Link>
+          </Button>
         </div>
 
         {/* METRICS GRID SUMMARY */}
@@ -798,8 +830,15 @@ export default function AdminOrdersPage() {
                         {/* Customer details */}
                         <TableCell>
                           <div className="font-semibold text-foreground">{order.user.name}</div>
-                          <div className="text-[10px] text-muted-foreground mt-0.5">{order.user.email}</div>
+                          {!order.user.email.endsWith("@phone-order.local") && (
+                            <div className="text-[10px] text-muted-foreground mt-0.5">{order.user.email}</div>
+                          )}
                           <div className="text-[10px] text-muted-foreground mt-0.5">{order.shippingPhone}</div>
+                          {order.source && (
+                            <span className="mt-1 inline-block rounded-full bg-sky-50 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-sky-700">
+                              {orderSourceLabel(order.source)}
+                            </span>
+                          )}
                         </TableCell>
 
                         {/* Created At */}

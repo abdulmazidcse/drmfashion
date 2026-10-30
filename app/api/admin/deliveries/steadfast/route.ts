@@ -78,6 +78,7 @@ export async function POST(req: NextRequest) {
         status: true,
         paymentStatus: true,
         totalAmount: true,
+        advancePaid: true,
         shippingPhone: true,
         shippingAddress: true,
         deliveryNote: true,
@@ -112,8 +113,10 @@ export async function POST(req: NextRequest) {
     }
 
     // Prepaid orders collect nothing at the door; everything else collects
-    // the full order total (stored in Taka, the store's base currency).
-    const codAmount = order.paymentStatus === "PAID" ? 0 : order.totalAmount
+    // the order total (stored in Taka, the store's base currency) less any
+    // advance already paid — e.g. a delivery charge sent by bKash on an order
+    // taken over Messenger (Admin → Create Order).
+    const codAmount = order.paymentStatus === "PAID" ? 0 : Math.max(0, order.totalAmount - (order.advancePaid || 0))
     const note =
       (typeof body?.note === "string" && body.note.trim()) || order.deliveryNote || undefined
 

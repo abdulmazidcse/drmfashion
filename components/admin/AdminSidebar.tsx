@@ -9,6 +9,7 @@ import { useAdminAccess } from "@/providers/AdminAccessProvider"
 import { moduleForPath } from "@/lib/permissions"
 
 import {
+  ClipboardPlus,
   LayoutDashboard,
   BarChart3,
   ShoppingCart, // kept for the commented-out POS Checkout link below
@@ -72,6 +73,7 @@ const navGroups: NavGroup[] = [
       // Hidden for now — the /admin/pos page itself is still in place.
       // { label: "POS Checkout", href: "/admin/pos", icon: ShoppingCart },
       { label: "Orders", href: "/admin/orders", icon: ClipboardList },
+      { label: "Create Order", href: "/admin/orders/create", icon: ClipboardPlus },
       { label: "Products", href: "/admin/products", icon: Shirt },
       { label: "SKU List", href: "/admin/skus", icon: Barcode },
       { label: "Categories", href: "/admin/categories", icon: FolderTree },
@@ -182,8 +184,13 @@ export default function AdminSidebar() {
 
   // Exact match for the dashboard root; prefix match for every other section so
   // sub-pages (e.g. /admin/products/create) keep their parent item highlighted.
-  const isActive = (href: string) =>
+  // When two items both prefix-match (Orders and Orders → Create Order), only
+  // the more specific one lights up.
+  const matches = (href: string) =>
     pathname === href || (href !== "/admin" && pathname.startsWith(`${href}/`))
+  const isActive = (href: string) =>
+    matches(href) &&
+    !navGroups.some((g) => g.links.some((l) => l.href.length > href.length && l.href.startsWith(href) && matches(l.href)))
 
   return (
     <aside

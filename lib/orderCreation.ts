@@ -234,20 +234,31 @@ export async function createOrderFromCheckout(
       },
     })
 
-    // Fallback: If exact variant is not found (e.g. slight metadata mismatch), find the first available variant for the product
+    // Tolerant second look for a slight metadata mismatch — case, stray
+    // whitespace (a colour saved as "BLACK<tab>-B25"), "" vs null length —
+    // but still the SAME colour/size/length. This used to fall back to the
+    // product's first variant of any size, which quietly turned a customer's
+    // XL into whatever row Postgres returned first (a 4XL, on one order).
     if (!variant) {
-      variant = await tx.productVariant.findFirst({
-        where: { productId: item.productId },
+      const norm = (v: string | null | undefined) => (v || "").replace(/\s+/g, " ").trim().toLowerCase()
+      const candidates = await tx.productVariant.findMany({
+        where: { productId: item.productId, deletedAt: null },
         include: {
           product: {
             include: { measurementTemplate: { include: { fields: { include: { tiers: true } } } } },
           },
         },
       })
+      variant =
+        candidates.find(
+          (v) => norm(v.color) === norm(item.color) && norm(v.size) === norm(item.size) && norm(v.length) === norm(item.length)
+        ) ?? null
     }
 
     if (!variant) {
-      throw new Error(`Product variant not found for ${item.title || item.productId}`)
+      throw new Error(
+        `"${item.title || "This product"}" is not available in ${[item.color, item.size, item.length].filter(Boolean).join(" / ")} any more. Please remove it from your bag and choose again.`
+      )
     }
 
     const product = variant.product

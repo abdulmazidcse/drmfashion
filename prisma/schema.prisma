@@ -497,6 +497,18 @@ model Order {
   pointsRedeemed      Int               @default(0)
   pointsEarned        Int               @default(0)
 
+  // ─── Orders entered by staff (Admin → Orders → Create Order) ──────────────
+  /// Where the order came from: "facebook" | "messenger" | "whatsapp" |
+  /// "instagram" | "phone" | "walk-in" | "other". Null = placed on the website.
+  source              String?
+  /// Internal note for staff; never shown to the customer.
+  adminNote           String?           @db.Text
+  /// Flat discount given by staff, already taken off totalAmount.
+  discountAmount      Float             @default(0)
+  /// Paid up front (e.g. the delivery charge by bKash) on an otherwise
+  /// cash-on-delivery order. The courier collects totalAmount − advancePaid.
+  advancePaid         Float             @default(0)
+
   currencyCode        String            @default("USD")
   currencySymbol      String            @default("$")
   exchangeRate        Float             @default(1.0)

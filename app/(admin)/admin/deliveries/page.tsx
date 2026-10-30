@@ -509,7 +509,7 @@ export default function AdminDeliveriesPage() {
                           ? "Checking whether this order was sent…"
                           : sentToSteadfast
                           ? `Sent · tracking ${editing?.trackingNumber}${steadfastStatus ? ` · status: ${steadfastStatus}` : ""}`
-                          : `Connected${typeof steadfast.balance === "number" ? ` · balance ৳${steadfast.balance}` : ""}. Cash on delivery is the order total unless it is already paid.`}
+                          : `Connected${typeof steadfast.balance === "number" ? ` · balance ৳${steadfast.balance}` : ""}. Cash on delivery is the order total less anything already paid.`}
                   </p>
                 </div>
                 <div className="flex gap-2">

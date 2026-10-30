@@ -36,6 +36,8 @@ type Order = {
   id: string
   totalAmount: number
   shippingFee: number
+  discountAmount?: number
+  advancePaid?: number
   taxAmount?: number | null
   taxRate?: number | null
   taxLabel?: string | null
@@ -120,13 +122,17 @@ export default function InvoicePage() {
   const subtotal = order.items.reduce((sum, i) => sum + i.price * i.quantity, 0)
   const shipping = order.shippingFee || 0
   const pointsDiscount = order.pointsRedeemed || 0
+  // Staff-entered orders (Admin → Create Order) can carry a flat discount and
+  // an amount already paid on an otherwise cash-on-delivery order.
+  const staffDiscount = Number(order.discountAmount) || 0
+  const advancePaid = Number(order.advancePaid) || 0
   // tax = totalAmount − subtotal − shipping + pointsDiscount
   // Orders placed before tax was stored per-region carry taxAmount 0, so fall
   // back to deriving it from the total the way this invoice always did.
   const storedTax = Number(order.taxAmount) || 0
   const tax = storedTax > 0
     ? storedTax
-    : Math.max(0, order.totalAmount - subtotal - shipping + pointsDiscount)
+    : Math.max(0, order.totalAmount - subtotal - shipping + pointsDiscount + staffDiscount)
   const taxLabelText =
     storedTax > 0 && Number(order.taxRate) > 0
       ? taxLineLabel(Number(order.taxRate), order.taxLabel || "Tax")
@@ -178,7 +184,7 @@ export default function InvoicePage() {
           <div>
             <h3 className="text-xs font-black tracking-widest uppercase text-zinc-400 mb-3">Bill To</h3>
             <p className="text-sm font-bold text-zinc-900">{order.user.name}</p>
-            <p className="text-sm text-zinc-600">{order.user.email}</p>
+            {!order.user.email.endsWith("@phone-order.local") && <p className="text-sm text-zinc-600">{order.user.email}</p>}
             <p className="text-sm text-zinc-600">{order.shippingPhone}</p>
           </div>
           <div>
@@ -268,6 +274,12 @@ export default function InvoicePage() {
                 <span className="font-bold text-emerald-600 font-mono whitespace-nowrap">−{formatPrice(pointsDiscount)}</span>
               </div>
             )}
+            {staffDiscount > 0 && (
+              <div className="flex justify-between text-sm">
+                <span className="font-bold text-zinc-600">Discount</span>
+                <span className="font-bold text-emerald-600 font-mono whitespace-nowrap">−{formatPrice(staffDiscount)}</span>
+              </div>
+            )}
             {tax > 0 && (
               <div className="flex justify-between text-sm">
                 <span className="font-bold text-zinc-600">{taxLabelText}</span>
@@ -284,6 +296,18 @@ export default function InvoicePage() {
               <span className="font-black text-zinc-900">Grand Total</span>
               <span className="font-black text-zinc-900 font-mono whitespace-nowrap">{formatPrice(order.totalAmount)}</span>
             </div>
+            {advancePaid > 0 && advancePaid < order.totalAmount && (
+              <>
+                <div className="flex justify-between text-sm">
+                  <span className="font-bold text-zinc-600">Paid in advance</span>
+                  <span className="font-bold text-emerald-600 font-mono whitespace-nowrap">−{formatPrice(advancePaid)}</span>
+                </div>
+                <div className="flex justify-between text-base">
+                  <span className="font-black text-zinc-900">Due on delivery</span>
+                  <span className="font-black text-zinc-900 font-mono whitespace-nowrap">{formatPrice(order.totalAmount - advancePaid)}</span>
+                </div>
+              </>
+            )}
           </div>
         </div>
 
