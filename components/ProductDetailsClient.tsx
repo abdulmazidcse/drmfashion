@@ -1521,7 +1521,9 @@ export default function ProductDetailsClient({ product, categories, relatedProdu
                   </div>
                   <div className="mt-3 flex flex-wrap items-center gap-3">
                     {uniqueColors.map((color) => {
-                      const dbColor = dbColors.find((c) => c.name.toLowerCase() === color.toLowerCase());
+                      // Whitespace-blind: a tab pasted into one name must not lose the swatch.
+                      const key = (s: string) => s.replace(/\s+/g, " ").trim().toLowerCase();
+                      const dbColor = dbColors.find((c) => key(c.name) === key(color));
                       const style = swatchStyle(dbColor ?? { value: COLOR_HEX_MAP[color] || "#71717a" });
                       const isSelected = selectedColor === color;
                       return (

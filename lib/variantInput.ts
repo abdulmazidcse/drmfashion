@@ -29,6 +29,14 @@ export type VariantInputResult =
 
 const text = (value: unknown) => (value === null || value === undefined ? "" : String(value).trim())
 
+/**
+ * A colour/size/length label with every run of whitespace — tabs pasted from a
+ * spreadsheet, double spaces — collapsed to one space. The storefront matches
+ * these by exact text (cart line to variant, image to colour), so two labels
+ * that look the same must also be the same.
+ */
+export const cleanLabel = (value: unknown) => text(value).replace(/\s+/g, " ")
+
 /** Row label for error messages: the SKU when there is one, else its position. */
 function rowLabel(raw: { sku?: unknown }, index: number): string {
   const sku = text(raw.sku)
@@ -80,10 +88,10 @@ export function normalizeVariantInput(variants: unknown): VariantInputResult {
     const row = raw as Record<string, unknown>
     const label = rowLabel(row, index)
 
-    const size = text(row.size)
+    const size = cleanLabel(row.size)
     if (!size) return { ok: false, message: `Pick a size for ${label}.` }
 
-    const color = text(row.color)
+    const color = cleanLabel(row.color)
     if (!color) return { ok: false, message: `Pick a colour for ${label}.` }
 
     // A blank SKU keeps its old behaviour — a generated placeholder — rather
@@ -110,7 +118,7 @@ export function normalizeVariantInput(variants: unknown): VariantInputResult {
       sku,
       size,
       color,
-      length: text(row.length) || null,
+      length: cleanLabel(row.length) || null,
       stock,
       price,
       image: text(row.image) || null,

@@ -6,7 +6,7 @@ import { getAdminPayload } from "@/lib/auth"
 import { parseCustomMeasurementInput } from "@/lib/measurement"
 import { normalizeProductCode } from "@/lib/productCode"
 import { invalidateProductCaches } from "@/lib/productCache"
-import { normalizeVariantInput, describeWriteError } from "@/lib/variantInput"
+import { normalizeVariantInput, describeWriteError, cleanLabel } from "@/lib/variantInput"
 
 export async function POST(
   req: NextRequest
@@ -126,7 +126,7 @@ export async function POST(
                 }
                 return {
                   url: img.url,
-                  color: img.color || null,
+                  color: cleanLabel(img.color) || null,
                   // Blank stays null rather than "": the storefront treats an
                   // empty alt as "generate one" — see lib/imageMeta.ts.
                   alt: String(img.alt || "").trim() || null,

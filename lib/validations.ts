@@ -5,7 +5,7 @@ const HEX_COLOR = /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
 
 export const colorSchema = z
   .object({
-    name: z.string().trim().min(1, { message: "Name is required" }).max(60),
+    name: z.string().trim().min(1, { message: "Name is required" }).max(60).transform((s) => s.replace(/\s+/g, " ")),
     type: z.enum(["SOLID", "GRADIENT", "CHECK", "IMAGE"]).default("SOLID"),
     value: z.string().trim().regex(HEX_COLOR, { message: "Hex value must look like #1a2b3c" }),
     value2: z.string().trim().optional().nullable(),

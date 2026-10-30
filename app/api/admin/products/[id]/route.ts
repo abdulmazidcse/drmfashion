@@ -6,7 +6,7 @@ import { getAdminPayload } from "@/lib/auth"
 import { parseCustomMeasurementInput } from "@/lib/measurement"
 import { normalizeProductCode } from "@/lib/productCode"
 import { invalidateProductCaches } from "@/lib/productCache"
-import { normalizeVariantInput, describeWriteError } from "@/lib/variantInput"
+import { normalizeVariantInput, describeWriteError, cleanLabel } from "@/lib/variantInput"
 
 type Params = {
   params: Promise<{
@@ -157,7 +157,7 @@ export async function PUT(
             // uploads land in the bucket root, but a bare name is resolved
             // against <bucket>/products/ on read, which 404s.
             url: typeof img === "string" ? img : img.url,
-            color: typeof img === "string" ? null : img.color || null,
+            color: typeof img === "string" ? null : cleanLabel(img.color) || null,
             // Blank stays null rather than "": the storefront treats an empty
             // alt as "generate one" and an empty string would defeat that.
             alt: typeof img === "string" ? null : String(img.alt || "").trim() || null,
@@ -185,9 +185,9 @@ export async function PUT(
             ev =>
               !claimed.has(ev.id) &&
               !ev.deletedAt &&
-              ev.size === v.size &&
-              ev.color === v.color &&
-              (ev.length || null) === v.length
+              cleanLabel(ev.size) === v.size &&
+              cleanLabel(ev.color) === v.color &&
+              (cleanLabel(ev.length) || null) === v.length
           );
         if (match) claimed.add(match.id);
         return { v, match };
@@ -262,7 +262,7 @@ export async function PUT(
           categoryId,
           brandId: brandId || null,
           featured: featured ?? false,
-          published: published ?? true,
+          published: published ?? true,
           flashSaleEndDate: flashSaleEndDate ? new Date(flashSaleEndDate) : null,
           upcoming: !!upcoming,
           launchDate: upcoming ? parseLaunchDate(launchDate) : null,
