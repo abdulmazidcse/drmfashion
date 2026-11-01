@@ -57,7 +57,14 @@ const nextConfig: NextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
+  // The build runs on the production box (1 vCPU / 2 GB, live site alongside).
+  // Under that load even /_not-found took over the 60 s default to prerender
+  // and the deploy failed (Deploy #13), so pages get 5 minutes each...
+  staticPageGenerationTimeout: 300,
   experimental: {
+    // ...and one build worker instead of several fighting over one core and
+    // pushing the box into swap.
+    cpus: 1,
     serverActions: {
       bodySizeLimit: "100mb",
     },
