@@ -50,6 +50,7 @@ import {
   AlertTriangle,
   Calculator,
   ShieldCheck,
+  UserCog,
   ChevronDown,
   type LucideIcon, Sheet
 } from "lucide-react"
@@ -123,7 +124,7 @@ const navGroups: NavGroup[] = [
   {
     title: "Marketing & Users",
     links: [
-      { label: "Users", href: "/admin/users", icon: Users },
+      { label: "Customers", href: "/admin/customers", icon: Users },
       { label: "Promo Codes", href: "/admin/coupons", icon: Ticket },
       { label: "Gift Cards", href: "/admin/gift-cards", icon: Gift },
       { label: "Reviews", href: "/admin/reviews", icon: Star },
@@ -138,6 +139,7 @@ const navGroups: NavGroup[] = [
     title: "System",
     links: [
       { label: "Settings", href: "/admin/settings", icon: Settings },
+      { label: "Staff", href: "/admin/staff", icon: UserCog },
       { label: "Roles & Permissions", href: "/admin/roles", icon: ShieldCheck },
       { label: "Pages", href: "/admin/pages", icon: FileText },
       { label: "Shipping", href: "/admin/settings/shipping", icon: Truck },

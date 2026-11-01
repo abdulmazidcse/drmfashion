@@ -83,7 +83,13 @@ export const PERMISSION_MODULES: PermissionModule[] = [
   { key: "accounting", label: "Accounting", group: "Finance", paths: ["/admin/accounting"], apiPaths: ["/api/admin/accounting"] },
 
   // ── Marketing & Users ─────────────────────────────────────────────────
-  { key: "users", label: "Users", group: "Marketing & Users", paths: ["/admin/users"], apiPaths: ["/api/admin/users"] },
+  {
+    key: "users",
+    label: "Users (customers & staff)",
+    group: "Marketing & Users",
+    paths: ["/admin/users", "/admin/customers", "/admin/staff"],
+    apiPaths: ["/api/admin/users"],
+  },
   {
     key: "coupons",
     label: "Promo Codes & Gift Cards",

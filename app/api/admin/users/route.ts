@@ -14,6 +14,42 @@ export async function GET(req: NextRequest) {
 
     const skip = (page - 1) * limit
 
+    // Admin → Orders → Create Order: find a customer by name, phone or email
+    // (case-insensitive) and prefill the form from their last order's address.
+    if (searchParams.get("view") === "order") {
+      const id = searchParams.get("id")
+      const customers = await prisma.user.findMany({
+        where: id
+          ? { id }
+          : {
+              role: "USER",
+              OR: [
+                { name: { contains: search, mode: "insensitive" } },
+                { email: { contains: search, mode: "insensitive" } },
+                { phone: { contains: search.replace(/[^\d]/g, "").replace(/^880/, "0") || search } },
+              ],
+            },
+        orderBy: { createdAt: "desc" },
+        take: Math.min(limit, 10),
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          phone: true,
+          _count: { select: { orders: true } },
+          orders: { orderBy: { createdAt: "desc" }, take: 1, select: { shippingAddress: true, shippingPhone: true } },
+        },
+      })
+      return NextResponse.json({
+        data: customers.map(({ orders, _count, ...c }) => ({
+          ...c,
+          orderCount: _count.orders,
+          lastAddress: orders[0]?.shippingAddress || null,
+          lastPhone: orders[0]?.shippingPhone || null,
+        })),
+      })
+    }
+
     const whereClause: any = {}
     if (search) {
       whereClause.OR = [
@@ -22,7 +58,10 @@ export async function GET(req: NextRequest) {
         { phone: { contains: search } }
       ]
     }
-    if (role && role !== "ALL") {
+    if (role === "TEAM") {
+      // Admin → Staff: everyone who can sign in to the admin panel.
+      whereClause.role = { in: ["ADMIN", "STAFF"] }
+    } else if (role && role !== "ALL") {
       whereClause.role = role
     }
 
@@ -33,6 +72,8 @@ export async function GET(req: NextRequest) {
         skip,
         take: limit,
         include: { adminRole: { select: { id: true, name: true } } },
+        // The list never needs the hash; it used to ship to the browser.
+        omit: { password: true },
       }),
       prisma.user.count({ where: whereClause })
     ])

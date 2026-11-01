@@ -38,7 +38,15 @@ import { formatImageUrl } from "@/lib/utils"
 type Variant = { id: string; color: string; size: string; length: string | null; sku: string; stock: number; price: number | null }
 type Product = { id: string; title: string; productCode: string | null; thumbnail: string; basePrice: number; discountPrice: number | null; variants: Variant[] }
 type Line = { variantId: string; title: string; thumbnail: string; label: string; sku: string; stock: number; quantity: number; price: number }
-type Customer = { id: string; name: string; email: string; phone: string | null }
+type Customer = {
+  id: string
+  name: string
+  email: string
+  phone: string | null
+  orderCount?: number
+  lastAddress?: string | null
+  lastPhone?: string | null
+}
 
 const tk = (n: number) => `৳${(Math.round(n * 100) / 100).toLocaleString("en-BD")}`
 const BD_PHONE = /^01[3-9]\d{8}$/
@@ -58,6 +66,10 @@ export default function CreateOrderPage() {
   const [address, setAddress] = useState("")
   const [customerId, setCustomerId] = useState<string | null>(null)
   const [phoneMatch, setPhoneMatch] = useState<Customer | null>(null)
+  const [customerQuery, setCustomerQuery] = useState("")
+  const [customerResults, setCustomerResults] = useState<Customer[]>([])
+  const [customerSearching, setCustomerSearching] = useState(false)
+  const customerBoxRef = useRef<HTMLDivElement>(null)
 
   // ── Order meta ──────────────────────────────────────────────────────────
   const [source, setSource] = useState<OrderSource>("facebook")
@@ -154,12 +166,61 @@ export default function CreateOrderPage() {
     return () => clearTimeout(t)
   }, [phone, customerId])
 
+  // Existing customer search by name, phone or email (debounced).
+  useEffect(() => {
+    const q = customerQuery.trim()
+    if (q.length < 2) {
+      setCustomerResults([])
+      return
+    }
+    const t = setTimeout(async () => {
+      setCustomerSearching(true)
+      try {
+        const res = await api.get(`/admin/users?view=order&limit=8&search=${encodeURIComponent(q)}`)
+        setCustomerResults(res.data.data || [])
+      } catch {
+        setCustomerResults([])
+      } finally {
+        setCustomerSearching(false)
+      }
+    }, 300)
+    return () => clearTimeout(t)
+  }, [customerQuery])
+
+  useEffect(() => {
+    const onDown = (e: MouseEvent) => {
+      if (customerBoxRef.current && !customerBoxRef.current.contains(e.target as Node)) setCustomerResults([])
+    }
+    document.addEventListener("mousedown", onDown)
+    return () => document.removeEventListener("mousedown", onDown)
+  }, [])
+
   const pickCustomer = (c: Customer) => {
     setCustomerId(c.id)
     setFullName(c.name || fullName)
     if (c.email && !c.email.endsWith("@phone-order.local")) setEmail(c.email)
+    const knownPhone = c.phone || c.lastPhone
+    if (knownPhone) setPhone(normPhone(knownPhone))
+    // Only fill the address when staff haven't typed one already.
+    if (c.lastAddress) setAddress((prev) => prev.trim() || c.lastAddress || "")
     setPhoneMatch(null)
+    setCustomerQuery("")
+    setCustomerResults([])
   }
+
+  // Opened from Admin → Users → "Create order" (?customer=<id>).
+  useEffect(() => {
+    const id = new URLSearchParams(window.location.search).get("customer")
+    if (!id) return
+    api
+      .get(`/admin/users?view=order&id=${encodeURIComponent(id)}`)
+      .then((res) => {
+        const c: Customer | undefined = (res.data.data || [])[0]
+        if (c) pickCustomer(c)
+      })
+      .catch(() => {})
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const addVariant = (p: Product, v: Variant) => {
     if (v.stock <= 0) return
@@ -338,6 +399,46 @@ export default function CreateOrderPage() {
                   </button>
                 )}
               </div>
+              {!customerId && (
+                <div ref={customerBoxRef} className="relative">
+                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    value={customerQuery}
+                    onChange={(e) => setCustomerQuery(e.target.value)}
+                    placeholder="Find an existing customer — name, phone or email"
+                    className="pl-9"
+                  />
+                  {customerSearching && (
+                    <Loader2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-muted-foreground" />
+                  )}
+                  {customerResults.length > 0 && (
+                    <div className="absolute z-20 mt-1 max-h-72 w-full overflow-auto rounded-lg border bg-white shadow-lg">
+                      {customerResults.map((c) => (
+                        <button
+                          key={c.id}
+                          type="button"
+                          onClick={() => pickCustomer(c)}
+                          className="flex w-full items-start justify-between gap-3 border-b px-3 py-2 text-left text-sm last:border-b-0 hover:bg-zinc-50"
+                        >
+                          <span className="min-w-0">
+                            <span className="block font-semibold">{c.name || "No name"}</span>
+                            <span className="block truncate text-xs text-muted-foreground">
+                              {[c.phone || c.lastPhone, c.email && !c.email.endsWith("@phone-order.local") ? c.email : null]
+                                .filter(Boolean)
+                                .join(" · ") || "—"}
+                            </span>
+                            {c.lastAddress && <span className="block truncate text-xs text-muted-foreground">{c.lastAddress}</span>}
+                          </span>
+                          <span className="shrink-0 text-xs text-muted-foreground">{c.orderCount || 0} orders</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  {customerQuery.trim().length >= 2 && !customerSearching && customerResults.length === 0 && (
+                    <p className="mt-1 text-xs text-muted-foreground">No customer found — fill in the details below for a new one.</p>
+                  )}
+                </div>
+              )}
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div className="space-y-1.5">
                   <Label>Mobile number *</Label>
