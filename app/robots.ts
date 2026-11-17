@@ -41,6 +41,18 @@ export default async function robots(): Promise<MetadataRoute.Robots> {
         '/wishlist',
         '/orders',
         '/buy',
+        // Facet, sort, layout and search variants of the listing pages. They
+        // carry a canonical to the plain page, but Googlebot still fetched
+        // thousands of combinations (Search Console: ~3k "alternate page with
+        // canonical", ~1.2k "crawled, not indexed") — load the single-vCPU box
+        // could not take, which in turn produced 5xx answers. Only the plain
+        // category/brand/shop URLs need crawling; the sitemap lists them.
+        '/*?*size=',
+        '/*?*color=',
+        '/*?*length=',
+        '/*?*sort=',
+        '/*?*view=',
+        '/*?*query=',
       ],
     },
     sitemap: `${base}/sitemap.xml`,

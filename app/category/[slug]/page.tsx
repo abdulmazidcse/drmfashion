@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import { notUpcomingWhere } from "@/lib/upcoming";
 import { prisma } from "@/lib/prisma";
 import { getStoreName } from "@/lib/settings";
 import Link from "next/link";
@@ -290,12 +289,13 @@ export default async function CategoryPage({ params, searchParams }: CategoryPag
       where: {
         published: true,
         deletedAt: null,
-        ...notUpcomingWhere(),
         categoryId: { in: filteredCategoryIds },
         ...variantFilter,
       },
       select: PRODUCT_CARD_SELECT,
-      orderBy,
+      // Upcoming products are listed in their category too (the card shows a
+      // Coming Soon badge and cannot be added), after everything buyable.
+      orderBy: [{ upcoming: "asc" as const }, orderBy],
       take: 48,
     }),
     prisma.product.groupBy({
@@ -303,7 +303,6 @@ export default async function CategoryPage({ params, searchParams }: CategoryPag
       where: {
         published: true,
         deletedAt: null,
-        ...notUpcomingWhere(),
         categoryId: { in: allSubtreeIds },
       },
       _count: { _all: true },
@@ -320,7 +319,7 @@ export default async function CategoryPage({ params, searchParams }: CategoryPag
     prisma.productVariant.findMany({
       where: {
         deletedAt: null,
-        product: { published: true, deletedAt: null, ...notUpcomingWhere(), categoryId: { in: categoryIds } },
+        product: { published: true, deletedAt: null, categoryId: { in: categoryIds } },
       },
       select: { productId: true, size: true, length: true, color: true },
     }),
