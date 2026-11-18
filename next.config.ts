@@ -1,4 +1,98 @@
 import type { NextConfig } from "next";
+// Old URLs → new page. Inlined rather than imported: next.config.ts is
+// compiled on its own and cannot reliably load other project files.
+// Products are listed one by one on purpose — a pattern would also catch live
+// product URLs, since redirects run before the page routes.
+const legacyCategories: Record<string, string> = {
+  "men-button-shirts": "/category/men",
+  "men-denim-guide": "/category/men",
+  "men-inspiration": "/category/men",
+  "men-on-the-clock": "/category/men",
+  "men-pants-chinos": "/category/formal-pant",
+  "started-with-tall": "/shop",
+  "women-all-dresses": "/shop",
+  "women-inspiration": "/shop",
+  "women-jeans-denim": "/shop",
+  "women-jumpsuits": "/shop",
+  "women-shirts-blouses": "/shop",
+  "women-shorts-skirts": "/shop",
+}
+
+const legacyProducts: Record<string, string> = {
+  "luxury-blue-crystal-floral-multi-chain-blazer-brooch-silver-royal-design-br-522": "/product/floral-rosette-crystal-lapel-pin-brooch-with-multi-tiered-hanging-chains-drm-fashion-br-522",
+  "luxury-crystal-multi-chain-blazer-brooch-silver-diamond-design-br-515": "/product/crown-motif-crystal-lapel-pin-brooch-with-multi-tiered-hanging-chains-drm-fashion-br-515",
+  "luxury-floral-crystal-multi-chain-blazer-brooch-silver-diamond-design-br-516": "/product/floral-rosette-crystal-lapel-pin-brooch-with-multi-tiered-hanging-chains-drm-fashion-br-516",
+  "luxury-leaf-multi-chain-blazer-brooch-silver-diamond-white-br-514": "/product/leaf-motif-crystal-lapel-pin-brooch-with-multi-tiered-hanging-chains-drm-fashion-br-514",
+  "luxury-pearl-crystal-multi-chain-blazer-brooch-silver-royal-design-br-518": "/product/heart-motif-crystal-pearl-lapel-pin-brooch-with-cascading-chains-drm-fashion-br-518",
+  "luxury-royal-crystal-multi-chain-blazer-brooch-gold-midnight-black-br-521": "/product/concentric-rosette-crystal-lapel-pin-brooch-with-multi-tiered-hanging-chains-drm-fashion-br-521",
+  "luxury-royal-crystal-multi-chain-blazer-brooch-gold-ruby-design-br-519": "/product/geometric-square-crystal-lapel-pin-brooch-with-multi-tiered-hanging-chains-drm-fashion-br-519",
+  "luxury-multi-chain-crystal-blazer-brooch-gold-diamond-white-br-511": "/category/brooch",
+  "aqua-blue-blazer-men": "/category/blazer",
+  "ash-grey-stylish-blazer-men": "/category/blazer",
+  "dark-navy-blue-blazer-men": "/category/blazer",
+  "deep-ash-blazer-men": "/category/blazer",
+  "grey-check-blazer-men": "/category/blazer",
+  "maroon-blazer-men": "/category/blazer",
+  "navy-check-blazer-men": "/category/blazer",
+  "mans-premium-beige-blazer-b-143": "/category/blazer",
+  "mans-premium-light-ash-blazer-b-135": "/category/blazer",
+  "mans-premium-sky-blue-blazer-b-140": "/category/blazer",
+  "premium-dark-grey-check-blazer-for-men-b-112": "/category/blazer",
+  "premium-sky-blue-blazer-for-men-b-141": "/category/blazer",
+  "premium-dark-navy-blue-complete-three-piece-suit-for-men-f-25": "/category/blazer",
+  "classic-mens-cream-white-purple-shade-waistcoat-w-103": "/category/panjabi-waistcoat",
+  "luxury-maroon-panjabi-waistcoat": "/category/panjabi-waistcoat",
+  "luxury-panjabi-white-waistcoat": "/category/panjabi-waistcoat",
+  "maroon-panjabi-navy-waistcoat": "/category/panjabi-waistcoat",
+  "premium-cotton-panjabi-navy-waistcoat": "/category/panjabi-waistcoat",
+  "premium-embossed-panjabi-waistcoat": "/category/panjabi-waistcoat",
+  "premium-katan-panjabi-designer-waistcoat-513": "/category/panjabi-waistcoat",
+  "premium-textured-panjabi-white-waistcoat": "/category/panjabi-waistcoat",
+  "classic-white-embroidered-panjabi-code-74-1": "/category/panjabi",
+  "crimson-red-heritage-panjabi-golden-thread": "/category/panjabi",
+  "elegant-blue-abstract-pattern-panjabi-premium-printed-design": "/category/panjabi",
+  "elegant-blush-pink-patterned-panjabi-modern-textured-design": "/category/panjabi",
+  "ivory-white-regal-panjabi-silver-collar": "/category/panjabi",
+  "mens-premium-ash-embroidered-panjabi": "/category/panjabi",
+  "mens-premium-ash-grey-embroidered-panjabi": "/category/panjabi",
+  "mens-premium-sky-blue-embroidered-panjabi": "/category/panjabi",
+  "midnight-black-executive-panjabi-copper-embroidery": "/category/panjabi",
+  "modern-blue-abstract-print-panjabi-premium-design": "/category/panjabi",
+  "modern-blue-geometric-printed-panjabi-premium-design": "/category/panjabi",
+  "premium-black-crepe-fabric-panjabi-elegant-design": "/category/panjabi",
+  "premium-mens-silk-panjabi-p-10": "/category/panjabi",
+  "premium-navy-blue-designer-panjabi-code-82-2": "/category/panjabi",
+  "premium-white-contrast-panjabi": "/category/panjabi",
+  "premium-white-embroidered-panjabi-code-81": "/category/panjabi",
+  "royal-coral-red-patterned-panjabi-modern-textured-design": "/category/panjabi",
+  "royal-golden-beige-patterned-panjabi-modern-textured-design": "/category/panjabi",
+}
+
+// URLs from the store's previous platform that Google still crawls and gets a
+// 404 for (Search Console "Not found (404)" export, 2026-11-18). Each one is
+// sent permanently to the closest page here, so old Facebook posts, backlinks
+// and bookmarks land somewhere useful and pass their ranking on. Query strings
+// (?page=4, ?fbclid=…) are carried over by Next automatically.
+const legacyRedirects = [
+  // Old SEO-style category/subcategory slugs. They all end in "-in-bd" or
+  // "-in-bangladesh", which no current category does. Most specific first.
+  { source: "/category/:slug(best-panjabi-waistcoat.*)", destination: "/category/panjabi-waistcoat" },
+  { source: "/:kind(category|subcategory)/:slug(.*brooch.*-in-(?:bd|bangladesh))", destination: "/category/brooch" },
+  { source: "/:kind(category|subcategory)/:slug(.*blazer.*-in-(?:bd|bangladesh))", destination: "/category/blazer" },
+  { source: "/:kind(category|subcategory)/:slug(.*panjabi.*-in-(?:bd|bangladesh))", destination: "/category/panjabi" },
+  { source: "/subcategory/:slug*", destination: "/shop" },
+  // Old campaign landing pages.
+  { source: "/campaign/:slug(.*panjabi.*)", destination: "/category/premium-panjabi-for-men" },
+  { source: "/campaign/:slug*", destination: "/shop" },
+  // Old info pages ("/page/…" → "/pages/…").
+  { source: "/page/delivery-rules", destination: "/pages/shipping-policy" },
+  { source: "/page/terms-and-conditions", destination: "/pages/terms-of-use" },
+  { source: "/page/:slug", destination: "/pages/:slug" },
+  { source: "/shipping-charge", destination: "/pages/shipping-policy" },
+  // Exact old category and product slugs (lists above).
+  ...Object.entries(legacyCategories).map(([slug, to]) => ({ source: `/category/${slug}`, destination: to })),
+  ...Object.entries(legacyProducts).map(([slug, to]) => ({ source: `/product/${slug}`, destination: to })),
+].map((rule) => ({ ...rule, permanent: true }));
 
 const nextConfig: NextConfig = {
   allowedDevOrigins: ['172.30.21.63','159.203.1.187'],
@@ -80,6 +174,8 @@ const nextConfig: NextConfig = {
       // Old About pages: one About page now, the CMS one.
       { source: "/about", destination: "/pages/about-us", permanent: true },
       { source: "/about-us", destination: "/pages/about-us", permanent: true },
+      // URLs from the previous platform that Google still crawls.
+      ...legacyRedirects,
     ];
   },
   async rewrites() {
