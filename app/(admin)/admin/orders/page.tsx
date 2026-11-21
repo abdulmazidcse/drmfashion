@@ -655,10 +655,13 @@ export default function AdminOrdersPage() {
           </div>
           <div>
             <h1 className="text-2xl font-semibold tracking-tight text-foreground">
-              Order Registry
+              Total Orders
+              {!loading && (
+                <span className="ml-2 text-base font-normal text-muted-foreground">({totalRecords.toLocaleString()})</span>
+              )}
             </h1>
             <p className="text-sm text-muted-foreground mt-0.5">
-              Manage client acquisitions, shipping pipeline, and retail checkouts.
+              Every order, filtered by the search and status below.
             </p>
           </div>
         </div>

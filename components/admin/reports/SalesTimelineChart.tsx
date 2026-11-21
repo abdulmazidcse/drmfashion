@@ -64,7 +64,7 @@ export default function SalesTimelineChart({
         <Bar
           yAxisId="orders"
           dataKey="orders"
-          name="Orders"
+          name="Total Orders"
           fill="#c7d2fe"
           radius={[4, 4, 0, 0]}
           maxBarSize={28}

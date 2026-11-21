@@ -318,7 +318,7 @@ export default function AdminDashboardPage() {
           compare={option.compare}
         />
         <StatCard
-          title="Orders"
+          title="Total Orders"
           value={cur.orders.toLocaleString()}
           sub={`${cur.cancelledOrders} cancelled`}
           icon={Receipt}

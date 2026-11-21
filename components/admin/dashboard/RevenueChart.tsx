@@ -52,10 +52,10 @@ export default function RevenueChart({
         <Tooltip
           contentStyle={{ borderRadius: 12, border: "1px solid #f4f4f5", fontSize: 12 }}
           labelStyle={{ fontWeight: 700, color: "#18181b" }}
-          formatter={(value, name) => [name === "Orders" ? String(value) : formatMoney(Number(value)), name]}
+          formatter={(value, name) => [name === "Total Orders" ? String(value) : formatMoney(Number(value)), name]}
         />
         <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 12 }} />
-        <Bar yAxisId="orders" dataKey="orders" name="Orders" fill="#e0e7ff" radius={[4, 4, 0, 0]} maxBarSize={18} />
+        <Bar yAxisId="orders" dataKey="orders" name="Total Orders" fill="#e0e7ff" radius={[4, 4, 0, 0]} maxBarSize={18} />
         <Line
           yAxisId="money"
           dataKey="sales"

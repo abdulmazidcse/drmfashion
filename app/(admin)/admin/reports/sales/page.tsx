@@ -176,7 +176,7 @@ export default function SalesReportPage() {
     ? [
         { label: "Revenue", value: formatBasePrice(summary.revenue), icon: DollarSign, tone: "bg-emerald-50 text-emerald-600" },
         { label: "Net Revenue", value: formatBasePrice(summary.netRevenue), icon: Wallet, tone: "bg-teal-50 text-teal-600", hint: "Revenue minus refunds" },
-        { label: "Orders", value: summary.orders.toLocaleString(), icon: ShoppingCart, tone: "bg-indigo-50 text-indigo-600" },
+        { label: "Total Orders", value: summary.orders.toLocaleString(), icon: ShoppingCart, tone: "bg-indigo-50 text-indigo-600" },
         { label: "Items Sold", value: summary.itemsSold.toLocaleString(), icon: Package, tone: "bg-sky-50 text-sky-600" },
         { label: "Average Order Value", value: formatBasePrice(summary.averageOrderValue), icon: Coins, tone: "bg-violet-50 text-violet-600" },
         { label: "Refunds", value: formatBasePrice(summary.refunds), icon: RotateCcw, tone: "bg-rose-50 text-rose-600", hint: "Refunded in this period" },
@@ -343,7 +343,7 @@ export default function SalesReportPage() {
                   <Th>#</Th>
                   <Th>Product</Th>
                   <Th className="text-right">Variants</Th>
-                  <Th className="text-right">Orders</Th>
+                  <Th className="text-right">Total Orders</Th>
                   <Th className="text-right">Qty</Th>
                   <Th className="text-right">Revenue</Th>
                 </TableRow>
@@ -417,7 +417,7 @@ export default function SalesReportPage() {
                 <TableHeader>
                   <TableRow>
                     <Th>Method</Th>
-                    <Th className="text-right">Orders</Th>
+                    <Th className="text-right">Total Orders</Th>
                     <Th className="text-right">Revenue</Th>
                     <Th className="text-right">Share</Th>
                   </TableRow>
@@ -446,7 +446,7 @@ export default function SalesReportPage() {
                 <TableHeader>
                   <TableRow>
                     <Th>Status</Th>
-                    <Th className="text-right">Orders</Th>
+                    <Th className="text-right">Total Orders</Th>
                     <Th className="text-right">Revenue</Th>
                     <Th className="text-right">Share</Th>
                   </TableRow>
@@ -549,7 +549,7 @@ function BreakdownTable({
       <TableHeader>
         <TableRow>
           <Th>{nameLabel}</Th>
-          <Th className="text-right">Orders</Th>
+          <Th className="text-right">Total Orders</Th>
           <Th className="text-right">Qty</Th>
           <Th className="text-right">Revenue</Th>
           <Th className="text-right">Share</Th>
