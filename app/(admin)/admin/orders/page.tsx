@@ -208,6 +208,17 @@ export default function AdminOrdersPage() {
     }
   }
 
+  // `?status=PENDING` etc. — the dashboard's "to do" tiles link here. Read on
+  // mount (not in the useState initialiser) so server and client render the
+  // same first frame; the debounced fetch below hasn't fired yet, so this costs
+  // no extra request.
+  useEffect(() => {
+    const status = new URLSearchParams(window.location.search).get("status")
+    if (status && ["PENDING", "PROCESSING", "SHIPPED", "DELIVERED", "CANCELLED"].includes(status)) {
+      setStatusFilter(status)
+    }
+  }, [])
+
   // Debounced fetch
   useEffect(() => {
     const handler = setTimeout(() => {
