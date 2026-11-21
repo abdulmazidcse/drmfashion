@@ -4,7 +4,6 @@ import { useEffect, useState } from "react"
 import dynamic from "next/dynamic"
 import {
   BarChart3,
-  Coins,
   Download,
   Loader2,
   Package,
@@ -178,7 +177,6 @@ export default function SalesReportPage() {
         { label: "Net Revenue", value: formatBasePrice(summary.netRevenue), icon: Wallet, tone: "bg-teal-50 text-teal-600", hint: "Revenue minus refunds" },
         { label: "Total Orders", value: summary.orders.toLocaleString(), icon: ShoppingCart, tone: "bg-indigo-50 text-indigo-600" },
         { label: "Items Sold", value: summary.itemsSold.toLocaleString(), icon: Package, tone: "bg-sky-50 text-sky-600" },
-        { label: "Average Order Value", value: formatBasePrice(summary.averageOrderValue), icon: Coins, tone: "bg-violet-50 text-violet-600" },
         { label: "Refunds", value: formatBasePrice(summary.refunds), icon: RotateCcw, tone: "bg-rose-50 text-rose-600", hint: "Refunded in this period" },
         {
           label: "Gross Profit",
