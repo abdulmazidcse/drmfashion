@@ -12,13 +12,10 @@ import {
   Calendar,
   TrendingUp,
   RotateCcw,
-  DollarSign,
   Filter,
   Truck,
-  CheckCircle2,
   AlertCircle,
   Printer,
-  Clock,
   ExternalLink,
   ClipboardPlus
 } from "lucide-react"
@@ -283,14 +280,6 @@ export default function AdminOrdersPage() {
   }
 
   // Filter logic handled by server
-
-  // Calculations for stats
-  const totalOrders = orders.length
-  const totalRevenue = orders
-    .filter(o => o.paymentStatus === "PAID" || o.status === "DELIVERED")
-    .reduce((sum, o) => sum + o.totalAmount, 0)
-  const pendingOrders = orders.filter(o => o.status === "PENDING" || o.status === "PROCESSING").length
-  const completedOrders = orders.filter(o => o.status === "DELIVERED").length
 
   // Status badging styles
   const getStatusBadge = (status: Order["status"]) => {
@@ -678,53 +667,6 @@ export default function AdminOrdersPage() {
               <ClipboardPlus className="mr-1.5 h-4 w-4" /> Create Order
             </Link>
           </Button>
-        </div>
-
-        {/* METRICS GRID SUMMARY */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <Card className="p-4.5 gap-0 flex flex-col justify-between">
-            <div className="flex justify-between items-center text-muted-foreground">
-              <Package size={16} />
-              <span className="text-[7.5px] font-extrabold text-muted-foreground uppercase tracking-widest">Total Orders</span>
-            </div>
-            <div className="mt-2.5">
-              <h3 className="text-xl font-semibold text-foreground tracking-tight font-mono">{totalOrders}</h3>
-              <p className="text-[8px] text-muted-foreground font-bold uppercase mt-0.5">Submissions</p>
-            </div>
-          </Card>
-
-          <Card className="p-4.5 gap-0 flex flex-col justify-between">
-            <div className="flex justify-between items-center text-emerald-600">
-              <DollarSign size={16} />
-              <span className="text-[7.5px] font-extrabold text-muted-foreground uppercase tracking-widest">Paid Revenues</span>
-            </div>
-            <div className="mt-2.5">
-              <h3 className="text-xl font-semibold text-foreground tracking-tight font-mono">{formatBasePrice(totalRevenue)}</h3>
-              <p className="text-[8px] text-emerald-600 font-bold uppercase mt-0.5">Total pipeline revenue</p>
-            </div>
-          </Card>
-
-          <Card className="p-4.5 gap-0 flex flex-col justify-between">
-            <div className="flex justify-between items-center text-amber-500">
-              <Clock size={16} />
-              <span className="text-[7.5px] font-extrabold text-muted-foreground uppercase tracking-widest">In Processing</span>
-            </div>
-            <div className="mt-2.5">
-              <h3 className="text-xl font-semibold text-foreground tracking-tight font-mono">{pendingOrders}</h3>
-              <p className="text-[8px] text-amber-600 font-bold uppercase mt-0.5">Awaiting dispatch</p>
-            </div>
-          </Card>
-
-          <Card className="p-4.5 gap-0 flex flex-col justify-between">
-            <div className="flex justify-between items-center text-muted-foreground">
-              <CheckCircle2 size={16} />
-              <span className="text-[7.5px] font-extrabold text-muted-foreground uppercase tracking-widest">Fulfilled</span>
-            </div>
-            <div className="mt-2.5">
-              <h3 className="text-xl font-semibold text-foreground tracking-tight font-mono">{completedOrders}</h3>
-              <p className="text-[8px] text-muted-foreground font-bold uppercase mt-0.5">Delivered to client</p>
-            </div>
-          </Card>
         </div>
 
         {/* SEARCH AND FILTERS BAR */}
