@@ -10,7 +10,6 @@ import {
   RefreshCw,
   RotateCcw,
   ShoppingCart,
-  TrendingUp,
   Wallet,
   DollarSign,
 } from "lucide-react"
@@ -178,13 +177,6 @@ export default function SalesReportPage() {
         { label: "Total Orders", value: summary.orders.toLocaleString(), icon: ShoppingCart, tone: "bg-indigo-50 text-indigo-600" },
         { label: "Items Sold", value: summary.itemsSold.toLocaleString(), icon: Package, tone: "bg-sky-50 text-sky-600" },
         { label: "Refunds", value: formatBasePrice(summary.refunds), icon: RotateCcw, tone: "bg-rose-50 text-rose-600", hint: "Refunded in this period" },
-        {
-          label: "Gross Profit",
-          value: formatBasePrice(summary.grossProfit),
-          icon: TrendingUp,
-          tone: "bg-amber-50 text-amber-600",
-          hint: `Cost price known for ${Math.round(summary.costCoverage * 100)}% of units`,
-        },
       ]
     : []
 
@@ -291,7 +283,7 @@ export default function SalesReportPage() {
       ) : (
         <>
           {/* KPI ROW */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
             {kpis.map((kpi) => (
               <Card key={kpi.label}>
                 <CardContent className="flex items-center gap-4">
