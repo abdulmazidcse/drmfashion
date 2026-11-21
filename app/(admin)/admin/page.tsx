@@ -4,7 +4,6 @@ import { useEffect, useState } from "react"
 import {
   ShoppingBag,
   Wallet,
-  Truck,
   Users,
   Receipt,
   XCircle,
@@ -13,11 +12,7 @@ import {
   ChevronRight,
   Loader2,
   Package,
-  Clock,
   PackageCheck,
-  RotateCcw,
-  AlertTriangle,
-  PackageX,
 } from "lucide-react"
 import Link from "next/link"
 import api from "@/lib/axios"
@@ -83,15 +78,6 @@ type DashboardData = {
   chart: { monthly: boolean; points: { label: string; sales: number; delivered: number; orders: number }[] }
   categorySales: { name: string; value: number }[]
   topProducts: { id: string; title: string; thumbnail: string; slug: string; qty: number; sales: number }[]
-  todo: {
-    pending: number
-    processing: number
-    shipped: number
-    pendingReturns: number
-    lowStock: number
-    outOfStock: number
-    lowStockThreshold: number
-  }
   recentOrders: {
     id: string
     createdAt: string
@@ -225,7 +211,7 @@ export default function AdminDashboardPage() {
     )
   }
 
-  const { current: cur, previous: prev, todo } = data
+  const { current: cur, previous: prev } = data
   const categoryTotal = data.categorySales.reduce((s, c) => s + c.value, 0)
   // Up to six slices; the tail is folded into "Other" so the pie stays legible.
   const pieData = (
@@ -236,15 +222,6 @@ export default function AdminDashboardPage() {
         ]
       : data.categorySales
   ).map((c, i) => ({ ...c, color: PIE_COLORS[i % PIE_COLORS.length] }))
-
-  const todoTiles = [
-    { label: "New orders to confirm", value: todo.pending, href: "/admin/orders?status=PENDING", icon: Clock, tone: "text-amber-600" },
-    { label: "Confirmed, to send to courier", value: todo.processing, href: "/admin/orders?status=PROCESSING", icon: Package, tone: "text-sky-600" },
-    { label: "With the courier", value: todo.shipped, href: "/admin/orders?status=SHIPPED", icon: Truck, tone: "text-indigo-600" },
-    { label: "Return requests", value: todo.pendingReturns, href: "/admin/returns", icon: RotateCcw, tone: "text-rose-600" },
-    { label: `Products with a size low (≤ ${todo.lowStockThreshold})`, value: todo.lowStock, href: "/admin/reports/low-stock", icon: AlertTriangle, tone: "text-amber-600" },
-    { label: "Products with a size sold out", value: todo.outOfStock, href: "/admin/reports/low-stock", icon: PackageX, tone: "text-rose-600" },
-  ]
 
   return (
     <div className="space-y-6 w-full p-2">
@@ -274,30 +251,6 @@ export default function AdminDashboardPage() {
           </div>
         </div>
       </div>
-
-      {/* TO DO — live counts, not tied to the period */}
-      <Card className="p-5">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-base font-semibold tracking-tight">Needs attention</h3>
-          <span className="text-xs text-muted-foreground">Right now</span>
-        </div>
-        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
-          {todoTiles.map((t) => (
-            <Link
-              key={t.label}
-              href={t.href}
-              className="group rounded-xl border border-border p-3.5 hover:border-foreground/20 hover:bg-muted/40 transition-colors"
-            >
-              <div className="flex items-center justify-between">
-                <t.icon className={cn("w-4 h-4", t.value > 0 ? t.tone : "text-muted-foreground")} />
-                <ChevronRight className="w-3.5 h-3.5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
-              </div>
-              <p className={cn("text-2xl font-semibold mt-2", t.value === 0 && "text-muted-foreground")}>{t.value}</p>
-              <p className="text-xs text-muted-foreground mt-0.5 leading-snug">{t.label}</p>
-            </Link>
-          ))}
-        </div>
-      </Card>
 
       {/* KPI CARDS */}
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">

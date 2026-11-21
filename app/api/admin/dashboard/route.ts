@@ -2,7 +2,6 @@ import { NextResponse, NextRequest } from "next/server";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getAdminPayload } from "@/lib/auth";
-import { getLowStockThreshold } from "@/lib/inventory";
 
 export const dynamic = "force-dynamic";
 
@@ -145,14 +144,7 @@ export async function GET(req: NextRequest) {
     const monthly = range === "year";
     const chartStart = range === "today" ? bdDayStart(now) - 6 * DAY_MS : start;
 
-    const threshold = await getLowStockThreshold();
-    // Same notion of "a sellable variant" as the inventory and low-stock pages.
-    const liveVariant: Prisma.ProductVariantWhereInput = {
-      deletedAt: null,
-      product: { deletedAt: null, upcoming: false, category: { slug: { not: "gift-cards" } } },
-    };
-
-    const [current, previous, chartRows, periodItems, todo, recentOrders] = await Promise.all([
+    const [current, previous, chartRows, periodItems, recentOrders] = await Promise.all([
       periodMetrics(start, end),
       periodMetrics(prevStart, prevEnd),
 
@@ -177,21 +169,6 @@ export async function GET(req: NextRequest) {
           },
         },
       }),
-
-      Promise.all([
-        prisma.order.count({ where: { status: "PENDING" } }),
-        prisma.order.count({ where: { status: "PROCESSING" } }),
-        prisma.order.count({ where: { status: "SHIPPED" } }),
-        prisma.returnRequest.count({ where: { status: "PENDING" } }),
-        // Products, not variants: one blazer in eight sizes would otherwise
-        // count eight times, and the number stops meaning anything.
-        prisma.productVariant
-          .findMany({ where: { ...liveVariant, stock: { gt: 0, lte: threshold } }, select: { productId: true }, distinct: ["productId"] })
-          .then((rows) => rows.length),
-        prisma.productVariant
-          .findMany({ where: { ...liveVariant, stock: { lte: 0 } }, select: { productId: true }, distinct: ["productId"] })
-          .then((rows) => rows.length),
-      ]),
 
       prisma.order.findMany({
         orderBy: { createdAt: "desc" },
@@ -275,7 +252,6 @@ export async function GET(req: NextRequest) {
       .sort((a, b) => b.value - a.value);
     const topProducts = [...productTotals.values()].sort((a, b) => b.qty - a.qty || b.sales - a.sales).slice(0, 5);
 
-    const [pending, processing, shipped, pendingReturns, lowStock, outOfStock] = todo;
 
     return NextResponse.json({
       range,
@@ -285,7 +261,6 @@ export async function GET(req: NextRequest) {
       chart: { monthly, points: buckets.map(({ key: _key, ...rest }) => rest) },
       categorySales,
       topProducts,
-      todo: { pending, processing, shipped, pendingReturns, lowStock, outOfStock, lowStockThreshold: threshold },
       recentOrders,
     });
   } catch (err) {
